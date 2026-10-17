@@ -100,6 +100,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
             rubric_criteria: template.rubric_criteria || [],
             student_instructions: template.student_instructions,
             expectations_rubric: template.expectations_rubric,
+            initial_referral: template.initial_referral || null,
             // hidden_diagnosis is intentionally excluded from this snapshot
         };
 

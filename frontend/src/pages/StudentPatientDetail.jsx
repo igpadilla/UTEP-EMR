@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
+import ReferralManager from "../components/ReferralManager.jsx";
 
 const VISIT_TYPES = ["Initial", "Follow-up", "Emergency", "Routine", "Specialist", "Other"];
 const APPT_TYPES  = ["Follow-up", "Initial Consultation", "Specialist Referral", "Routine Check-up", "Emergency", "Other"];
@@ -252,6 +253,7 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                             ))}
                         </div>
                     )}
+                    <ReferralManager patientId={id} />
                 </div>
             </div>
         </main>
