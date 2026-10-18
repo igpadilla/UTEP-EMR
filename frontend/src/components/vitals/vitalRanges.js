@@ -20,3 +20,11 @@ export function getFlag(field, value) {
     if (number < range.low) return "low";
     return "";
 }
+
+// Blood pressure uses the worse of the systolic and diastolic flags.
+export function getBloodPressureFlag(systolic, diastolic) {
+    const systolicFlag = getFlag("systolic_bp", systolic);
+    const diastolicFlag = getFlag("diastolic_bp", diastolic);
+    if (systolicFlag === "critical" || diastolicFlag === "critical") return "critical";
+    return systolicFlag || diastolicFlag;
+}

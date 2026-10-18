@@ -414,6 +414,7 @@ export default function InstructorCases({ onNavigate }) {
                                                                 {c.encounter_status === "pending review" ? "Grade" : "View"}
                                                             </button>
                                                         )}
+                                                        <button className="instructor-action-btn instructor-action-assign" type="button" onClick={() => onNavigate("patientChart", null, { caseId: c.id, backTo: "instructorCases" })}>Chart</button>
                                                         <button
                                                             className="instructor-action-btn instructor-action-assign"
                                                             type="button"

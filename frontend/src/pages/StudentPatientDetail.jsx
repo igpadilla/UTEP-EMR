@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
-import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 
 const VISIT_TYPES = ["Initial", "Follow-up", "Emergency", "Routine", "Specialist", "Other"];
@@ -116,7 +115,7 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                     <Detail label="Occupation" value={patient.occupation} />
                 </div>
 
-                <VitalsPanel patientId={id} />
+                <button className="primary-action-button" onClick={() => onNavigate("patientChart", id, { backTo: "studentPatientDetail" })}>Open chart</button>
 
                 {/* Current Medications */}
                 <div style={sectionStyle}>

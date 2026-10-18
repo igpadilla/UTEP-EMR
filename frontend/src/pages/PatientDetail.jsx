@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
-import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import TagSelector from "../components/TagSelector.jsx";
 
@@ -290,7 +289,7 @@ export default function PatientDetail({ id, onNavigate }) {
                             )}
                         </div>
 
-                        <VitalsPanel patientId={id} />
+                        <button className="primary-action-button" onClick={() => onNavigate("patientChart", id, { backTo: "patientDetail" })}>Open chart</button>
 
                         <div style={sectionStyle}>
                             <h3>Visit History</h3>

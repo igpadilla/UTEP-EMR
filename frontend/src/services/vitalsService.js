@@ -1,21 +1,26 @@
 import { supabase } from "../supabase.js";
 
-// Current vitals for a live patient, newest first.
-export async function getVitals(patientId) {
+// `owner` is { patientId } for an instructor's patient, or { caseId } for a student's case copy.
+function ownerColumns(owner) {
+    return owner.caseId ? { assigned_case_id: owner.caseId } : { patient_id: owner.patientId };
+}
+
+// Current vitals, newest first.
+export async function getVitals(owner) {
     const { data, error } = await supabase
         .from("current_vital_sign_sets")
         .select("*")
-        .eq("patient_id", patientId)
+        .match(ownerColumns(owner))
         .order("measured_at", { ascending: false });
 
     if (error) throw error;
     return data;
 }
 
-export async function recordVitals(patientId, vitals) {
+export async function recordVitals(owner, vitals) {
     const { data, error } = await supabase
         .from("vital_sign_sets")
-        .insert({ patient_id: patientId, ...vitals })
+        .insert({ ...ownerColumns(owner), ...vitals })
         .select()
         .single();
 
@@ -53,4 +58,16 @@ export async function markVitalsInError(id, reason) {
 
     if (error) throw error;
     if (data.length === 0) throw new Error("You can only mark your own entries as entered in error.");
+}
+
+// Every set, including corrected and entered-in-error ones, for the history list.
+export async function getVitalsHistory(owner) {
+    const { data, error } = await supabase
+        .from("vital_sign_sets")
+        .select("*")
+        .match(ownerColumns(owner))
+        .order("recorded_at", { ascending: false });
+
+    if (error) throw error;
+    return data;
 }

@@ -1,0 +1,110 @@
+/* Patient chart page — full width: header band (banner + tabs), then content */
+
+.chart-page {
+  width: 100%;
+}
+
+.chart-header {
+  padding: 1.25rem 2rem 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
+}
+
+.chart-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  text-align: left;
+}
+
+.chart-banner h1 {
+  margin: 0;
+}
+
+.chart-banner-details {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+}
+
+.chart-banner-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.chart-allergies {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #d03b3b;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chart-no-allergies {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.chart-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.chart-tab {
+  margin-bottom: -1px;
+  padding: 0.6rem 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chart-tab:hover {
+  color: var(--text);
+}
+
+.chart-tab-active {
+  border-bottom-color: var(--primary-hover);
+  color: var(--primary-hover);
+  font-weight: 600;
+}
+
+.chart-placeholder {
+  padding: 2rem 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* "Case copy" tag next to the name when the chart belongs to an assigned case */
+.chart-case-tag {
+  margin-left: 0.75rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid #a78bfa;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #4c1d95;
+  font-size: 0.8rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* "Open patient chart" button inside the case windows */
+.open-chart-button {
+  margin-bottom: 1rem;
+}

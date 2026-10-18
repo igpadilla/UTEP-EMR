@@ -1,6 +1,6 @@
 begin;
 
-select plan(12);
+select plan(17);
 
 -- --------------------------------------------------
 -- Test setup (runs as the database owner)
@@ -128,6 +128,19 @@ select is(
 );
 
 -- --------------------------------------------------
+-- TEST: Recording vitals on a case writes to the case's audit log
+-- --------------------------------------------------
+insert into public.vital_sign_sets (assigned_case_id, heart_rate, spo2)
+values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 92, 96);
+
+select is(
+    (select new_value from public.audit_logs
+     where case_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and action_type = 'VITALS_RECORDED'),
+    'HR 92, SpO2 96%',
+    'Case vitals are logged with a summary'
+);
+
+-- --------------------------------------------------
 -- TEST 8: Marking a correction as entered in error hides the whole set
 -- (the original must not come back)
 -- --------------------------------------------------
@@ -177,6 +190,45 @@ select is(
     (select count(*) from public.vital_sign_sets),
     0::bigint,
     'Front desk cannot read vitals'
+);
+
+-- --------------------------------------------------
+-- TEST: The instructor who assigned the case sees the student's vitals and the log
+-- --------------------------------------------------
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a004', true);
+
+select is(
+    (select count(*) from public.vital_sign_sets where assigned_case_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+    2::bigint,
+    'Instructor sees the baseline set and the student''s set on the case'
+);
+
+select is(
+    (select count(*) from public.audit_logs
+     where case_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and action_type like 'VITALS_%'),
+    1::bigint,
+    'Instructor sees the vitals entry in the case audit log'
+);
+
+-- --------------------------------------------------
+-- TEST: Instructors record vitals on their live patients, but not on a student's case
+-- --------------------------------------------------
+select lives_ok(
+    $$
+        insert into public.vital_sign_sets (patient_id, heart_rate)
+        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 76);
+    $$,
+    'Instructor can record vitals on a live patient'
+);
+
+select throws_ok(
+    $$
+        insert into public.vital_sign_sets (assigned_case_id, heart_rate)
+        values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 76);
+    $$,
+    '42501',
+    null,
+    'Instructor cannot record vitals on a student''s case'
 );
 
 select * from finish();
