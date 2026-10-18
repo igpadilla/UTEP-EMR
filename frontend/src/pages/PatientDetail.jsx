@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import TagSelector from "../components/TagSelector.jsx";
+import ReferralManager from "../components/ReferralManager.jsx";
+
 
 export default function PatientDetail({ id, onNavigate }) {
     const [patient, setPatient] = useState(null);
@@ -310,6 +312,7 @@ export default function PatientDetail({ id, onNavigate }) {
                                 ))
                             )}
                         </div>
+                        <ReferralManager patientId={id} />
 
                         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.5rem" }}>
                             <button onClick={() => { setEditing(true); setEditMeds(Array.isArray(patient.current_medications) ? patient.current_medications : []); }}>Edit Patient</button>
