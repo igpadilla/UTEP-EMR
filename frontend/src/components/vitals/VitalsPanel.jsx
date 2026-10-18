@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getVitals } from "../../services/vitalsService.js";
+import { getVitals, markVitalsInError } from "../../services/vitalsService.js";
 import { hasPermission } from "../../services/permissionService.js";
 import { getFlag } from "./vitalRanges.js";
 import VitalsForm from "./VitalsForm.jsx";
@@ -11,6 +11,7 @@ export default function VitalsPanel({ patientId }) {
     const [vitals, setVitals] = useState([]);
     const [canRecord, setCanRecord] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [correcting, setCorrecting] = useState(null);
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -27,16 +28,35 @@ export default function VitalsPanel({ patientId }) {
         }
     }
 
-    function handleSaved() {
+    function closeForm() {
         setShowForm(false);
+        setCorrecting(null);
+    }
+
+    function handleSaved() {
+        closeForm();
         loadVitals();
+    }
+
+    async function handleMarkError(set) {
+        const reason = prompt("Why should this set be removed from the chart? For example: charted on the wrong patient. (required)");
+        if (!reason) return;
+
+        try {
+            await markVitalsInError(set.id, reason);
+            setError("");
+            loadVitals();
+        } catch (err) {
+            console.error(err);
+            setError(err.message);
+        }
     }
 
     return (
         <section className="vitals-panel">
             <div className="vitals-header">
                 <h3>Vitals</h3>
-                {canRecord && !showForm && (
+                {canRecord && !showForm && !correcting && (
                     <button className="primary-action-button" onClick={() => setShowForm(true)}>
                         + Record vitals
                     </button>
@@ -45,8 +65,8 @@ export default function VitalsPanel({ patientId }) {
 
             {error && <p role="alert" className="vitals-error">{error}</p>}
 
-            {showForm && (
-                <VitalsForm patientId={patientId} onSaved={handleSaved} onCancel={() => setShowForm(false)} />
+            {(showForm || correcting) && (
+                <VitalsForm patientId={patientId} correcting={correcting} onSaved={handleSaved} onCancel={closeForm} />
             )}
 
             {vitals.length === 0 ? (
@@ -65,12 +85,18 @@ export default function VitalsPanel({ patientId }) {
                                 <th>Weight lb</th>
                                 <th>BMI</th>
                                 <th>Pain</th>
+                                {canRecord && <th></th>}
                             </tr>
                         </thead>
                         <tbody>
                             {vitals.map((set) => (
                                 <tr key={set.id}>
-                                    <td>{new Date(set.measured_at).toLocaleString()}</td>
+                                    <td>
+                                        {new Date(set.measured_at).toLocaleString()}
+                                        {set.supersedes_id && (
+                                            <span className="vitals-corrected-tag" title={`Reason: ${set.correction_reason}`}>corrected</span>
+                                        )}
+                                    </td>
                                     <Cell value={bpText(set)} flag={bpFlag(set)} />
                                     <Cell value={set.heart_rate} flag={getFlag("heart_rate", set.heart_rate)} />
                                     <Cell value={set.resp_rate} flag={getFlag("resp_rate", set.resp_rate)} />
@@ -79,6 +105,16 @@ export default function VitalsPanel({ patientId }) {
                                     <Cell value={set.weight_lb} flag="" />
                                     <Cell value={set.bmi} flag={getFlag("bmi", set.bmi)} />
                                     <Cell value={set.pain_score} flag={getFlag("pain_score", set.pain_score)} />
+                                    {canRecord && (
+                                        <td className="vitals-row-actions">
+                                            <button type="button" className="vitals-link-button" title="Fix a wrong value, like a typo" onClick={() => setCorrecting(set)}>
+                                                Correct
+                                            </button>
+                                            <button type="button" className="vitals-link-button" title="Remove a set that should not be in this chart, like one charted on the wrong patient" onClick={() => handleMarkError(set)}>
+                                                Entered in error
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>

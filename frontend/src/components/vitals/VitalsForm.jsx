@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { recordVitals } from "../../services/vitalsService.js";
+import { recordVitals, correctVitals } from "../../services/vitalsService.js";
 import { getFlag } from "./vitalRanges.js";
 
-// Number inputs in the form: [database column, label]
+// Number inputs in the form: [database column, label, min, max]
+// min/max match the database limits, so the browser stops impossible values first.
 const FIELDS = [
-    ["systolic_bp", "Systolic BP (mmHg)"],
-    ["diastolic_bp", "Diastolic BP (mmHg)"],
-    ["heart_rate", "Heart rate (bpm)"],
-    ["resp_rate", "Resp. rate (/min)"],
-    ["temperature_f", "Temperature (°F)"],
-    ["spo2", "SpO₂ (%)"],
-    ["weight_lb", "Weight (lb)"],
-    ["height_in", "Height (in)"],
-    ["pain_score", "Pain (0-10)"],
+    ["systolic_bp", "Systolic BP (mmHg)", 40, 300],
+    ["diastolic_bp", "Diastolic BP (mmHg)", 20, 200],
+    ["heart_rate", "Heart rate (bpm)", 20, 300],
+    ["resp_rate", "Resp. rate (/min)", 4, 80],
+    ["temperature_f", "Temperature (°F)", 86, 113],
+    ["spo2", "SpO₂ (%)", 50, 100],
+    ["weight_lb", "Weight (lb)", 1, 1100],
+    ["height_in", "Height (in)", 8, 102],
+    ["pain_score", "Pain (0-10)", 0, 10],
 ];
 
 const FLAG_MESSAGES = {
@@ -21,8 +22,10 @@ const FLAG_MESSAGES = {
     critical: "Critical - re-check, then notify",
 };
 
-export default function VitalsForm({ patientId, onSaved, onCancel }) {
-    const [form, setForm] = useState({});
+// `correcting` is optional: pass an existing set to correct it instead of recording a new one.
+export default function VitalsForm({ patientId, correcting, onSaved, onCancel }) {
+    const [form, setForm] = useState(correcting ? valuesFrom(correcting) : {});
+    const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
 
@@ -45,9 +48,18 @@ export default function VitalsForm({ patientId, onSaved, onCancel }) {
             return;
         }
 
+        if (correcting && !reason.trim()) {
+            setError("Enter a reason for the correction.");
+            return;
+        }
+
         setSaving(true);
         try {
-            await recordVitals(patientId, vitals);
+            if (correcting) {
+                await correctVitals(correcting, vitals, reason.trim());
+            } else {
+                await recordVitals(patientId, vitals);
+            }
             onSaved();
         } catch (err) {
             console.error(err);
@@ -58,8 +70,14 @@ export default function VitalsForm({ patientId, onSaved, onCancel }) {
 
     return (
         <form className="vitals-form" onSubmit={handleSubmit}>
+            {correcting && (
+                <p className="vitals-form-title">
+                    Correcting the set from {new Date(correcting.measured_at).toLocaleString()}
+                </p>
+            )}
+
             <div className="vitals-form-grid">
-                {FIELDS.map(([name, label]) => {
+                {FIELDS.map(([name, label, min, max]) => {
                     const flag = getFlag(name, form[name]);
                     return (
                         <div key={name} className="vitals-field">
@@ -69,6 +87,8 @@ export default function VitalsForm({ patientId, onSaved, onCancel }) {
                                 name={name}
                                 type="number"
                                 step="any"
+                                min={min}
+                                max={max}
                                 value={form[name] ?? ""}
                                 onChange={handleChange}
                                 disabled={saving}
@@ -95,6 +115,13 @@ export default function VitalsForm({ patientId, onSaved, onCancel }) {
                 <textarea id="vitals-comment" name="comment" rows={2} value={form.comment ?? ""} onChange={handleChange} disabled={saving} />
             </div>
 
+            {correcting && (
+                <div className="vitals-field">
+                    <label htmlFor="vitals-reason">Reason for correction (required)</label>
+                    <input id="vitals-reason" type="text" value={reason} onChange={(e) => setReason(e.target.value)} disabled={saving} />
+                </div>
+            )}
+
             {error && <p role="alert" className="vitals-error">{error}</p>}
 
             <div className="vitals-actions">
@@ -102,9 +129,18 @@ export default function VitalsForm({ patientId, onSaved, onCancel }) {
                     Cancel
                 </button>
                 <button type="submit" className="primary-action-button" disabled={saving}>
-                    {saving ? "Saving..." : "Save vitals"}
+                    {saving ? "Saving..." : correcting ? "Save correction" : "Save vitals"}
                 </button>
             </div>
         </form>
     );
+}
+
+// Copy an existing set's values into the form (used for corrections).
+function valuesFrom(set) {
+    const values = {};
+    for (const [name] of FIELDS) values[name] = set[name] ?? "";
+    values.oxygen = set.oxygen ?? "";
+    values.comment = set.comment ?? "";
+    return values;
 }

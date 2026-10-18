@@ -1,6 +1,6 @@
 begin;
 
-select plan(11);
+select plan(12);
 
 -- --------------------------------------------------
 -- Test setup (runs as the database owner)
@@ -109,8 +109,8 @@ select throws_ok(
 -- --------------------------------------------------
 -- TEST 6: A correction replaces the old value in current vitals
 -- --------------------------------------------------
-insert into public.vital_sign_sets (patient_id, systolic_bp, diastolic_bp, supersedes_id, correction_reason)
-values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 138, 88, 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Wrong cuff size');
+insert into public.vital_sign_sets (id, patient_id, systolic_bp, diastolic_bp, supersedes_id, correction_reason)
+values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 138, 88, 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Wrong cuff size');
 
 select is(
     (select systolic_bp from public.current_vital_sign_sets where patient_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
@@ -128,16 +128,23 @@ select is(
 );
 
 -- --------------------------------------------------
--- TEST 8: A student can mark their own entry as entered in error
+-- TEST 8: Marking a correction as entered in error hides the whole set
+-- (the original must not come back)
 -- --------------------------------------------------
 update public.vital_sign_sets
 set status = 'entered_in_error', correction_reason = 'Charted on the wrong patient'
-where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
 select is(
-    (select status from public.vital_sign_sets where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+    (select status from public.vital_sign_sets where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'),
     'entered_in_error',
     'Own entry can be marked entered in error'
+);
+
+select is(
+    (select count(*) from public.current_vital_sign_sets where patient_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+    0::bigint,
+    'Original set stays hidden after its correction is marked entered in error'
 );
 
 -- --------------------------------------------------

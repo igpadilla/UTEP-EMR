@@ -128,3 +128,38 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+/* Corrections */
+
+.vitals-row-actions button + button {
+  margin-left: 0.75rem;
+}
+
+.vitals-link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-hover);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vitals-link-button:hover {
+  text-decoration: underline;
+}
+
+.vitals-corrected-tag {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-dark);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.vitals-form-title {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
