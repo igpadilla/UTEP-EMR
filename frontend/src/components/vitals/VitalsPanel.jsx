@@ -26,7 +26,8 @@ const ROWS = [
 ];
 
 // Pass `patientId` for an instructor's patient, or `caseId` for a student's case copy.
-export default function VitalsPanel({ patientId, caseId }) {
+// `locked` makes it read-only (a submitted case).
+export default function VitalsPanel({ patientId, caseId, locked = false }) {
     const owner = { patientId, caseId };
     const [vitals, setVitals] = useState([]);
     const [history, setHistory] = useState([]); // every set, for the corrections list
@@ -38,11 +39,12 @@ export default function VitalsPanel({ patientId, caseId }) {
     useEffect(() => {
         loadVitals();
         checkCanRecord().then(setCanRecord).catch(() => setCanRecord(false));
-    }, [patientId, caseId]);
+    }, [patientId, caseId, locked]);
 
     // Clinical roles with vitals.write can record. Instructors and admins can also record
     // on their own (live) patients, but never on a student's case.
     async function checkCanRecord() {
+        if (locked) return false;
         if (await hasPermission("vitals.write")) return true;
         if (caseId) return false;
         const user = await getCurrentUserWithProfile();
@@ -111,6 +113,10 @@ export default function VitalsPanel({ patientId, caseId }) {
                     </button>
                 )}
             </div>
+
+            {locked && (
+                <p className="vitals-locked">This case has been submitted, so its vitals are read-only.</p>
+            )}
 
             {error && <p role="alert" className="vitals-error">{error}</p>}
 

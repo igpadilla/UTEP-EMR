@@ -1,6 +1,6 @@
 begin;
 
-select plan(17);
+select plan(19);
 
 -- --------------------------------------------------
 -- Test setup (runs as the database owner)
@@ -130,14 +130,41 @@ select is(
 -- --------------------------------------------------
 -- TEST: Recording vitals on a case writes to the case's audit log
 -- --------------------------------------------------
-insert into public.vital_sign_sets (assigned_case_id, heart_rate, spo2)
-values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 92, 96);
+insert into public.vital_sign_sets (id, assigned_case_id, heart_rate, spo2)
+values ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 92, 96);
 
 select is(
     (select new_value from public.audit_logs
      where case_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and action_type = 'VITALS_RECORDED'),
     'HR 92, SpO2 96%',
     'Case vitals are logged with a summary'
+);
+
+-- --------------------------------------------------
+-- TEST: Once the case is submitted, the student cannot add or remove vitals
+-- --------------------------------------------------
+update public.assigned_cases
+set encounter_status = 'pending review'
+where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+select throws_ok(
+    $$
+        insert into public.vital_sign_sets (assigned_case_id, heart_rate)
+        values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 80);
+    $$,
+    '42501',
+    null,
+    'Student cannot record vitals on a submitted case'
+);
+
+update public.vital_sign_sets
+set status = 'entered_in_error', correction_reason = 'Trying after submit'
+where id = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+select is(
+    (select status from public.vital_sign_sets where id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'),
+    'active',
+    'Student cannot mark vitals in error on a submitted case'
 );
 
 -- --------------------------------------------------

@@ -3,6 +3,9 @@ import { supabase } from "../supabase.js";
 import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import "./PatientChart.css";
 
+// Case statuses where the student can still change their copy (same as StudentCases.jsx).
+const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
+
 // Chart sections. Only Vitals is built so far; the rest are placeholders.
 const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History", "Visits", "Referrals"];
 
@@ -10,16 +13,20 @@ const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History"
 // With `caseId` it shows the student's copy of the patient from that assigned case.
 export default function PatientChart({ id, caseId, backTo, onNavigate }) {
     const [patient, setPatient] = useState(null);
+    const [caseStatus, setCaseStatus] = useState(null);
     const [activeTab, setActiveTab] = useState("Vitals");
 
     useEffect(() => {
         if (caseId) {
             supabase
                 .from("assigned_cases")
-                .select("patient_snapshot")
+                .select("patient_snapshot, encounter_status")
                 .eq("id", caseId)
                 .single()
-                .then(({ data }) => setPatient(data?.patient_snapshot ?? null));
+                .then(({ data }) => {
+                    setPatient(data?.patient_snapshot ?? null);
+                    setCaseStatus(data?.encounter_status ?? null);
+                });
         } else {
             supabase
                 .from("patients")
@@ -74,7 +81,7 @@ export default function PatientChart({ id, caseId, backTo, onNavigate }) {
 
             <div className="chart-content">
                 {activeTab === "Vitals" ? (
-                    <VitalsPanel patientId={id} caseId={caseId} />
+                    <VitalsPanel patientId={id} caseId={caseId} locked={Boolean(caseId) && !EDITABLE_STATUSES.includes(caseStatus)} />
                 ) : (
                     <p className="chart-placeholder">{activeTab} is coming soon.</p>
                 )}

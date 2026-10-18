@@ -530,3 +530,14 @@
   margin: 0;
   padding: 0 1.25rem 1rem;
 }
+
+/* Read-only notice on a submitted case */
+.vitals-locked {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
