@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
+import ReferralManager from "../components/ReferralManager.jsx";
 import "./PatientChart.css";
 
 // Case statuses where the student can still change their copy (same as StudentCases.jsx).
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
 
-// Chart sections. Only Vitals is built so far; the rest are placeholders.
+// Chart sections. Vitals and Referrals are built; the rest are placeholders.
 const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History", "Visits", "Referrals"];
 
 // Patient chart: banner + section tabs. `backTo` is the page to return to.
@@ -40,6 +41,8 @@ export default function PatientChart({ id, caseId, backTo, onNavigate }) {
     if (!patient) return <p>Loading chart...</p>;
 
     const allergies = patient.allergies ?? [];
+    // A submitted case is read-only for the student (vitals and referrals).
+    const locked = Boolean(caseId) && !EDITABLE_STATUSES.includes(caseStatus);
 
     return (
         <main className="chart-page">
@@ -81,7 +84,9 @@ export default function PatientChart({ id, caseId, backTo, onNavigate }) {
 
             <div className="chart-content">
                 {activeTab === "Vitals" ? (
-                    <VitalsPanel patientId={id} caseId={caseId} locked={Boolean(caseId) && !EDITABLE_STATUSES.includes(caseStatus)} />
+                    <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
+                ) : activeTab === "Referrals" ? (
+                    <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                 ) : (
                     <p className="chart-placeholder">{activeTab} is coming soon.</p>
                 )}

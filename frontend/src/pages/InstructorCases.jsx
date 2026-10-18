@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase } from "../services/instructorService.js";
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
-import ReferralManager from "../components/ReferralManager.jsx";
 
 const STATUS_STYLES = {
     "not started":        { background: "#f1f5f9", color: "#64748b" },
@@ -549,10 +548,6 @@ export default function InstructorCases({ onNavigate }) {
                                         ))}
                                     </div>
                                 )}
-
-                                <div style={{ marginTop: "1rem" }}>
-                                    <ReferralManager caseId={reviewCase.id} />
-                                </div>
 
                                 {/* Add annotation form — only when grading */}
                                 {reviewCase.encounter_status === "pending review" && (

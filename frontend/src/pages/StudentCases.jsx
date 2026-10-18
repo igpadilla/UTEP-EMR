@@ -8,7 +8,6 @@ import {
 import { getMyClinicalRoles } from "../services/clinicalRoleService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import PTSoapNote from "../components/PTSoapNote.jsx";
-import ReferralManager from "../components/ReferralManager.jsx";
 
 const STATUS_STYLES = {
     "not started":        { background: "#ede9fe", color: "#6d28d9" },
@@ -499,10 +498,6 @@ export default function StudentCases({ onNavigate }) {
                                     )}
                                 </div>
                             )}
-
-                            <div className="case-modal-section">
-                                <ReferralManager caseId={activeCase.id} readOnly={!isEditable} />
-                            </div>
 
                             {modalError && (
                                 <p className="form-message form-message-error" role="alert">{modalError}</p>
