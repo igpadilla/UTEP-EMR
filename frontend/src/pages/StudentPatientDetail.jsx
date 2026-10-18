@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
+import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 
 const VISIT_TYPES = ["Initial", "Follow-up", "Emergency", "Routine", "Specialist", "Other"];
@@ -114,6 +115,8 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                     <Detail label="Sex" value={patient.sex} />
                     <Detail label="Occupation" value={patient.occupation} />
                 </div>
+
+                <VitalsPanel patientId={id} />
 
                 {/* Current Medications */}
                 <div style={sectionStyle}>

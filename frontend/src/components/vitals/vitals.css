@@ -1,0 +1,130 @@
+/* Vitals panel — styles for components/vitals only */
+
+.vitals-panel {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.vitals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.vitals-empty,
+.vitals-none {
+  color: var(--text-muted);
+}
+
+.vitals-error {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+/* Table */
+
+.vitals-table-wrap {
+  overflow-x: auto;
+}
+
+.vitals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vitals-table th,
+.vitals-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.vitals-table th {
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* Flags: color plus a text label */
+
+.vitals-flag-high,
+.vitals-flag-low {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.vitals-flag-critical {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.vitals-flag-label {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+}
+
+/* Form */
+
+.vitals-form {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.vitals-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.vitals-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vitals-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vitals-input-high,
+.vitals-input-low {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.vitals-input-critical {
+  border-color: #d03b3b;
+  background: #fef2f2;
+}
+
+.vitals-message-high,
+.vitals-message-low {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.vitals-message-critical {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.vitals-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
