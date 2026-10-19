@@ -115,6 +115,8 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                     <Detail label="Occupation" value={patient.occupation} />
                 </div>
 
+                <button className="primary-action-button" onClick={() => onNavigate("patientChart", id, { backTo: "studentPatientDetail" })}>Open chart</button>
+
                 {/* Current Medications */}
                 <div style={sectionStyle}>
                     <h3>Current Medications</h3>

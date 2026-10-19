@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import TagSelector from "../components/TagSelector.jsx";
 
+
 export default function PatientDetail({ id, onNavigate }) {
     const [patient, setPatient] = useState(null);
     const [visits, setVisits] = useState([]);
@@ -288,6 +289,8 @@ export default function PatientDetail({ id, onNavigate }) {
                                 </div>
                             )}
                         </div>
+
+                        <button className="primary-action-button" onClick={() => onNavigate("patientChart", id, { backTo: "patientDetail" })}>Open chart</button>
 
                         <div style={sectionStyle}>
                             <h3>Visit History</h3>
