@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Header from "./components/Header.jsx";
@@ -28,49 +28,80 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [nav, setNav] = useState({ page: "dashboard", id: null });
+    const accountRequest = useRef(0);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
     }
 
     useEffect(() => {
+        let signedIn = false;
+        let disposed = false;
+        let authTimer;
         async function initializeAuth() {
             try {
                 const currentSession = await getSession();
+                if (disposed) return;
+                signedIn = Boolean(currentSession);
                 setSession(currentSession);
                 if (currentSession) await loadUser();
             } catch (error) {
                 console.error(error);
                 setError("Unable to initialize authentication.");
             } finally {
-                setLoading(false);
+                if (!disposed) setLoading(false);
             }
         }
 
         initializeAuth();
 
-        const { data: { subscription } } = onAuthStateChange(async (_event, newSession) => {
+        const { data: { subscription } } = onAuthStateChange((_event, newSession) => {
+            signedIn = Boolean(newSession);
+            accountRequest.current++;
             setSession(newSession);
-            if (newSession) await loadUser();
-            else setUser(null);
+            clearTimeout(authTimer);
+            if (newSession) {
+                setUser((current) => current?.id === newSession.user.id ? current : null);
+                // Supabase auth callbacks must finish before making another auth request.
+                authTimer = setTimeout(() => { if (!disposed) loadUser(); }, 0);
+            } else setUser(null);
         });
 
-        return () => subscription.unsubscribe();
+        function recheckAccount() {
+            if (signedIn && document.visibilityState === "visible") loadUser();
+        }
+        const interval = setInterval(recheckAccount, 60_000);
+        window.addEventListener("focus", recheckAccount);
+        document.addEventListener("visibilitychange", recheckAccount);
+        return () => {
+            disposed = true;
+            accountRequest.current++;
+            clearTimeout(authTimer);
+            clearInterval(interval);
+            window.removeEventListener("focus", recheckAccount);
+            document.removeEventListener("visibilitychange", recheckAccount);
+            subscription.unsubscribe();
+        };
     }, []);
 
     async function loadUser() {
+        const request = ++accountRequest.current;
         try {
             const currentUser = await getCurrentUserWithProfile();
+            if (request !== accountRequest.current) return;
             if (!currentUser) { setUser(null); return; }
             if (!currentUser.profile.active) {
-                await logout();
+                setUser(null);
                 setError("Your account is inactive.");
+                await logout();
                 return;
             }
             setUser(currentUser);
             setError("");
         } catch (error) {
+            if (request !== accountRequest.current) return;
             console.error(error);
+            setUser(null);
             setError("Unable to load your account.");
         }
     }
@@ -86,7 +117,13 @@ export default function App() {
         );
     }
 
-    if (!user) return <p>Loading account...</p>;
+    if (!user) return error ? (
+        <div className="scaffold-card">
+            <p role="alert">{error}</p>
+            <button type="button" onClick={loadUser}>Retry</button>
+            <button type="button" onClick={() => logout().catch(() => setError("Unable to sign out. Please try again."))}>Sign out</button>
+        </div>
+    ) : <p>Loading account...</p>;
 
     const isAdmin = user.profile.account_type === "admin";
     const isInstructor = user.profile.account_type === "instructor";

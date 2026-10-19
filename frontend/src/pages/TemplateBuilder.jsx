@@ -7,6 +7,7 @@ import {
 } from "../services/instructorService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import MedicationSelector from "../components/MedicationSelector.jsx";
+import { validateRubric } from "../lib/grading.js";
 
 const EMPTY_FORM = {
     title: "",
@@ -221,6 +222,13 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
         const age = parseInt(form.age, 10);
         if (isNaN(age) || age < 0 || age > 150) {
             setError("Age must be a number between 0 and 150.");
+            return;
+        }
+
+        try {
+            validateRubric(rubricCriteria);
+        } catch (error) {
+            setError(error.message);
             return;
         }
 

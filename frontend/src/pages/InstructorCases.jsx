@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase } from "../services/instructorService.js";
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
+import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 
 const STATUS_STYLES = {
     "not started":        { background: "#f1f5f9", color: "#64748b" },
@@ -18,15 +19,6 @@ const STATUS_LABELS = {
     "pending review":     "Pending Review",
     "completed":          "Completed",
 };
-
-// The default rubric criteria every case gets. Instructors can override
-// these by defining their own criteria in the template builder.
-const DEFAULT_CRITERIA = [
-    { key: "subjective",  label: "Subjective History",          maxPoints: 25 },
-    { key: "objective",   label: "Objective Findings & Vitals", maxPoints: 25 },
-    { key: "assessment",  label: "Assessment & Clinical Logic",  maxPoints: 25 },
-    { key: "plan",        label: "Plan & Safety Checks",        maxPoints: 25 },
-];
 
 export default function InstructorCases({ onNavigate }) {
     const [templates, setTemplates] = useState([]);
@@ -145,22 +137,17 @@ export default function InstructorCases({ onNavigate }) {
     }
 
     function getCriteria(c) {
-        const templateCriteria = c.patient_templates?.rubric_criteria || c.patient_snapshot?.rubric_criteria;
-        if (templateCriteria && templateCriteria.length > 0) return templateCriteria;
-        return DEFAULT_CRITERIA;
+        return getCaseCriteria(c);
     }
 
 
     function totalScore() {
-        return Object.values(rubricScores).reduce((sum, val) => {
-            const n = parseFloat(val);
-            return sum + (isNaN(n) ? 0 : n);
-        }, 0);
+        return reviewCase ? previewGrade(getCriteria(reviewCase), rubricScores) : 0;
     }
 
     function maxScore() {
         if (!reviewCase) return 100;
-        return getCriteria(reviewCase).reduce((sum, c) => sum + c.maxPoints, 0);
+        return getCriteria(reviewCase).reduce((sum, c) => sum + Number(c.maxPoints), 0);
     }
 
     function addAnnotation() {
@@ -181,18 +168,11 @@ export default function InstructorCases({ onNavigate }) {
         setReviewError("");
 
         const criteria = getCriteria(reviewCase);
-        const allFilled = criteria.every((c) => rubricScores[c.key] !== "");
-        if (!allFilled) {
-            setReviewError("Please fill in a score for every rubric criterion before submitting.");
-            setReviewSubmitting(false);
-            return;
-        }
-
         try {
             const updated = await gradeCase(reviewCase.id, {
+                criteria,
                 rubricScores,
                 chartAnnotations: annotations,
-                score: totalScore(),
                 feedback,
                 decision,
             });
@@ -200,7 +180,7 @@ export default function InstructorCases({ onNavigate }) {
             closeReview();
         } catch (err) {
             console.error(err);
-            setReviewError("Failed to save grade. Please try again.");
+            setReviewError(err.message || "Failed to save grade. Please try again.");
         }
         setReviewSubmitting(false);
     }
@@ -626,13 +606,13 @@ export default function InstructorCases({ onNavigate }) {
                                     );
                                 })()}
 
-                                {reviewCase.patient_templates?.expectations_rubric && (
+                                {(reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric) && (
                                     <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px" }}>
                                         <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>
                                             Instructor Expectations & Milestones
                                         </p>
                                         <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>
-                                            {reviewCase.patient_templates.expectations_rubric}
+                                            {reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}
                                         </p>
                                     </div>
                                 )}
@@ -644,16 +624,18 @@ export default function InstructorCases({ onNavigate }) {
                                     {getCriteria(reviewCase).map((crit) => (
                                         <div key={crit.key} style={{ marginBottom: "1rem" }}>
                                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                                                <label style={{ fontWeight: 500, fontSize: "0.875rem" }}>{crit.label}</label>
+                                                <label htmlFor={`rubric-score-${crit.key}`} style={{ fontWeight: 500, fontSize: "0.875rem" }}>{crit.label}</label>
                                                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>/ {crit.maxPoints} pts</span>
                                             </div>
                                             <input
+                                                id={`rubric-score-${crit.key}`}
                                                 type="number"
+                                                step="0.01"
                                                 min={0}
                                                 max={crit.maxPoints}
                                                 value={rubricScores[crit.key] ?? ""}
                                                 onChange={(e) => setRubricScores((prev) => ({ ...prev, [crit.key]: e.target.value }))}
-                                                disabled={reviewCase.encounter_status !== "pending review"}
+                                                disabled={reviewSubmitting || reviewCase.encounter_status !== "pending review"}
                                                 className="instructor-search-input"
                                                 style={{ width: "100%" }}
                                             />
