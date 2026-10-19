@@ -80,8 +80,48 @@ export async function deleteTemplate(id) {
 export async function getMyCourses() {
     const { data, error } = await supabase
         .from("courses")
-        .select("id, course_number, crn")
+        .select("id, course_number, crn, discipline")
         .order("course_number");
+    if (error) throw error;
+    return data;
+}
+
+export async function createCourse({ course_number, crn, discipline }) {
+    const { data, error } = await supabase
+        .from("courses")
+        .insert({ course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateCourse(courseId, { course_number, crn, discipline }) {
+    const { data, error } = await supabase
+        .from("courses")
+        .update({ course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
+        .eq("id", courseId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteCourse(courseId) {
+    const { error } = await supabase
+        .from("courses")
+        .delete()
+        .eq("id", courseId);
+    if (error) throw error;
+}
+
+export async function getClinicalRoles() {
+    const { data, error } = await supabase
+        .from("roles")
+        .select("role_name, display_name")
+        .eq("is_clinical", true)
+        .eq("active", true)
+        .order("display_name");
     if (error) throw error;
     return data;
 }
