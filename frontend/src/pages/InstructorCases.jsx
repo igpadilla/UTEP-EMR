@@ -377,7 +377,7 @@ export default function InstructorCases({ onNavigate }) {
                                 checked={showArchived}
                                 onChange={(e) => setShowArchived(e.target.checked)}
                             />
-                            View Archived Cases
+                            Include Archived Cases
                         </label>
                     </div>
                 </div>
@@ -388,8 +388,8 @@ export default function InstructorCases({ onNavigate }) {
                     ) : cases.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">📂</div>
-                            <strong>{showArchived ? "No archived cases" : "No cases assigned yet"}</strong>
-                            <p>{showArchived ? "There are no archived cases to display." : "Assign a template to a student to get started."}</p>
+                            <strong>No cases assigned yet</strong>
+                            <p>Assign a template to a student to get started.</p>
                         </div>
                     ) : (
                         <div className="patient-table-wrapper">
@@ -427,6 +427,19 @@ export default function InstructorCases({ onNavigate }) {
                                                     <span className="instructor-status-badge" style={statusStyle}>
                                                         {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
                                                     </span>
+                                                    {c.is_archived && (
+                                                        <span
+                                                            className="instructor-status-badge"
+                                                            style={{
+                                                                background: "#f1f5f9",
+                                                                color: "#64748b",
+                                                                border: "1px solid #cbd5e1",
+                                                                marginLeft: "0.35rem",
+                                                            }}
+                                                        >
+                                                            Archived
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td>{c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"}</td>
                                                 <td>
@@ -454,7 +467,7 @@ export default function InstructorCases({ onNavigate }) {
                                                         >
                                                             Audit Log
                                                         </button>
-                                                        {!showArchived && c.encounter_status === "completed" && (
+                                                        {!c.is_archived && c.encounter_status === "completed" && (
                                                             <button
                                                                 className="instructor-action-btn instructor-action-delete"
                                                                 type="button"
@@ -463,7 +476,7 @@ export default function InstructorCases({ onNavigate }) {
                                                                 Archive
                                                             </button>
                                                         )}
-                                                        {showArchived && (
+                                                        {c.is_archived && (
                                                             <button
                                                                 className="instructor-action-btn instructor-action-edit"
                                                                 type="button"
