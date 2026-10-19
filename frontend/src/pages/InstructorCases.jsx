@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase } from "../services/instructorService.js";
+import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase, archiveCase, unarchiveCase } from "../services/instructorService.js";
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 
@@ -55,9 +55,12 @@ export default function InstructorCases({ onNavigate }) {
     const [auditModalOpen, setAuditModalOpen] = useState(false);
     const [auditLoading, setAuditLoading] = useState(false);
 
+    // Archiving
+    const [showArchived, setShowArchived] = useState(false);
+
     useEffect(() => {
         fetchAll();
-    }, []);
+    }, [showArchived]);
 
     async function fetchAll() {
         setLoading(true);
@@ -65,7 +68,7 @@ export default function InstructorCases({ onNavigate }) {
         try {
             const [tmpl, assigned] = await Promise.all([
                 getMyTemplates(),
-                getMyAssignedCases(),
+                getMyAssignedCases(showArchived),
             ]);
             setTemplates(tmpl);
             setCases(assigned);
@@ -74,6 +77,26 @@ export default function InstructorCases({ onNavigate }) {
             setError("Failed to load data. Please try again.");
         }
         setLoading(false);
+    }
+
+    async function handleArchive(caseId) {
+        try {
+            await archiveCase(caseId);
+            await fetchAll();
+        } catch (err) {
+            console.error(err);
+            alert("Failed to archive case.");
+        }
+    }
+
+    async function handleUnarchive(caseId) {
+        try {
+            await unarchiveCase(caseId);
+            await fetchAll();
+        } catch (err) {
+            console.error(err);
+            alert("Failed to unarchive case.");
+        }
     }
 
     async function handleDelete(templateId, patientName) {
@@ -347,6 +370,16 @@ export default function InstructorCases({ onNavigate }) {
                             All cases assigned to students and their current status.
                         </p>
                     </div>
+                    <div className="instructor-row-actions">
+                        <label className="instructor-student-label">
+                            <input
+                                type="checkbox"
+                                checked={showArchived}
+                                onChange={(e) => setShowArchived(e.target.checked)}
+                            />
+                            View Archived Cases
+                        </label>
+                    </div>
                 </div>
 
                 <div className="patient-results">
@@ -355,8 +388,8 @@ export default function InstructorCases({ onNavigate }) {
                     ) : cases.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">📂</div>
-                            <strong>No cases assigned yet</strong>
-                            <p>Assign a template to a student to get started.</p>
+                            <strong>{showArchived ? "No archived cases" : "No cases assigned yet"}</strong>
+                            <p>{showArchived ? "There are no archived cases to display." : "Assign a template to a student to get started."}</p>
                         </div>
                     ) : (
                         <div className="patient-table-wrapper">
@@ -421,6 +454,24 @@ export default function InstructorCases({ onNavigate }) {
                                                         >
                                                             Audit Log
                                                         </button>
+                                                        {!showArchived && c.encounter_status === "completed" && (
+                                                            <button
+                                                                className="instructor-action-btn instructor-action-delete"
+                                                                type="button"
+                                                                onClick={() => handleArchive(c.id)}
+                                                            >
+                                                                Archive
+                                                            </button>
+                                                        )}
+                                                        {showArchived && (
+                                                            <button
+                                                                className="instructor-action-btn instructor-action-edit"
+                                                                type="button"
+                                                                onClick={() => handleUnarchive(c.id)}
+                                                            >
+                                                                Unarchive
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
