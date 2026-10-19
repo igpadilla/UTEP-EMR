@@ -14,6 +14,7 @@ import TemplateBuilder from "./pages/TemplateBuilder.jsx";
 import CaseAssign from "./pages/CaseAssign.jsx";
 import StudentCases from "./pages/StudentCases.jsx";
 import CourseForm from "./pages/CourseForm.jsx";
+import CourseDetail from "./pages/CourseDetail.jsx";
 
 import {
     getSession,
@@ -103,7 +104,8 @@ export default function App() {
         : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" ? "patients"
         : nav.page === "appointments" ? "appointments"
-        : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" || nav.page === "courseForm" ? "cases"
+        : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "cases"
+        : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCases" ? "myCases"
         : "dashboard";
 
@@ -112,6 +114,8 @@ export default function App() {
             navigate("studentManagement");
         } else if (page === "cases" && canManageCases) {
             navigate("instructorCases");
+        } else if (page === "courses" && canManageCases) {
+            navigate("courses");
         } else if (page === "myCases") {
             navigate("studentCases");
         } else if (page === "patients") {
@@ -163,10 +167,13 @@ export default function App() {
         case "studentCases":
             pageContent = <StudentCases onNavigate={navigate} />;
             break;
-        case "courseForm":
+        case "courses":
             pageContent = canManageCases
                 ? <CourseForm onNavigate={navigate} />
                 : <Dashboard user={user} onNavigate={navigate} />;
+            break;
+        case "courseDetail":
+            pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
             break;
         case "dashboard":
         default:

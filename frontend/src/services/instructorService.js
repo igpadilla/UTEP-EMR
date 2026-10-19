@@ -86,10 +86,52 @@ export async function getMyCourses() {
     return data;
 }
 
-export async function createCourse({ course_number, crn, discipline }) {
+export async function getCourseById(courseId) {
     const { data, error } = await supabase
         .from("courses")
-        .insert({ course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
+        .select("id, course_number, crn, discipline, instructor_id, profiles!instructor_id ( first_name, last_name )")
+        .eq("id", courseId)
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function getCourseAssignedCases(courseId) {
+    const { data: enrollments, error: enrollErr } = await supabase
+        .from("course_enrollments")
+        .select("student_id")
+        .eq("course_id", courseId);
+    if (enrollErr) throw enrollErr;
+    if (!enrollments?.length) return [];
+
+    const studentIds = enrollments.map((e) => e.student_id);
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .select(`
+            id, encounter_status, assigned_at, due_date, score,
+            patient_templates ( first_name, last_name, chief_complaint ),
+            profiles!student_id ( user_id, first_name, last_name )
+        `)
+        .in("student_id", studentIds)
+        .order("assigned_at", { ascending: false });
+    if (error) throw error;
+    return data;
+}
+
+export async function getAllCourses() {
+    const { data, error } = await supabase
+        .from("courses")
+        .select("id, course_number, crn, discipline, instructor_id, profiles!instructor_id ( first_name, last_name )")
+        .order("course_number");
+    if (error) throw error;
+    return data;
+}
+
+export async function createCourse({ course_number, crn, discipline }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+        .from("courses")
+        .insert({ instructor_id: user.id, course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
         .select()
         .single();
     if (error) throw error;

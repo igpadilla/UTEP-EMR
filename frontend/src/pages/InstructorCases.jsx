@@ -241,13 +241,6 @@ export default function InstructorCases({ onNavigate }) {
                     <h2>Case Management</h2>
                     <p>Create patient templates and assign training cases to students.</p>
                 </div>
-                <button
-                    className="secondary-action-button"
-                    type="button"
-                    onClick={() => onNavigate("courseForm")}
-                >
-                    Manage Courses
-                </button>
             </div>
 
             {error && (
