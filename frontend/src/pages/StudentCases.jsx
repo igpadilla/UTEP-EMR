@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     getMyAssignedCases,
     startCase,
@@ -37,7 +37,7 @@ const EMPTY_PT_SOAP = {
     plan: "",
 };
 
-export default function StudentCases({ onNavigate }) {
+export default function StudentCases({ onNavigate, openCaseId = null }) {
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -75,6 +75,17 @@ export default function StudentCases({ onNavigate }) {
         fetchCases();
         fetchClinicalRoles();
     }, []);
+
+    // Open a specific case when arriving from another page (e.g. a course's case list).
+    const openedFromLink = useRef(false);
+    useEffect(() => {
+        if (!openCaseId || openedFromLink.current || loading) return;
+        const target = cases.find((c) => c.id === openCaseId);
+        if (target) {
+            openedFromLink.current = true;
+            openCase(target);
+        }
+    }, [openCaseId, loading, cases]);
 
     async function fetchCases() {
         setLoading(true);
