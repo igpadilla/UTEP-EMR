@@ -155,7 +155,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                             key={c.id}
                                             className="course-detail-case-row"
                                             style={{ gridTemplateColumns: "1fr 120px 110px 70px", cursor: "pointer" }}
-                                            onClick={() => onNavigate("studentPatientDetail", c.id)}
+                                            onClick={() => onNavigate("patientChart", null, { caseId: c.id, backTo: "studentCourses" })}
                                         >
                                             <div>
                                                 <div className="course-detail-case-patient">
