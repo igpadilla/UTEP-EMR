@@ -15,6 +15,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
     const [dueDate, setDueDate] = useState("");
     const [assignmentNotes, setAssignmentNotes] = useState("");
     const [courses, setCourses] = useState([]);
+    const [selectedCourseId, setSelectedCourseId] = useState(null);
     const [courseLoadingId, setCourseLoadingId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -50,6 +51,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
 
     async function handleCourseSelect(courseId) {
         if (!courseId) return;
+        setSelectedCourseId(courseId);
         setCourseLoadingId(courseId);
         try {
             const enrolled = await getCourseStudents(courseId);
@@ -106,7 +108,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
 
         const results = await Promise.allSettled(
             selected.map((studentId) =>
-                assignCase(templateId, studentId, patientSnapshot, dueDate, assignmentNotes)
+                assignCase(templateId, studentId, patientSnapshot, dueDate, assignmentNotes, selectedCourseId)
             )
         );
 
