@@ -106,8 +106,8 @@ export async function getStudents() {
     return data;
 }
 
-export async function getMyAssignedCases() {
-    const { data, error } = await supabase
+export async function getMyAssignedCases(includeArchived = false) {
+    let query = supabase
         .from("assigned_cases")
         .select(`
             *,
@@ -115,6 +115,34 @@ export async function getMyAssignedCases() {
             profiles!student_id ( first_name, last_name )
         `)
         .order("assigned_at", { ascending: false });
+
+    if (!includeArchived) {
+        query = query.eq("is_archived", false);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+}
+
+export async function archiveCase(caseId) {
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .update({ is_archived: true, updated_at: new Date().toISOString() })
+        .eq("id", caseId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function unarchiveCase(caseId) {
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .update({ is_archived: false, updated_at: new Date().toISOString() })
+        .eq("id", caseId)
+        .select()
+        .single();
     if (error) throw error;
     return data;
 }
