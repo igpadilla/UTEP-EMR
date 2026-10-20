@@ -16,8 +16,8 @@ async function seed() {
   const users = [
     { email: 'admin@test.com', firstName: 'System', lastName: 'Admin', role: 'admin' },
     { email: 'instructor@test.com', firstName: 'Jane', lastName: 'Instructor', role: 'instructor' },
-    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student' },
-    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student' }
+    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student', clinicalRole: 'pharmacy' },
+    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student', clinicalRole: 'physical_therapy' }
   ];
 
   for (const u of users) {
@@ -164,31 +164,57 @@ async function seed() {
   const instructorForCourse = userListForCourse?.users?.find(u => u.email === 'instructor@test.com');
   const studentForCourse = userListForCourse?.users?.find(u => u.email === 'student@test.com');
 
+  const ptStudentForCourse = userListForCourse?.users?.find(u => u.email === 'pt.student@test.com');
+
   if (instructorForCourse && studentForCourse) {
-    console.log('Creating sample course...');
-    const { data: course, error: courseError } = await supabase
+    console.log('Creating PHARM 4301 course...');
+    const { data: pharmCourse, error: pharmCourseError } = await supabase
       .from('courses')
       .upsert(
-        { instructor_id: instructorForCourse.id, course_number: 'PHARM 4301', crn: '11234' },
+        { instructor_id: instructorForCourse.id, course_number: 'PHARM 4301', crn: '11234', discipline: 'pharmacy' },
         { onConflict: 'instructor_id,crn', ignoreDuplicates: false }
       )
       .select('id')
       .single();
 
-    if (courseError) {
-      console.error('Error creating course:', courseError.message);
+    if (pharmCourseError) {
+      console.error('Error creating PHARM course:', pharmCourseError.message);
     } else {
-      console.log('Sample course created with ID:', course.id);
-
+      console.log('PHARM 4301 created with ID:', pharmCourse.id);
       const { error: enrollError } = await supabase
         .from('course_enrollments')
         .upsert(
-          { course_id: course.id, student_id: studentForCourse.id, enrolled_by: instructorForCourse.id },
+          { course_id: pharmCourse.id, student_id: studentForCourse.id, enrolled_by: instructorForCourse.id },
           { onConflict: 'course_id,student_id', ignoreDuplicates: true }
         );
-
-      if (enrollError) console.error('Error enrolling student:', enrollError.message);
+      if (enrollError) console.error('Error enrolling student@test.com:', enrollError.message);
       else console.log('student@test.com enrolled in PHARM 4301.');
+    }
+
+    if (ptStudentForCourse) {
+      console.log('Creating PT 3301 course...');
+      const { data: ptCourse, error: ptCourseError } = await supabase
+        .from('courses')
+        .upsert(
+          { instructor_id: instructorForCourse.id, course_number: 'PT 3301', crn: '22345', discipline: 'physical_therapy' },
+          { onConflict: 'instructor_id,crn', ignoreDuplicates: false }
+        )
+        .select('id')
+        .single();
+
+      if (ptCourseError) {
+        console.error('Error creating PT course:', ptCourseError.message);
+      } else {
+        console.log('PT 3301 created with ID:', ptCourse.id);
+        const { error: ptEnrollError } = await supabase
+          .from('course_enrollments')
+          .upsert(
+            { course_id: ptCourse.id, student_id: ptStudentForCourse.id, enrolled_by: instructorForCourse.id },
+            { onConflict: 'course_id,student_id', ignoreDuplicates: true }
+          );
+        if (ptEnrollError) console.error('Error enrolling pt.student@test.com:', ptEnrollError.message);
+        else console.log('pt.student@test.com enrolled in PT 3301.');
+      }
     }
   }
 

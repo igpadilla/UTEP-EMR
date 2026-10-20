@@ -78,9 +78,11 @@ export async function deleteTemplate(id) {
 }
 
 export async function getMyCourses() {
+    const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
         .from("courses")
         .select("id, course_number, crn, discipline")
+        .eq("instructor_id", user.id)
         .order("course_number");
     if (error) throw error;
     return data;

@@ -5,6 +5,7 @@ import {
     updateCourse,
     deleteCourse,
     getClinicalRoles,
+    getCourseStudents,
 } from "../services/instructorService.js";
 import BulkStudentImport from "../components/BulkStudentImport.jsx";
 import { supabase } from "../supabase.js";
@@ -140,6 +141,12 @@ export default function CourseForm({ onNavigate }) {
     }
 
     async function handleDelete(courseId) {
+        const enrolled = await getCourseStudents(courseId).catch(() => []);
+        if (enrolled.length > 0) {
+            setError(`Cannot delete — ${enrolled.length} student${enrolled.length !== 1 ? "s" : ""} are still enrolled. Remove them from the roster first.`);
+            return;
+        }
+        if (!window.confirm("Are you sure you want to delete this course? This cannot be undone.")) return;
         setDeletingId(courseId);
         setError("");
         setSuccess("");
@@ -149,7 +156,7 @@ export default function CourseForm({ onNavigate }) {
             if (editingId === courseId) cancelForm();
         } catch (err) {
             console.error(err);
-            setError("Cannot delete a course that has enrolled students.");
+            setError("Failed to delete course.");
         }
         setDeletingId(null);
     }
