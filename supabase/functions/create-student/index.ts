@@ -5,6 +5,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import { isDuplicateEmailError, validateStudentAccount } from "../_shared/student-validation.mjs";
 
 /* Define the JSON data expected from the frontend
 The function then validates each property before creating the account
@@ -75,7 +76,7 @@ export default {
 
     // Parse the JSON request body
 
-    let body: CreateStudentBody;
+    let body: unknown;
 
     try {
       body = await req.json();
@@ -86,29 +87,13 @@ export default {
     // Normalize submitted values before validation and storage
   // We need to remove any spaces on names, convert emails to lower case, etc
 
-  const firstName = body.firstName?.trim();
-  const lastName = body.lastName?.trim();
-  const email = body.email?.trim().toLowerCase();
-  const password = body.password ??"";
-
-  // Reject incomplete submissions before pushing to database
-  if(!firstName || !lastName || !email || !password){
-    return errorResponse("All fields are required", 400);
+  let student: Required<CreateStudentBody>;
+  try {
+    student = validateStudentAccount(body);
+  } catch (error) {
+    return errorResponse((error as Error).message, 400);
   }
-
-  // Perform an email check
-  if (!email.includes("@")){
-    return errorResponse("Enter a valid email address.",400);
-  }
-
-  // set a minimum password length
-
-  if(password.length < 6){
-    return errorResponse(
-      "The temporary password must contain at least 6 characters",
-      400,
-    );
-  }
+  const { firstName, lastName, email, password } = student;
 
   // create the account in supabase auth
 
@@ -120,6 +105,9 @@ export default {
     });
 
     if (createError || !createdUser.user){
+      if (isDuplicateEmailError(createError)) {
+        return errorResponse("That email is already in use. No new account was created.", 409);
+      }
       return errorResponse(
         createError?.message ?? "Unable to create the student account.",
         400,

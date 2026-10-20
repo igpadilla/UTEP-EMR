@@ -1,7 +1,9 @@
 import { supabase } from "../supabase.js"
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 
 export async function getCurrentUserWithProfile() {
     const { data, error } = await supabase.auth.getUser();
+    if (isAuthSessionMissingError(error)) return null;
     if (error) throw error;
 
     if(!data.user) {

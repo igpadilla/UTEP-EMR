@@ -125,6 +125,7 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
               value={form.firstName}
               onChange={handleChange}
               autoComplete="given-name"
+              maxLength={100}
               disabled={submitting}
               required
             />
@@ -139,6 +140,7 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
               value={form.lastName}
               onChange={handleChange}
               autoComplete="family-name"
+              maxLength={100}
               disabled={submitting}
               required
             />
@@ -153,6 +155,7 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
               value={form.email}
               onChange={handleChange}
               autoComplete="email"
+              maxLength={254}
               disabled={submitting}
               required
             />

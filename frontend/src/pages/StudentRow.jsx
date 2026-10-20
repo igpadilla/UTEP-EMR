@@ -15,6 +15,7 @@ export default function StudentRow({ student, onChanged }) {
         setLastName(student.last_name ?? "");
         setEmail(student.email ?? "");
         setError("");
+        setConfirming("");
         setEditing(true);
     }
 
@@ -29,7 +30,7 @@ export default function StudentRow({ student, onChanged }) {
                 firstName: firstName.trim(), lastName: lastName.trim(),
             });
             setEditing(false);
-            onChanged();
+            onChanged("Student name updated.");
         } catch (saveError) {
             setError(saveError.message);
         } finally {
@@ -43,7 +44,7 @@ export default function StudentRow({ student, onChanged }) {
         try {
             await updateStudent(student.user_id, { email: email.trim() });
             setEditing(false);
-            onChanged();
+            onChanged("Student email updated.");
         } catch (saveError) {
             setError(saveError.message);
         } finally {
@@ -57,7 +58,9 @@ export default function StudentRow({ student, onChanged }) {
         try {
             await updateStudent(student.user_id, { active: !student.active });
             setConfirming("");
-            onChanged();
+            onChanged(student.active
+                ? "Student deactivated. Their existing work has been kept."
+                : "Student reactivated. They can sign in again.");
         } catch (statusError) {
             setError(statusError.message);
         } finally {
@@ -70,7 +73,7 @@ export default function StudentRow({ student, onChanged }) {
         setError("");
         try {
             await deleteStudent(student.user_id);
-            onChanged();
+            onChanged("Student account deleted.");
         } catch (deleteError) {
             setError(deleteError.message);
             setConfirming("");
@@ -128,7 +131,7 @@ export default function StudentRow({ student, onChanged }) {
                     {confirming ? (
                         <>
                             <span className="student-confirm-label">
-                                {confirming === "delete" ? "Delete permanently?" : "Deactivate?"}
+                                {confirming === "delete" ? "Delete permanently?" : "Deactivate login and keep their work?"}
                             </span>
                             <button type="button" className="student-small-button student-danger-button" disabled={busy}
                                 onClick={confirming === "delete" ? remove : changeStatus}>Confirm</button>
