@@ -97,14 +97,6 @@ export async function getCourseById(courseId) {
 }
 
 export async function getCourseAssignedCases(courseId) {
-    const { data: enrollments, error: enrollErr } = await supabase
-        .from("course_enrollments")
-        .select("student_id")
-        .eq("course_id", courseId);
-    if (enrollErr) throw enrollErr;
-    if (!enrollments?.length) return [];
-
-    const studentIds = enrollments.map((e) => e.student_id);
     const { data, error } = await supabase
         .from("assigned_cases")
         .select(`
@@ -112,7 +104,7 @@ export async function getCourseAssignedCases(courseId) {
             patient_templates ( first_name, last_name, chief_complaint ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
-        .in("student_id", studentIds)
+        .eq("course_id", courseId)
         .order("assigned_at", { ascending: false });
     if (error) throw error;
     return data;
@@ -171,10 +163,40 @@ export async function getClinicalRoles() {
 export async function getCourseStudents(courseId) {
     const { data, error } = await supabase
         .from("course_enrollments")
-        .select("profiles!student_id ( user_id, first_name, last_name )")
+        .select("student_id, profiles!student_id ( user_id, first_name, last_name )")
         .eq("course_id", courseId);
     if (error) throw error;
     return data.map((row) => row.profiles).filter(Boolean);
+}
+
+export async function unenrollStudent(courseId, studentId) {
+    const { error } = await supabase
+        .from("course_enrollments")
+        .delete()
+        .eq("course_id", courseId)
+        .eq("student_id", studentId);
+    if (error) throw error;
+}
+
+export async function getMyEnrolledCourses() {
+    const { data, error } = await supabase
+        .from("course_enrollments")
+        .select("courses ( id, course_number, crn, discipline, profiles!instructor_id ( first_name, last_name ) )");
+    if (error) throw error;
+    return data.map((row) => row.courses).filter(Boolean);
+}
+
+export async function getMyCourseCases(courseId) {
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .select(`
+            id, encounter_status, assigned_at, due_date, score, instructor_feedback,
+            patient_templates ( first_name, last_name, chief_complaint )
+        `)
+        .eq("course_id", courseId)
+        .order("due_date", { ascending: true, nullsFirst: false });
+    if (error) throw error;
+    return data;
 }
 
 export async function getStudents() {
@@ -262,7 +284,7 @@ export async function gradeCase(caseId, { rubricScores, chartAnnotations, score,
     return data;
 }
 
-export async function assignCase(templateId, studentId, patientSnapshot, dueDate = null, assignmentNotes = null) {
+export async function assignCase(templateId, studentId, patientSnapshot, dueDate = null, assignmentNotes = null, courseId = null) {
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
         .from("assigned_cases")
@@ -273,6 +295,7 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
             patient_snapshot: patientSnapshot,
             due_date: dueDate || null,
             assignment_notes: assignmentNotes || null,
+            course_id: courseId || null,
         })
         .select()
         .single();

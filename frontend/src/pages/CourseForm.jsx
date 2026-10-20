@@ -26,6 +26,18 @@ const DISCIPLINE_BANNERS = {
 };
 const DEFAULT_BANNER = "linear-gradient(135deg, #475569 0%, #94a3b8 100%)";
 
+const DISCIPLINE_ABBR = {
+    pharmacy:                  "PHARM",
+    nursing:                   "NURS",
+    physical_therapy:          "PT",
+    occupational_therapy:      "OT",
+    psychology:                "PSYC",
+    psychiatry:                "PSYC",
+    speech_language_pathology: "SLP",
+    social_work:               "SW",
+    inpatient_physician:       "MD",
+};
+
 export default function CourseForm({ onNavigate }) {
     const [courses, setCourses]       = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
@@ -292,17 +304,14 @@ export default function CourseForm({ onNavigate }) {
                                 <div
                                     className="course-card-banner"
                                     style={{ background: banner }}
-                                >
-                                    {c.discipline && (
-                                        <span className="course-card-discipline">
-                                            {disciplineLabel(c.discipline)}
-                                        </span>
-                                    )}
-                                </div>
+                                />
 
                                 <div className="course-card-body">
                                     <span className="course-card-id">CRN {c.crn}</span>
-                                    <span className="course-card-name">{c.course_number}</span>
+                                    <span className="course-card-name">
+                                        {c.discipline ? `${DISCIPLINE_ABBR[c.discipline] ?? disciplineLabel(c.discipline)} ` : ""}
+                                        {c.course_number}
+                                    </span>
                                 </div>
 
                                 <div className="course-card-footer">

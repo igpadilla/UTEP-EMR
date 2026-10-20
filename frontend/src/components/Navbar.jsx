@@ -48,6 +48,16 @@ export default function Navbar({ currentPage, onNavigate, user }) {
 
         {profile.account_type === "student" && (
           <button
+            className={`nav-link ${currentPage === "myCourses" ? "active" : ""}`}
+            type="button"
+            onClick={() => onNavigate("myCourses")}
+          >
+            My Courses
+          </button>
+        )}
+
+        {profile.account_type === "student" && (
+          <button
             className={`nav-link ${currentPage === "myCases" ? "active" : ""}`}
             type="button"
             onClick={() => onNavigate("myCases")}

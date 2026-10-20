@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { supabase } from "../supabase.js";
 import {
     getCourseById,
     getCourseStudents,
     getCourseAssignedCases,
     getClinicalRoles,
+    updateCourse,
+    unenrollStudent,
 } from "../services/instructorService.js";
 
 const DISCIPLINE_BANNERS = {
@@ -18,6 +21,18 @@ const DISCIPLINE_BANNERS = {
     inpatient_physician: "linear-gradient(135deg, #991b1b 0%, #ef4444 100%)",
 };
 const DEFAULT_BANNER = "linear-gradient(135deg, #475569 0%, #94a3b8 100%)";
+
+const DISCIPLINE_ABBR = {
+    pharmacy:                  "PHARM",
+    nursing:                   "NURS",
+    physical_therapy:          "PT",
+    occupational_therapy:      "OT",
+    psychology:                "PSYC",
+    psychiatry:                "PSYC",
+    speech_language_pathology: "SLP",
+    social_work:               "SW",
+    inpatient_physician:       "MD",
+};
 
 const STATUS_LABELS = {
     "not started": "Not Started",
@@ -40,12 +55,24 @@ export default function CourseDetail({ courseId, onNavigate }) {
     const [students, setStudents] = useState([]);
     const [cases, setCases] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [currentUserId, setCurrentUserId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+
+    // Edit state
+    const [editing, setEditing] = useState(false);
+    const [editForm, setEditForm] = useState({ course_number: "", crn: "", discipline: "" });
+    const [saving, setSaving] = useState(false);
+    const [editError, setEditError] = useState("");
+
+    // Unenroll state
+    const [unenrollingId, setUnenrollingId] = useState(null);
 
     useEffect(() => {
         async function load() {
             try {
+                const { data: { user } } = await supabase.auth.getUser();
+                setCurrentUserId(user?.id ?? null);
                 const [c, s, ca, r] = await Promise.all([
                     getCourseById(courseId),
                     getCourseStudents(courseId),
@@ -65,6 +92,46 @@ export default function CourseDetail({ courseId, onNavigate }) {
         load();
     }, [courseId]);
 
+    function startEdit() {
+        setEditForm({
+            course_number: course.course_number,
+            crn: course.crn,
+            discipline: course.discipline ?? "",
+        });
+        setEditError("");
+        setEditing(true);
+    }
+
+    async function handleSave() {
+        if (!editForm.course_number.trim() || !editForm.crn.trim()) {
+            setEditError("Course number and CRN are required.");
+            return;
+        }
+        setSaving(true);
+        setEditError("");
+        try {
+            const updated = await updateCourse(courseId, editForm);
+            setCourse((prev) => ({ ...prev, ...updated }));
+            setEditing(false);
+        } catch (err) {
+            console.error(err);
+            setEditError("Failed to save changes.");
+        }
+        setSaving(false);
+    }
+
+    async function handleUnenroll(studentId) {
+        setUnenrollingId(studentId);
+        try {
+            await unenrollStudent(courseId, studentId);
+            setStudents((prev) => prev.filter((s) => s.user_id !== studentId));
+        } catch (err) {
+            console.error(err);
+            setError("Failed to unenroll student.");
+        }
+        setUnenrollingId(null);
+    }
+
     if (loading) {
         return (
             <main className="instructor-main">
@@ -82,6 +149,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
     }
 
     const instructor = course.profiles;
+    const isOwner = currentUserId && course.instructor_id === currentUserId;
 
     const gradebook = students.map((s) => {
         const studentCases = cases.filter((c) => c.profiles?.user_id === s.user_id);
@@ -91,7 +159,9 @@ export default function CourseDetail({ courseId, onNavigate }) {
             : null;
         return { student: s, cases: studentCases, avg };
     });
-    const banner = DISCIPLINE_BANNERS[course.discipline] ?? DEFAULT_BANNER;
+
+    const activeDiscipline = editing ? editForm.discipline : course.discipline;
+    const banner = DISCIPLINE_BANNERS[activeDiscipline] ?? DEFAULT_BANNER;
     const disciplineLabel = roles.find((r) => r.role_name === course.discipline)?.display_name ?? course.discipline;
     const initials = instructor
         ? `${instructor.first_name?.[0] ?? ""}${instructor.last_name?.[0] ?? ""}`.toUpperCase()
@@ -110,6 +180,11 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     >
                         ← Courses
                     </button>
+                    {course.discipline && (
+                        <p className="course-detail-crn" style={{ opacity: 0.85 }}>
+                            {DISCIPLINE_ABBR[course.discipline] ?? disciplineLabel}
+                        </p>
+                    )}
                     <p className="course-detail-crn">CRN {course.crn}</p>
                     <h2 className="course-detail-title">{course.course_number}</h2>
                 </div>
@@ -225,8 +300,19 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         ) : (
                             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
                                 {students.map((s) => (
-                                    <li key={s.user_id} style={{ padding: "0.65rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-                                        {s.last_name}, {s.first_name}
+                                    <li key={s.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.65rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+                                        <span>{s.last_name}, {s.first_name}</span>
+                                        {isOwner && (
+                                            <button
+                                                className="secondary-action-button"
+                                                type="button"
+                                                onClick={() => handleUnenroll(s.user_id)}
+                                                disabled={unenrollingId === s.user_id}
+                                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", color: "#dc2626" }}
+                                            >
+                                                {unenrollingId === s.user_id ? "Removing…" : "Remove"}
+                                            </button>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
@@ -251,25 +337,99 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         </div>
                     </div>
 
-                    {/* Details */}
+                    {/* Details / Edit */}
                     <div className="course-detail-sidebar-card">
-                        <p className="course-detail-sidebar-title">Details</p>
-                        <div className="course-detail-meta-row">
-                            <span className="course-detail-meta-label">CRN</span>
-                            <span className="course-detail-meta-value">{course.crn}</span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                            <p className="course-detail-sidebar-title" style={{ margin: 0 }}>Details</p>
+                            {isOwner && !editing && (
+                                <button
+                                    className="secondary-action-button"
+                                    type="button"
+                                    onClick={startEdit}
+                                    style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem" }}
+                                >
+                                    Edit
+                                </button>
+                            )}
                         </div>
-                        <div className="course-detail-meta-row">
-                            <span className="course-detail-meta-label">Discipline</span>
-                            <span className="course-detail-meta-value">{disciplineLabel || "—"}</span>
-                        </div>
-                        <div className="course-detail-meta-row">
-                            <span className="course-detail-meta-label">Students</span>
-                            <span className="course-detail-meta-value">{students.length}</span>
-                        </div>
-                        <div className="course-detail-meta-row">
-                            <span className="course-detail-meta-label">Cases</span>
-                            <span className="course-detail-meta-value">{cases.length}</span>
-                        </div>
+
+                        {editing ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                <div className="student-form-field">
+                                    <label>Course Number</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.course_number}
+                                        onChange={(e) => setEditForm((p) => ({ ...p, course_number: e.target.value }))}
+                                        disabled={saving}
+                                    />
+                                </div>
+                                <div className="student-form-field">
+                                    <label>CRN</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.crn}
+                                        onChange={(e) => setEditForm((p) => ({ ...p, crn: e.target.value }))}
+                                        disabled={saving}
+                                    />
+                                </div>
+                                <div className="student-form-field">
+                                    <label>Discipline</label>
+                                    <select
+                                        value={editForm.discipline}
+                                        onChange={(e) => setEditForm((p) => ({ ...p, discipline: e.target.value }))}
+                                        disabled={saving}
+                                        className="instructor-search-input"
+                                    >
+                                        <option value="">— None —</option>
+                                        {roles.map((r) => (
+                                            <option key={r.role_name} value={r.role_name}>{r.display_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {editError && (
+                                    <p className="form-message form-message-error" style={{ margin: 0 }}>{editError}</p>
+                                )}
+                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                                    <button
+                                        className="primary-action-button"
+                                        type="button"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        style={{ flex: 1 }}
+                                    >
+                                        {saving ? "Saving…" : "Save"}
+                                    </button>
+                                    <button
+                                        className="secondary-action-button"
+                                        type="button"
+                                        onClick={() => setEditing(false)}
+                                        disabled={saving}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="course-detail-meta-row">
+                                    <span className="course-detail-meta-label">CRN</span>
+                                    <span className="course-detail-meta-value">{course.crn}</span>
+                                </div>
+                                <div className="course-detail-meta-row">
+                                    <span className="course-detail-meta-label">Discipline</span>
+                                    <span className="course-detail-meta-value">{disciplineLabel || "—"}</span>
+                                </div>
+                                <div className="course-detail-meta-row">
+                                    <span className="course-detail-meta-label">Students</span>
+                                    <span className="course-detail-meta-value">{students.length}</span>
+                                </div>
+                                <div className="course-detail-meta-row">
+                                    <span className="course-detail-meta-label">Cases</span>
+                                    <span className="course-detail-meta-value">{cases.length}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Actions */}

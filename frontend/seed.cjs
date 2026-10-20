@@ -16,8 +16,8 @@ async function seed() {
   const users = [
     { email: 'admin@test.com', firstName: 'System', lastName: 'Admin', role: 'admin' },
     { email: 'instructor@test.com', firstName: 'Jane', lastName: 'Instructor', role: 'instructor' },
-    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student', clinicalRole: 'pharmacy' },
-    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student', clinicalRole: 'physical_therapy' }
+    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student' },
+    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student' }
   ];
 
   for (const u of users) {
@@ -198,6 +198,13 @@ async function seed() {
   const instructorUser = userList?.users?.find(u => u.email === 'instructor@test.com');
   const studentUser = userList?.users?.find(u => u.email === 'student@test.com');
 
+  // Look up the sample course so case assignment can reference it
+  const { data: sampleCourse } = await supabase
+    .from('courses')
+    .select('id')
+    .eq('crn', '11234')
+    .maybeSingle();
+
   if (instructorUser && studentUser) {
     console.log('Creating sample template...');
     const { data: template, error: templateError } = await supabase
@@ -266,6 +273,7 @@ async function seed() {
           patient_snapshot: patientSnapshot,
           due_date: '2026-10-15',
           assignment_notes: 'Focus on antiplatelet and anticoagulation therapy options.',
+          course_id: sampleCourse?.id ?? null,
         });
 
       if (caseError) console.error('Error assigning case:', caseError.message);
