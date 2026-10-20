@@ -58,3 +58,5 @@ For that check, open a patient's existing detail page, choose Open chart, save e
 ## Earlier work
 
 The separate student-management/grading work is preserved in local commit `98df90a` on `codex/student-management-improvements`. It is not included in this patient-chart branch. No branches were deleted and nothing was pushed or deployed.
+
+For the combined version, use `codex/sprint3-integration`. That branch includes both features and development through `52d9e60`; see `docs/SPRINT3_INTEGRATION.md`.

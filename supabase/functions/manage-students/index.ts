@@ -8,6 +8,7 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 //Load the helper that checks who is calling the function
 
 import { withSupabase } from "@supabase/server";
+import { isDuplicateEmailError, validateStudentEmail, validateStudentIdentity } from "../_shared/student-validation.mjs";
 
 
 
@@ -52,62 +53,29 @@ export default {
     //stop if the account is inactive or the user is not an admin
     if (!profile.active || profile.account_type !== "admin") {
       return errorResponse(
-        "ONly active admins can manage student accounts", 403,
+        "Only active admins can manage student accounts", 403,
       );
 
     }
     if (req.method === "GET") {
       // read the requested page - use page 1 when none is supplied
-      const page = Number(new URL(req.url).searchParams.get("page") ?? "1");
-      const pageSize = 25;
-
-
-      if (!Number.isSafeInteger(page) || page < 1) {
+      const params = new URL(req.url).searchParams;
+      const page = Number(params.get("page") ?? "1");
+      const search = (params.get("search") ?? "").trim();
+      const status = params.get("status") ?? "all";
+      if (!Number.isSafeInteger(page) || page < 1 || page > 2147483647) {
         return errorResponse("Page must be a positive whole number", 400);
       }
-      const first = (page - 1) * pageSize;
-
-      // Read student profiles after admin check above has passed
-      const { data: students, error: studentError, count } = await ctx.supabaseAdmin
-        .from("profiles")
-        .select("user_id, first_name, last_name, active, created_at", { count: "exact" })
-        .eq("account_type", "student")
-        .order("created_at", { ascending: false })
-        .range(first, first + pageSize - 1);
-
-      if (studentError) {
-        return errorResponse("Unable to load students", 500);
+      if (search.length > 254 || !["all", "active", "inactive"].includes(status)) {
+        return errorResponse("Use a search of at most 254 characters and a valid account status.", 400);
       }
-      // tell the caller if the database query failed
-
-      // Send the matching profiles back as JSON
-      try {
-        // Look up the Auth account for each student profile.
-        const studentsWithEmail = await Promise.all(
-          (students ?? []).map(async (student) => {
-            const { data, error } = await ctx.supabaseAdmin.auth.admin
-              .getUserById(student.user_id);
-
-            // Stop rather than return a misleading, incomplete list.
-            if (error || !data.user) {
-              throw new Error("Student Auth lookup failed.");
-            }
-
-            // Keep the profile fields and add the account's email.
-            return { ...student, email: data.user.email ?? null };
-          }),
-        );
-
-        // Wait until all email lookups finish, then send the list.
-        return Response.json({
-          students: studentsWithEmail,
-          page,
-          pageSize,
-          total: count ?? 0,
-        });
-      } catch {
-        return errorResponse("Unable to load student emails.", 500);
+      const { data, error } = await ctx.supabaseAdmin.rpc("search_student_accounts", {
+        p_search: search, p_status: status, p_page: page,
+      });
+      if (error) {
+        return errorResponse("Unable to load students. Please try again.", 500);
       }
+      return Response.json(data);
     }
 
     if (req.method === "PATCH" || req.method === "DELETE") {
@@ -146,6 +114,9 @@ export default {
           ctx.supabaseAdmin.from("visits").select("id", { count: "exact", head: true }).eq("created_by", userId),
           ctx.supabaseAdmin.from("appointments").select("id", { count: "exact", head: true }).eq("created_by", userId),
           ctx.supabaseAdmin.from("audit_logs").select("id", { count: "exact", head: true }).eq("actor_id", userId),
+          ctx.supabaseAdmin.from("clinical_notes").select("note_id", { count: "exact", head: true }).or(`author_id.eq.${userId},reviewed_by.eq.${userId}`),
+          ctx.supabaseAdmin.from("referrals").select("id", { count: "exact", head: true }).eq("referring_user_id", userId),
+          ctx.supabaseAdmin.from("vital_sign_sets").select("id", { count: "exact", head: true }).eq("recorded_by", userId),
         ]);
         if (references.some((result) => result.error)) {
           return errorResponse("Unable to check this student's records.", 500);
@@ -167,18 +138,19 @@ export default {
       }
 
       if (editingEmail) {
-        if (typeof email !== "string") return errorResponse("A valid email is required.", 400);
-        const cleanEmail = email.trim().toLowerCase();
-        if (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-          return errorResponse("A valid email is required.", 400);
+        let cleanEmail: string;
+        try {
+          cleanEmail = validateStudentEmail(email);
+        } catch (error) {
+          return errorResponse((error as Error).message, 400);
         }
         const { data, error } = await ctx.supabaseAdmin.auth.admin.updateUserById(
           userId, { email: cleanEmail, email_confirm: true },
         );
         if (error) {
           return errorResponse(
-            error.status === 422 ? "That email is already in use." : "Unable to change the email.",
-            error.status === 422 ? 409 : 500,
+            isDuplicateEmailError(error) ? "That email is already in use." : "Unable to change the email.",
+            isDuplicateEmailError(error) ? 409 : 500,
           );
         }
         if (!data.user) return errorResponse("Unable to change the email.", 500);
@@ -192,16 +164,13 @@ export default {
         updated_at: string;
       } = { updated_at: new Date().toISOString() };
       if (editingNames) {
-        if (typeof firstName !== "string" || typeof lastName !== "string") {
-          return errorResponse("Both names are required.", 400);
+        try {
+          const clean = validateStudentIdentity({ firstName, lastName });
+          changes.first_name = clean.firstName;
+          changes.last_name = clean.lastName;
+        } catch (error) {
+          return errorResponse((error as Error).message, 400);
         }
-        const cleanFirst = firstName.trim();
-        const cleanLast = lastName.trim();
-        if (!cleanFirst || !cleanLast || cleanFirst.length > 100 || cleanLast.length > 100) {
-          return errorResponse("Names must contain 1 to 100 characters.", 400);
-        }
-        changes.first_name = cleanFirst;
-        changes.last_name = cleanLast;
       } else {
         if (typeof active !== "boolean") return errorResponse("Active must be true or false.", 400);
         changes.active = active;
