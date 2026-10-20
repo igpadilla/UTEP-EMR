@@ -4,6 +4,7 @@ import {
     getPatientById,
     createTemplate,
     updateTemplate,
+    getMyCourses,
 } from "../services/instructorService.js";
 import { getReferralsByPatient } from "../services/referralService.js";
 import TagSelector from "../components/TagSelector.jsx";
@@ -14,6 +15,7 @@ const EMPTY_FORM = {
     title: "",
     target_year: "",
     discipline: "",
+    course_id: "",
     first_name: "",
     last_name: "",
     date_of_birth: "",
@@ -47,6 +49,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
     const [baseline, setBaseline] = useState([{ key: "", value: "" }]);
     const [traps, setTraps] = useState([]);
     const [rubricCriteria, setRubricCriteria] = useState(DEFAULT_RUBRIC_CRITERIA);
+    const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(isEditing || isFromPatient);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -54,6 +57,9 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
     const [medications, setMedications] = useState([]);
     const [initialReferral, setInitialReferral] = useState({ target_discipline: "", priority: "routine", reason: "", notes: "" });
 
+    useEffect(() => {
+        getMyCourses().then(setCourses).catch(console.error);
+    }, []);
 
     useEffect(() => {
         if (isEditing) {
@@ -64,6 +70,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                         title: t.title ?? "",
                         target_year: t.target_year ?? "",
                         discipline: t.discipline ?? "",
+                        course_id: t.course_id ?? "",
                         first_name: t.first_name,
                         last_name: t.last_name,
                         date_of_birth: t.date_of_birth ?? "",
@@ -258,6 +265,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
             title: form.title.trim() || null,
             target_year: form.target_year.trim() || null,
             discipline: form.discipline.trim() || null,
+            course_id: form.course_id || null,
             first_name: form.first_name.trim(),
             last_name: form.last_name.trim(),
             date_of_birth: form.date_of_birth || null,
@@ -374,6 +382,25 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                                 disabled={submitting}
                                 placeholder="e.g. Pharmacotherapy"
                             />
+                        </div>
+
+                        <div className="student-form-field">
+                            <label htmlFor="course_id">Course</label>
+                            <select
+                                id="course_id"
+                                name="course_id"
+                                value={form.course_id}
+                                onChange={handleChange}
+                                disabled={submitting}
+                                className="instructor-search-input"
+                            >
+                                <option value="">— None —</option>
+                                {courses.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.course_number} — CRN {c.crn}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>

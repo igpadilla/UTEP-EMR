@@ -22,10 +22,16 @@ try {
         channel: process.env.PLAYWRIGHT_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
     });
     page = await browser.newPage({ viewport: { width: 1366, height: 1000 } });
+    await page.clock.install();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.setDefaultTimeout(10000);
     let accountActive = true;
+    let accountType = "admin";
+    let profileUnavailable = false;
+    let authUnavailable = false;
+    let sessionMissing = false;
+    let profileChecks = 0;
     let enrolled = false;
     let creationCalls = 0;
     let gradeSaved;
@@ -48,9 +54,19 @@ try {
         const request = route.request(), url = new URL(request.url());
         const reply = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
         if (url.pathname.endsWith("/token")) return reply({ access_token: jwt, refresh_token: "test-refresh", token_type: "bearer", expires_in: 3600, user });
-        if (url.pathname.endsWith("/user")) return reply(user);
+        if (url.pathname.endsWith("/user")) {
+            if (sessionMissing) return reply({ error_code: "session_not_found", message: "Session not found" }, 401);
+            if (authUnavailable) return reply({ message: "Temporary auth service failure" }, 503);
+            return reply(user);
+        }
         if (url.pathname.endsWith("/logout")) return reply({});
-        if (url.pathname.endsWith("/profiles")) return reply({ user_id: user.id, first_name: "Test", last_name: "Admin", account_type: "admin", active: accountActive });
+        if (url.pathname.endsWith("/profiles")) {
+            profileChecks++;
+            if (profileUnavailable === "network") return route.abort("internetdisconnected");
+            if (profileUnavailable) return reply({ message: "Temporary profile service failure" }, 503);
+            return reply({ user_id: user.id, first_name: "Test", last_name: "User", account_type: accountType, active: accountActive });
+        }
+        if (["courses", "roles", "profile_roles"].some((table) => url.pathname.endsWith(`/${table}`))) return reply([]);
         if (url.pathname.endsWith("/manage-students")) {
             if (request.method() === "PATCH") {
                 const body = request.postDataJSON();
@@ -139,6 +155,23 @@ try {
     await page.setViewportSize({ width: 1366, height: 1000 });
     console.log("PASS: validation, CSV errors, retained credentials, and enrollment-only retry");
 
+    await page.getByRole("button", { name: "Courses", exact: true }).hover();
+    await page.getByRole("menuitem", { name: "Course Management", exact: true }).click();
+    await page.getByRole("button", { name: "+ Add Course", exact: true }).click();
+    await page.getByRole("button", { name: "Import Roster as CSV", exact: true }).click();
+    enrolled = false;
+    const beforeCourseImport = creationCalls;
+    await page.getByLabel("CSV Data").fill("Ana Jones,ana.jones@example.edu,P,1");
+    await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
+    await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
+    const coursePassword = await page.locator(".student-import-credentials code").textContent();
+    await page.getByRole("button", { name: "Retry unfinished rows", exact: true }).click();
+    await page.getByText("Account created and enrolled", { exact: true }).waitFor();
+    assert.equal(creationCalls, beforeCourseImport + 1);
+    assert.equal(await page.locator(".student-import-credentials code").textContent(), coursePassword);
+    assert.ok(await page.getByRole("button", { name: "Start a new import", exact: true }).isVisible());
+    console.log("PASS: course roster import stays open after failure and success, retaining credentials and retry");
+
     await page.getByRole("button", { name: "Cases", exact: true }).click();
     await page.getByRole("button", { name: "Grade", exact: true }).click();
     await page.getByText("Reference guide for the existing review workflow").waitFor();
@@ -162,6 +195,71 @@ try {
     assert.equal(await page.getByRole("button", { name: "Students", exact: true }).count(), 0);
     assert.deepEqual(pageErrors, []);
     console.log("PASS: an already-open app signs out a deactivated account on focus; no browser errors");
+
+    accountActive = true;
+    accountType = "student";
+    assigned.encounter_status = "in progress";
+    await page.getByLabel("Email", { exact: true }).fill("student@example.edu");
+    await page.getByLabel("Password", { exact: true }).fill("test-password");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await page.getByRole("button", { name: "My Cases", exact: true }).click();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    const draft = page.getByPlaceholder("Document your clinical reasoning, findings, assessment, and plan…");
+    const note = "Unsaved student note that must survive a connection failure";
+    await draft.fill(note);
+    const originalDraft = await draft.elementHandle();
+    const warning = page.getByRole("status").filter({ hasText: "Unable to check your account right now" });
+
+    profileUnavailable = "network";
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await warning.waitFor();
+    assert.equal(await draft.inputValue(), note);
+    assert.ok(await originalDraft.evaluate((element) => element.isConnected), "The note editor must not unmount");
+    profileUnavailable = false;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await warning.waitFor({ state: "hidden" });
+    assert.equal(await draft.inputValue(), note);
+
+    profileUnavailable = true;
+    const beforeInterval = profileChecks;
+    await page.clock.fastForward(60_000);
+    await warning.waitFor();
+    assert.ok(profileChecks > beforeInterval);
+    assert.equal(await draft.inputValue(), note);
+    profileUnavailable = false;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await warning.waitFor({ state: "hidden" });
+
+    authUnavailable = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await warning.waitFor();
+    assert.equal(await draft.inputValue(), note);
+    authUnavailable = false;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await warning.waitFor({ state: "hidden" });
+    assert.equal(await draft.inputValue(), note);
+    assert.ok(await originalDraft.evaluate((element) => element.isConnected));
+    console.log("PASS: focus, visibility, and timed account checks preserve a student's unsaved note through profile/auth failures and recovery");
+
+    sessionMissing = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByRole("button", { name: "Sign In", exact: true }).waitFor();
+    assert.equal(await draft.count(), 0);
+    assert.deepEqual(pageErrors, []);
+    console.log("PASS: a confirmed missing session still removes protected content and returns to sign-in");
+
+    sessionMissing = false;
+    profileUnavailable = true;
+    await page.getByLabel("Email", { exact: true }).fill("student@example.edu");
+    await page.getByLabel("Password", { exact: true }).fill("test-password");
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Unable to load your account" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "My Cases", exact: true }).count(), 0);
+    profileUnavailable = false;
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await page.getByRole("button", { name: "My Cases", exact: true }).waitFor();
+    assert.deepEqual(pageErrors, []);
+    console.log("PASS: initial account-load errors still block protected pages until a successful retry");
 } catch (error) {
     if (page) await page.screenshot({ path: `${artifacts}/failure.png`, fullPage: true }).catch(() => {});
     console.error(error);

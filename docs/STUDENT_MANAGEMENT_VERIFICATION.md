@@ -13,9 +13,11 @@
 
 Apply these migrations **before** deploying the updated `manage-students` function and frontend:
 
-1. `20261018000000_search_student_accounts.sql` adds the service-role-only search RPC joining profiles with Auth email addresses.
-2. `20261018000001_enforce_active_course_access.sql` extends the existing inactive-account restriction to newer tables. It grants no additional permissions.
-3. `20261019000000_enforce_active_clinical_access.sql` applies the same restriction to the referral and vitals tables pulled from development.
+1. `20261020000003_search_student_accounts.sql` adds the service-role-only search RPC joining profiles with Auth email addresses.
+2. `20261020000004_enforce_active_course_access.sql` extends the existing inactive-account restriction to newer tables. It grants no additional permissions.
+3. `20261020000005_enforce_active_clinical_access.sql` applies the same restriction to the referral and vitals tables pulled from development.
+
+These versions run after the course-management migrations merged in PR #24 and do not reuse their timestamps.
 
 For local development, start Docker Desktop and run `npm run dev`; the startup script applies pending local migrations without resetting records. Deploy the updated `create-student` and `manage-students` functions together with their shared validator. The current GitHub workflow deploys Edge Functions but does not apply database migrations automatically, so hosted migration ordering must be handled explicitly.
 
@@ -31,7 +33,7 @@ No hosted database or deployment was changed as part of these local edits.
 - CSV parsing, partial failures, continued imports, retained credentials, and enrollment-only retries.
 - Rubric validation and custom score totals.
 
-`npm run test:ui` exercises the real React application against intercepted test responses: directory pagination/search/filters, deactivation/reactivation, form validation, CSV errors, partial import/retry, grading, and signing out an already-open deactivated account. Desktop and mobile screenshots are saved locally. This is not a live Supabase end-to-end test.
+`npm run test:ui` exercises the real React application against intercepted test responses: directory pagination/search/filters, deactivation/reactivation, form validation, CSV errors, partial import/retry in both student management and course management, and grading. Account checks preserve an unsaved student note during temporary profile/Auth failures and remove protected content for confirmed inactive accounts or missing sessions. Desktop and mobile screenshots are saved locally. This is not a live Supabase end-to-end test.
 
 `npm --prefix frontend run build` checks the production bundle.
 

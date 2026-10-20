@@ -1,9 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 
 const sql = (name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
+
+test("migration versions are unique and student changes follow the course migrations", async () => {
+    const names = (await readdir(new URL("../supabase/migrations/", import.meta.url))).filter((name) => name.endsWith(".sql"));
+    const versions = names.map((name) => name.split("_")[0]);
+    assert.equal(new Set(versions).size, versions.length, "Supabase migration timestamps must be unique");
+    const courseVersion = "20261020000002";
+    for (const name of names.filter((name) => /_(search_student_accounts|enforce_active_course_access|enforce_active_clinical_access)\.sql$/.test(name))) {
+        assert.ok(name.split("_")[0] > courseVersion, `${name} must run after the course changes`);
+    }
+});
 
 test("student directory searches the complete roster before paginating and restricts RPC execution", async () => {
     const db = new PGlite();
@@ -20,7 +30,7 @@ test("student directory searches the complete roster before paginating and restr
             insert into auth.users values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','admin@example.edu');
             insert into profiles values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Admin','Account',true,'admin',now());
         `);
-        await db.exec(await sql("20261018000000_search_student_accounts.sql"));
+        await db.exec(await sql("20261020000003_search_student_accounts.sql"));
         const search = async (term = "", status = "all", page = 1) => {
             const { rows } = await db.query("select search_student_accounts($1,$2,$3) as result", [term, status, page]);
             return rows[0].result;
@@ -80,8 +90,8 @@ test("inactive accounts lose database access while their existing records surviv
         }
         await db.exec(await sql("20261002212404_enforce_active_accounts.sql"));
         await db.exec(await sql("20261002232000_enforce_active_audit_logs.sql"));
-        await db.exec(await sql("20261018000001_enforce_active_course_access.sql"));
-        await db.exec(await sql("20261019000000_enforce_active_clinical_access.sql"));
+        await db.exec(await sql("20261020000004_enforce_active_course_access.sql"));
+        await db.exec(await sql("20261020000005_enforce_active_clinical_access.sql"));
         await db.exec("set test.user_id = '11111111-1111-4111-8111-111111111111'; set role authenticated;");
         for (const table of tables) assert.equal((await db.query(`select * from ${table}`)).rows.length, 1);
         await db.exec("reset role; update profiles set active=false; set role authenticated;");

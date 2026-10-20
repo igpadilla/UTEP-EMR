@@ -13,6 +13,10 @@ import InstructorCases from "./pages/InstructorCases.jsx";
 import TemplateBuilder from "./pages/TemplateBuilder.jsx";
 import CaseAssign from "./pages/CaseAssign.jsx";
 import StudentCases from "./pages/StudentCases.jsx";
+import StudentCourses from "./pages/StudentCourses.jsx";
+import StudentCourseDetail from "./pages/StudentCourseDetail.jsx";
+import CourseForm from "./pages/CourseForm.jsx";
+import CourseDetail from "./pages/CourseDetail.jsx";
 import PatientChart from "./pages/PatientChart.jsx";
 
 import {
@@ -28,6 +32,7 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [accountWarning, setAccountWarning] = useState("");
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
 
@@ -64,12 +69,15 @@ export default function App() {
             if (newSession) {
                 setUser((current) => current?.id === newSession.user.id ? current : null);
                 // Supabase auth callbacks must finish before making another auth request.
-                authTimer = setTimeout(() => { if (!disposed) loadUser(); }, 0);
-            } else setUser(null);
+                authTimer = setTimeout(() => { if (!disposed) loadUser({ background: true }); }, 0);
+            } else {
+                setUser(null);
+                setAccountWarning("");
+            }
         });
 
         function recheckAccount() {
-            if (signedIn && document.visibilityState === "visible") loadUser();
+            if (signedIn && document.visibilityState === "visible") loadUser({ background: true });
         }
         const interval = setInterval(recheckAccount, 60_000);
         window.addEventListener("focus", recheckAccount);
@@ -85,24 +93,28 @@ export default function App() {
         };
     }, []);
 
-    async function loadUser() {
+    async function loadUser({ background = false } = {}) {
         const request = ++accountRequest.current;
         try {
             const currentUser = await getCurrentUserWithProfile();
             if (request !== accountRequest.current) return;
-            if (!currentUser) { setUser(null); return; }
-            if (!currentUser.profile.active) {
+            if (!currentUser || !currentUser.profile.active) {
                 setUser(null);
-                setError("Your account is inactive.");
-                await logout();
+                setSession(null);
+                setAccountWarning("");
+                setError(currentUser ? "Your account is inactive." : "Your session ended. Please sign in again.");
+                await logout().catch((error) => console.error(error));
                 return;
             }
             setUser(currentUser);
             setError("");
+            setAccountWarning("");
         } catch (error) {
             if (request !== accountRequest.current) return;
             console.error(error);
-            setUser(null);
+            //     Keep the open page and its edits when a background check cannot connect
+            if (background) setAccountWarning("Unable to check your account right now. We'll try again shortly.");
+            else setUser(null);
             setError("Unable to load your account.");
         }
     }
@@ -121,7 +133,7 @@ export default function App() {
     if (!user) return error ? (
         <div className="scaffold-card">
             <p role="alert">{error}</p>
-            <button type="button" onClick={loadUser}>Retry</button>
+            <button type="button" onClick={() => loadUser()}>Retry</button>
             <button type="button" onClick={() => logout().catch(() => setError("Unable to sign out. Please try again."))}>Sign out</button>
         </div>
     ) : <p>Loading account...</p>;
@@ -141,6 +153,8 @@ export default function App() {
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "cases"
+        : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
+        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
         : nav.page === "studentCases" ? "myCases"
         : "dashboard";
 
@@ -149,6 +163,10 @@ export default function App() {
             navigate("studentManagement");
         } else if (page === "cases" && canManageCases) {
             navigate("instructorCases");
+        } else if (page === "courses" && canManageCases) {
+            navigate("courses");
+        } else if (page === "myCourses") {
+            navigate("studentCourses");
         } else if (page === "myCases") {
             navigate("studentCases");
         } else if (page === "patients") {
@@ -205,6 +223,20 @@ export default function App() {
         case "studentCases":
             pageContent = <StudentCases onNavigate={navigate} />;
             break;
+        case "studentCourses":
+            pageContent = <StudentCourses onNavigate={navigate} />;
+            break;
+        case "studentCourseDetail":
+            pageContent = <StudentCourseDetail course={nav.course} onNavigate={navigate} />;
+            break;
+        case "courses":
+            pageContent = canManageCases
+                ? <CourseForm onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} />;
+            break;
+        case "courseDetail":
+            pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
+            break;
         case "dashboard":
         default:
             pageContent = <Dashboard user={user} onNavigate={navigate} />;
@@ -214,6 +246,7 @@ export default function App() {
         <div className="emr-app">
             <Header user={user} />
             <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />
+            {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
             {pageContent}
             <footer className="emr-footer">
                 <span>Educational EMR Prototype</span>
