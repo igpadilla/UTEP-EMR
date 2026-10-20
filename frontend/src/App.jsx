@@ -221,7 +221,7 @@ export default function App() {
                 : <Dashboard user={user} onNavigate={navigate} />;
             break;
         case "studentCases":
-            pageContent = <StudentCases onNavigate={navigate} />;
+            pageContent = <StudentCases onNavigate={navigate} openCaseId={nav.openCaseId ?? null} />;
             break;
         case "studentCourses":
             pageContent = <StudentCourses onNavigate={navigate} />;
