@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Header from "./components/Header.jsx";
@@ -32,50 +32,89 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [accountWarning, setAccountWarning] = useState("");
     const [nav, setNav] = useState({ page: "dashboard", id: null });
+    const accountRequest = useRef(0);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
     }
 
     useEffect(() => {
+        let signedIn = false;
+        let disposed = false;
+        let authTimer;
         async function initializeAuth() {
             try {
                 const currentSession = await getSession();
+                if (disposed) return;
+                signedIn = Boolean(currentSession);
                 setSession(currentSession);
                 if (currentSession) await loadUser();
             } catch (error) {
                 console.error(error);
                 setError("Unable to initialize authentication.");
             } finally {
-                setLoading(false);
+                if (!disposed) setLoading(false);
             }
         }
 
         initializeAuth();
 
-        const { data: { subscription } } = onAuthStateChange(async (_event, newSession) => {
+        const { data: { subscription } } = onAuthStateChange((_event, newSession) => {
+            signedIn = Boolean(newSession);
+            accountRequest.current++;
             setSession(newSession);
-            if (newSession) await loadUser();
-            else setUser(null);
+            clearTimeout(authTimer);
+            if (newSession) {
+                setUser((current) => current?.id === newSession.user.id ? current : null);
+                // Supabase auth callbacks must finish before making another auth request.
+                authTimer = setTimeout(() => { if (!disposed) loadUser({ background: true }); }, 0);
+            } else {
+                setUser(null);
+                setAccountWarning("");
+            }
         });
 
-        return () => subscription.unsubscribe();
+        function recheckAccount() {
+            if (signedIn && document.visibilityState === "visible") loadUser({ background: true });
+        }
+        const interval = setInterval(recheckAccount, 60_000);
+        window.addEventListener("focus", recheckAccount);
+        document.addEventListener("visibilitychange", recheckAccount);
+        return () => {
+            disposed = true;
+            accountRequest.current++;
+            clearTimeout(authTimer);
+            clearInterval(interval);
+            window.removeEventListener("focus", recheckAccount);
+            document.removeEventListener("visibilitychange", recheckAccount);
+            subscription.unsubscribe();
+        };
     }, []);
 
-    async function loadUser() {
+    async function loadUser({ background = false } = {}) {
+        const request = ++accountRequest.current;
         try {
             const currentUser = await getCurrentUserWithProfile();
-            if (!currentUser) { setUser(null); return; }
-            if (!currentUser.profile.active) {
-                await logout();
-                setError("Your account is inactive.");
+            if (request !== accountRequest.current) return;
+            if (!currentUser || !currentUser.profile.active) {
+                setUser(null);
+                setSession(null);
+                setAccountWarning("");
+                setError(currentUser ? "Your account is inactive." : "Your session ended. Please sign in again.");
+                await logout().catch((error) => console.error(error));
                 return;
             }
             setUser(currentUser);
             setError("");
+            setAccountWarning("");
         } catch (error) {
+            if (request !== accountRequest.current) return;
             console.error(error);
+            //     Keep the open page and its edits when a background check cannot connect
+            if (background) setAccountWarning("Unable to check your account right now. We'll try again shortly.");
+            else setUser(null);
             setError("Unable to load your account.");
         }
     }
@@ -91,7 +130,13 @@ export default function App() {
         );
     }
 
-    if (!user) return <p>Loading account...</p>;
+    if (!user) return error ? (
+        <div className="scaffold-card">
+            <p role="alert">{error}</p>
+            <button type="button" onClick={() => loadUser()}>Retry</button>
+            <button type="button" onClick={() => logout().catch(() => setError("Unable to sign out. Please try again."))}>Sign out</button>
+        </div>
+    ) : <p>Loading account...</p>;
 
     const isAdmin = user.profile.account_type === "admin";
     const isInstructor = user.profile.account_type === "instructor";
@@ -148,7 +193,9 @@ export default function App() {
             pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} />;
             break;
         case "patientChart":
-            pageContent = <PatientChart id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate} />;
+            pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
+                id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
+                canEditPatient={user.profile.active && (isAdmin || isInstructor)} />;
             break;
         case "studentManagement":
             pageContent = canManageStudents
@@ -199,6 +246,7 @@ export default function App() {
         <div className="emr-app">
             <Header user={user} />
             <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />
+            {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
             {pageContent}
             <footer className="emr-footer">
                 <span>Educational EMR Prototype</span>

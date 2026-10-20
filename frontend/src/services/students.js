@@ -1,14 +1,16 @@
 import { supabase } from "../supabase.js";
+import { validateStudentAccount, validateStudentEmail, validateStudentIdentity } from "../../../supabase/functions/_shared/student-validation.mjs";
 
 // ask the create student edge function to create a new student account
 export async function createStudent(student) {
+    const clean = validateStudentAccount(student);
     const { data, error } = await supabase.functions.invoke("create-student",
         {
             body: {
-                firstName: student.firstName,
-                lastName: student.lastName,
-                email: student.email,
-                password: student.password,
+                firstName: clean.firstName,
+                lastName: clean.lastName,
+                email: clean.email,
+                password: clean.password,
             },
         }
     );
@@ -29,7 +31,7 @@ export async function createStudent(student) {
     }
 
     // Any unexpected successful response will be treated as an error
-    if (!data?.student) {
+    if (!data?.student?.id) {
         throw new Error("The student account was created without a valid response.");
     }
 
@@ -56,6 +58,9 @@ export async function enrollStudent(studentId, courseNumber, crn) {
         throw new Error(message);
     }
 
+    if (data?.enrolled !== true) {
+        throw new Error("The account exists, but enrollment was not confirmed. Retry enrollment.");
+    }
     return data;
 }
 
@@ -76,14 +81,17 @@ async function managementErrorMessage(error) {
 }
 
 // load one page of student accounts.
-export async function listStudents(page = 1) {
+export async function listStudents(page = 1, { search = "", status = "all" } = {}) {
+    const params = new URLSearchParams({ page: String(page), search, status });
     const { data, error } = await supabase.functions.invoke(
-        `manage-students?page=${page}`,
+        `manage-students?${params}`,
         { method: "GET" },
     );
 
     if (error) throw new Error(await managementErrorMessage(error));
-    if (!Array.isArray(data?.students)) {
+    if (!Array.isArray(data?.students) || !Number.isInteger(data.page) || data.page < 1
+        || !Number.isInteger(data.pageSize) || data.pageSize < 1
+        || !Number.isInteger(data.total) || data.total < 0) {
         throw new Error("The student list had an invalid response.");
     }
 
@@ -92,9 +100,14 @@ export async function listStudents(page = 1) {
 
 // Change a student's name, email, or active status
 export async function updateStudent(userId, changes) {
+    let clean = changes;
+    if ("firstName" in changes || "lastName" in changes) {
+        clean = { ...changes, ...validateStudentIdentity(changes) };
+    }
+    if ("email" in changes) clean = { ...clean, email: validateStudentEmail(changes.email) };
     const { data, error } = await supabase.functions.invoke("manage-students", {
         method: "PATCH",
-        body: { ...changes, userId },
+        body: { ...clean, userId },
     });
 
     if (error) throw new Error(await managementErrorMessage(error));

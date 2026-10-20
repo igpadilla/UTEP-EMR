@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js";
 import { logCaseAction, ACTION_TYPES } from "./auditService.js";
+import { validateGrade } from "../lib/grading.js";
 
 export async function searchPatients(query) {
     let q = supabase
@@ -217,7 +218,7 @@ export async function getMyAssignedCases(includeArchived = false) {
         .from("assigned_cases")
         .select(`
             *,
-            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria ),
+            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric ),
             profiles!student_id ( first_name, last_name )
         `)
         .order("assigned_at", { ascending: false });
@@ -285,7 +286,9 @@ export async function returnCase(caseId, instructorFeedback) {
     return data;
 }
 
-export async function gradeCase(caseId, { rubricScores, chartAnnotations, score, feedback, decision }) {
+export async function gradeCase(caseId, { criteria, rubricScores, chartAnnotations, feedback, decision }) {
+    if (!["approve", "return"].includes(decision)) throw new Error("Choose sign-off or return for revision.");
+    const grade = validateGrade(criteria, rubricScores);
     const { data: { user } } = await supabase.auth.getUser();
     const newStatus = decision === "approve" ? "completed" : "revision_requested";
 
@@ -293,9 +296,10 @@ export async function gradeCase(caseId, { rubricScores, chartAnnotations, score,
         .from("assigned_cases")
         .update({
             encounter_status: newStatus,
-            rubric_scores: rubricScores,
+            rubric_scores: grade.rubricScores,
             chart_annotations: chartAnnotations,
-            score,
+            score: grade.score,
+            max_score: grade.maxScore,
             instructor_feedback: feedback,
             updated_at: new Date().toISOString(),
         })

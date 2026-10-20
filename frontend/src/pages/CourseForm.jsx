@@ -288,7 +288,7 @@ export default function CourseForm({ onNavigate }) {
                         </form>
 
                         {showImport && (
-                            <BulkStudentImport onImported={() => setShowImport(false)} />
+                            <BulkStudentImport />
                         )}
                     </div>
                 </div>
