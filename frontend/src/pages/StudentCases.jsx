@@ -320,6 +320,8 @@ export default function StudentCases({ onNavigate }) {
                                 </div>
                             )}
 
+                            <button type="button" className="primary-action-button open-chart-button" onClick={() => onNavigate("patientChart", null, { caseId: activeCase.id, backTo: "studentCases" })}>Open patient chart</button>
+
                             {/* Patient snapshot */}
                             <div className="case-modal-section">
                                 <p className="case-modal-section-label">Patient Info</p>

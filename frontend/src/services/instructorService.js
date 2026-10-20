@@ -278,5 +278,25 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
         .single();
     if (error) throw error;
     await logCaseAction(data.id, user.id, ACTION_TYPES.CASE_ASSIGNED, null, studentId).catch(() => {});
+
+    if (patientSnapshot?.initial_referral?.target_discipline) {
+        const priority = patientSnapshot.initial_referral.priority || "routine";
+        const reason = patientSnapshot.initial_referral.reason?.trim() || "Initial consult requested";
+        const { error: refError } = await supabase.from("referrals").insert({
+            case_id: data.id,
+            referring_user_id: user.id,
+            target_discipline: patientSnapshot.initial_referral.target_discipline,
+            priority,
+            reason,
+            notes: patientSnapshot.initial_referral.notes?.trim() || null,
+        });
+        if (refError) {
+            console.error("Failed to seed initial referral:", refError);
+        } else {
+            const detail = `${patientSnapshot.initial_referral.target_discipline} (${priority.toUpperCase()}) — ${reason}`;
+            await logCaseAction(data.id, user.id, ACTION_TYPES.REFERRAL_REQUESTED, null, detail).catch(() => {});
+        }
+    }
+
     return data;
 }

@@ -13,8 +13,7 @@ import InstructorCases from "./pages/InstructorCases.jsx";
 import TemplateBuilder from "./pages/TemplateBuilder.jsx";
 import CaseAssign from "./pages/CaseAssign.jsx";
 import StudentCases from "./pages/StudentCases.jsx";
-import CourseForm from "./pages/CourseForm.jsx";
-import CourseDetail from "./pages/CourseDetail.jsx";
+import PatientChart from "./pages/PatientChart.jsx";
 
 import {
     getSession,
@@ -102,10 +101,9 @@ export default function App() {
     const navbarPage =
         nav.page === "studentManagement" ? "students"
         : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
-        : nav.page === "patientLookup" || nav.page === "studentPatientDetail" ? "patients"
+        : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "cases"
-        : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCases" ? "myCases"
         : "dashboard";
 
@@ -114,8 +112,6 @@ export default function App() {
             navigate("studentManagement");
         } else if (page === "cases" && canManageCases) {
             navigate("instructorCases");
-        } else if (page === "courses" && canManageCases) {
-            navigate("courses");
         } else if (page === "myCases") {
             navigate("studentCases");
         } else if (page === "patients") {
@@ -140,6 +136,9 @@ export default function App() {
             break;
         case "studentPatientDetail":
             pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} />;
+            break;
+        case "patientChart":
+            pageContent = <PatientChart id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate} />;
             break;
         case "studentManagement":
             pageContent = canManageStudents
@@ -166,14 +165,6 @@ export default function App() {
             break;
         case "studentCases":
             pageContent = <StudentCases onNavigate={navigate} />;
-            break;
-        case "courses":
-            pageContent = canManageCases
-                ? <CourseForm onNavigate={navigate} />
-                : <Dashboard user={user} onNavigate={navigate} />;
-            break;
-        case "courseDetail":
-            pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
             break;
         case "dashboard":
         default:
