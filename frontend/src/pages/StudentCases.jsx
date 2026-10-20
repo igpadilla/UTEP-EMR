@@ -68,6 +68,9 @@ export default function StudentCases({ onNavigate }) {
     const [selectedNoteTemplateId, setSelectedNoteTemplateId] = useState("");
     const [dynamicNoteData, setDynamicNoteData] = useState({});
 
+    // Temporarily disabled until dynamic notes can be saved/submitted.
+    const ENABLE_DYNAMIC_CLINICAL_NOTES = false;
+
     useEffect(() => {
         fetchCases();
         fetchClinicalRoles();
@@ -164,7 +167,9 @@ export default function StudentCases({ onNavigate }) {
             setNotes(openedCase.encounter_notes ?? "");
         }
         setModalError("");
-        loadCaseNoteTemplates(openedCase.id);
+        if (ENABLE_DYNAMIC_CLINICAL_NOTES) {
+            loadCaseNoteTemplates(openedCase.id);
+        }
     }
 
     function closeModal() {
@@ -507,68 +512,70 @@ export default function StudentCases({ onNavigate }) {
                             )}
 
                             {/* Clinical note template selection */}
-                            <div className="case-modal-section">
-                                <p className="case-modal-section-label">Clinical Note Template</p>
+                            {ENABLE_DYNAMIC_CLINICAL_NOTES && (
+                                <div className="case-modal-section">
+                                    <p className="case-modal-section-label">Clinical Note Template</p>
 
-                                {templatesLoading ? (
-                                    <p>Loading clinical note templates...</p>
-                                ) : clinicalRole ? (
-                                    <>
-                                        <p><strong>Clinical Role:</strong>{" "}{clinicalRole.roleDisplayName}</p>
+                                    {templatesLoading ? (
+                                        <p>Loading clinical note templates...</p>
+                                    ) : clinicalRole ? (
+                                        <>
+                                            <p><strong>Clinical Role:</strong>{" "}{clinicalRole.roleDisplayName}</p>
 
-                                        {noteTemplates.length > 0 ? (
-                                            <>
-                                                <label
-                                                    htmlFor="clinical-note-template"
-                                                    className="case-info-label"
-                                                >
-                                                    Select Note Template
-                                                </label>
+                                            {noteTemplates.length > 0 ? (
+                                                <>
+                                                    <label
+                                                        htmlFor="clinical-note-template"
+                                                        className="case-info-label"
+                                                    >
+                                                        Select Note Template
+                                                    </label>
 
-                                                <select
-                                                    id="clinical-note-template"
-                                                    className="instructor-input"
-                                                    value={selectedNoteTemplateId}
-                                                    onChange={(e) => {
-                                                        setSelectedNoteTemplateId(e.target.value);
-                                                        setDynamicNoteData({});
-                                                    }}
-                                                    disabled={!isEditable || submitting}
-                                                    style={{ width: "100%", marginTop: "0.5rem" }}
-                                                >
-                                                    <option value="">-- Select a template -- </option>
+                                                    <select
+                                                        id="clinical-note-template"
+                                                        className="instructor-input"
+                                                        value={selectedNoteTemplateId}
+                                                        onChange={(e) => {
+                                                            setSelectedNoteTemplateId(e.target.value);
+                                                            setDynamicNoteData({});
+                                                        }}
+                                                        disabled={!isEditable || submitting}
+                                                        style={{ width: "100%", marginTop: "0.5rem" }}
+                                                    >
+                                                        <option value="">-- Select a template -- </option>
 
-                                                    {noteTemplates.map((template) => (
-                                                        <option key={template.id} value={template.id}>{template.name}</option>
-                                                    ))}
-                                                </select>
+                                                        {noteTemplates.map((template) => (
+                                                            <option key={template.id} value={template.id}>{template.name}</option>
+                                                        ))}
+                                                    </select>
 
-                                                {selectedNoteTemplateId && (
-                                                    <div style={{ marginTop: "1.5rem" }}>
-                                                        <DynamicClinicalNoteForm
-                                                            template={noteTemplates.find(
-                                                                (template) =>
-                                                                    template.id === selectedNoteTemplateId
-                                                            )}
-                                                            value={dynamicNoteData}
-                                                            onChange={setDynamicNoteData}
-                                                            disabled={submitting}
-                                                            readOnly={!isEditable}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <p>No active note templates are available for this role.</p>
-                                        )}
-                                    </>
-                                ) : (
-                                    <p>
-                                        This case does not have a course-specific clinical
-                                        role assigned yet.
-                                    </p>
-                                )}
-                            </div>
+                                                    {selectedNoteTemplateId && (
+                                                        <div style={{ marginTop: "1.5rem" }}>
+                                                            <DynamicClinicalNoteForm
+                                                                template={noteTemplates.find(
+                                                                    (template) =>
+                                                                        template.id === selectedNoteTemplateId
+                                                                )}
+                                                                value={dynamicNoteData}
+                                                                onChange={setDynamicNoteData}
+                                                                disabled={submitting}
+                                                                readOnly={!isEditable}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p>No active note templates are available for this role.</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p>
+                                            This case does not have a course-specific clinical
+                                            role assigned yet.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Encounter notes */}
                             {isPTStudent ? (
