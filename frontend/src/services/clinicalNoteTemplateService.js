@@ -42,7 +42,7 @@ export async function getClinicalNoteTemplatesByRole(roleId) {
 export async function getClinicalNoteTemplatesForCase(caseId) {
     const clinicalRole = await getAssignedCaseClinicalRole(caseId);
 
-    // Cases without a course enrollment cannot
+    // Cases without a course (or a course without a discipline) cannot
     // determine their course-specific clinical role.
     if (!clinicalRole || !clinicalRole.roleId) {
         return {

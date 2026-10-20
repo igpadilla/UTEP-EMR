@@ -51,49 +51,37 @@ export async function submitCase(caseId, notes) {
     return data;
 }
 
-//Retrieve the clinical role associated with an assigned case through its course enrollment
+// Retrieve the clinical role for an assigned case from its course's discipline
 export async function getAssignedCaseClinicalRole(caseId) {
-    const { data: caseData, error: caseError } = await supabase
+    const { data, error } = await supabase
         .from("assigned_cases")
-        .select("id, student_id, enrollment_id")
-        .eq("id", caseId)
-        .single();
-
-    if (caseError) throw caseError;
-
-    if (!caseData.enrollment_id) {
-        return null;
-    }
-
-    const { data: enrollment, error: enrollmentError } = await supabase
-        .from("course_enrollments")
         .select(`
             id,
             course_id,
-            student_id,
-            clinical_role_id,
-            roles (
-                role_id,
-                role_name,
-                display_name
+            courses (
+                discipline,
+                roles (
+                    role_id,
+                    role_name,
+                    display_name
+                )
             )
         `)
-        .eq("id", caseData.enrollment_id)
+        .eq("id", caseId)
         .single();
 
-    if (enrollmentError) throw enrollmentError;
+    if (error) throw error;
 
-    if (enrollment.student_id !== caseData.student_id) {
-        throw new Error(
-            "The case enrollment does not belong to the assigned student."
-        );
+    // Cases without a course, or courses without a discipline, have no clinical role.
+    const role = data.courses?.roles;
+    if (!role) {
+        return null;
     }
 
     return {
-        enrollmentId: enrollment.id,
-        courseId: enrollment.course_id,
-        roleId: enrollment.clinical_role_id,
-        roleName: enrollment.roles?.role_name ?? null,
-        roleDisplayName: enrollment.roles?.display_name ?? null,
+        courseId: data.course_id,
+        roleId: role.role_id,
+        roleName: role.role_name,
+        roleDisplayName: role.display_name,
     };
 }
