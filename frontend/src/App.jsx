@@ -13,6 +13,7 @@ import InstructorCases from "./pages/InstructorCases.jsx";
 import TemplateBuilder from "./pages/TemplateBuilder.jsx";
 import CaseAssign from "./pages/CaseAssign.jsx";
 import StudentCases from "./pages/StudentCases.jsx";
+import PatientChart from "./pages/PatientChart.jsx";
 
 import {
     getSession,
@@ -137,7 +138,7 @@ export default function App() {
     const navbarPage =
         nav.page === "studentManagement" ? "students"
         : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
-        : nav.page === "patientLookup" || nav.page === "studentPatientDetail" ? "patients"
+        : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "cases"
         : nav.page === "studentCases" ? "myCases"
@@ -172,6 +173,9 @@ export default function App() {
             break;
         case "studentPatientDetail":
             pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} />;
+            break;
+        case "patientChart":
+            pageContent = <PatientChart id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate} />;
             break;
         case "studentManagement":
             pageContent = canManageStudents

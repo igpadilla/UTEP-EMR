@@ -16,7 +16,7 @@ async function seed() {
   const users = [
     { email: 'admin@test.com', firstName: 'System', lastName: 'Admin', role: 'admin' },
     { email: 'instructor@test.com', firstName: 'Jane', lastName: 'Instructor', role: 'instructor' },
-    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student' },
+    { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student', clinicalRole: 'pharmacy' },
     { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student', clinicalRole: 'physical_therapy' }
   ];
 

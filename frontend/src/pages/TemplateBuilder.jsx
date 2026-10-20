@@ -5,6 +5,7 @@ import {
     createTemplate,
     updateTemplate,
 } from "../services/instructorService.js";
+import { getReferralsByPatient } from "../services/referralService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import { validateRubric } from "../lib/grading.js";
@@ -51,6 +52,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState("allergies");
     const [medications, setMedications] = useState([]);
+    const [initialReferral, setInitialReferral] = useState({ target_discipline: "", priority: "routine", reason: "", notes: "" });
 
 
     useEffect(() => {
@@ -96,6 +98,9 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                             ? t.rubric_criteria
                             : DEFAULT_RUBRIC_CRITERIA
                     );
+                    if (t.initial_referral) {
+                        setInitialReferral(t.initial_referral);
+                    }
                 } catch (err) {
                     console.error(err);
                     setError("Failed to load template.");
@@ -134,6 +139,17 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                     setBaseline(baselineRows);
                     setTraps([]);
                     setRubricCriteria(DEFAULT_RUBRIC_CRITERIA);
+
+                    const refs = await getReferralsByPatient(patientId);
+                    if (refs && refs.length > 0) {
+                        const activeRef = refs.find((r) => r.status === "pending" || r.status === "accepted") || refs[0];
+                        setInitialReferral({
+                            target_discipline: activeRef.target_discipline || "",
+                            priority: activeRef.priority || "routine",
+                            reason: activeRef.reason || "",
+                            notes: activeRef.notes || "",
+                        });
+                    }
                 } catch (err) {
                     console.error(err);
                     setError("Failed to load patient data.");
@@ -262,6 +278,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
             student_instructions: form.student_instructions.trim() || null,
             hidden_diagnosis: form.hidden_diagnosis.trim() || null,
             expectations_rubric: expectationsRubric.trim() || null,
+            initial_referral: initialReferral.target_discipline ? initialReferral : null,
         };
 
         setSubmitting(true);
@@ -638,6 +655,72 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                             placeholder="e.g. STEMI — Left anterior descending artery occlusion"
                         />
                     </div>
+                </div>
+
+                <div className="instructor-form-section">
+                    <h3 className="instructor-form-section-title">Pre-loaded Referral (Optional)</h3>
+                    <p className="instructor-baseline-hint">
+                        Include an initial consult request on the chart (e.g. for Physical Therapy or Pharmacy students).
+                    </p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.75rem" }}>
+                        <div className="student-form-field">
+                            <label>Target Specialty</label>
+                            <select
+                                value={initialReferral.target_discipline}
+                                onChange={(e) => setInitialReferral({ ...initialReferral, target_discipline: e.target.value })}
+                                disabled={submitting}
+                                className="instructor-search-input"
+                            >
+                                <option value="">-- None --</option>
+                                <option value="Physical Therapy">Physical Therapy</option>
+                                <option value="Pharmacy">Pharmacy</option>
+                                <option value="Occupational Therapy">Occupational Therapy</option>
+                                <option value="Speech-Language Pathology">Speech-Language Pathology</option>
+                                <option value="Nursing">Nursing</option>
+                                <option value="Social Work">Social Work</option>
+                                <option value="Psychiatry">Psychiatry</option>
+                            </select>
+                        </div>
+                        <div className="student-form-field">
+                            <label>Priority</label>
+                            <select
+                                value={initialReferral.priority}
+                                onChange={(e) => setInitialReferral({ ...initialReferral, priority: e.target.value })}
+                                disabled={submitting}
+                                className="instructor-search-input"
+                            >
+                                <option value="routine">Routine</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="stat">Stat</option>
+                            </select>
+                        </div>
+                    </div>
+                    {initialReferral.target_discipline && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
+                            <div className="student-form-field">
+                                <label>Reason for Consult</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Evaluate gait instability after right-sided stroke"
+                                    value={initialReferral.reason}
+                                    onChange={(e) => setInitialReferral({ ...initialReferral, reason: e.target.value })}
+                                    disabled={submitting}
+                                    className="instructor-search-input"
+                                />
+                            </div>
+                            <div className="student-form-field">
+                                <label>Referring Provider / Clinical Notes</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Ordered by Dr. Smith (Internal Medicine)"
+                                    value={initialReferral.notes}
+                                    onChange={(e) => setInitialReferral({ ...initialReferral, notes: e.target.value })}
+                                    disabled={submitting}
+                                    className="instructor-search-input"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Deliberate Clinical Traps (Step 3) ──────────── */}
