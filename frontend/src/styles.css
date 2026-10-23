@@ -904,21 +904,30 @@ button {
 }
 
 /* Existing Login / Scaffold Support */
-
-.scaffold-card {
-  width: min(90%, 600px);
-
-  margin: 4rem auto;
+.login-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 2rem;
+}
 
+.login-title {
+  margin: 0 0 3rem;
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text);
   text-align: center;
-
+}
+.scaffold-card {
+  padding: 2rem;
+  text-align: center;
   background: var(--surface);
-
   border: 1px solid var(--border);
   border-radius: 12px;
-
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
+  width: 100%; 
+  max-width: 450px;
 }
 
 .scaffold-card h1 {
@@ -929,8 +938,11 @@ button {
 }
 
 .scaffold-card p {
-  margin-bottom: 1.5rem;
   color: var(--text-muted);
+  margin: 0 0 2rem;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 500;
 }
 
 .status-badge {
@@ -946,6 +958,57 @@ button {
 
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.form-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.signin-button {
+  width: 60%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.signin-button:hover {
+  background: var(--primary-hover);
 }
 
 
