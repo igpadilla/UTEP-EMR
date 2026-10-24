@@ -1,0 +1,125 @@
+{
+  "_meta": {
+    "purpose": "Allergy synonyms and cross-reactivity used by the medication safety engine to flag drug-allergy conflicts.",
+    "review_status": "Draft clinical content. Cross-reactivity statements are simplified for teaching and must be reviewed by clinical faculty.",
+    "matching": "An allergy string matches an entry when it contains any synonym as a whole word. Separately, if it contains a drug name, brand name or slash-separated component of a drug name, that exact drug is a direct match and other drugs in a class listed under direct_match_cross_reactive_classes are flagged as same-class."
+  },
+  "entries": [
+    {
+      "key": "penicillin",
+      "label": "Penicillin",
+      "synonyms": ["penicillin", "penicillins", "pcn", "beta-lactam", "beta lactam"],
+      "reactions": [
+        {"classes": ["PENICILLIN"], "severity": "contraindicated", "note": "Documented penicillin allergy. Penicillins risk anaphylaxis."},
+        {"classes": ["CEPHALOSPORIN"], "severity": "moderate", "note": "Cross-reactivity with cephalosporins is low (about 2%) and depends on side-chain similarity. Review the reaction history before use."}
+      ]
+    },
+    {
+      "key": "cephalosporin",
+      "label": "Cephalosporin",
+      "synonyms": ["cephalosporin", "cephalosporins"],
+      "reactions": [
+        {"classes": ["CEPHALOSPORIN"], "severity": "contraindicated", "note": "Documented cephalosporin allergy."},
+        {"classes": ["PENICILLIN"], "severity": "moderate", "note": "Possible cross-reactivity with penicillins. Review the reaction history before use."}
+      ]
+    },
+    {
+      "key": "sulfa",
+      "label": "Sulfonamide antibiotics (sulfa)",
+      "synonyms": ["sulfa", "sulfa drugs", "sulfonamide", "sulfonamides", "sulfamethoxazole", "bactrim"],
+      "reactions": [
+        {"classes": ["SULFONAMIDE_ANTIBIOTIC"], "severity": "contraindicated", "note": "Documented sulfonamide antibiotic allergy."},
+        {"classes": ["SULFONYLUREA", "LOOP_DIURETIC", "THIAZIDE_DIURETIC"], "severity": "minor", "note": "Cross-reactivity between sulfonamide antibiotics and these non-antibiotic sulfonamides is considered unlikely, but it is often flagged for review."},
+        {"drugs": ["Celecoxib"], "severity": "minor", "note": "Celecoxib contains a sulfonamide group. Cross-reactivity is considered unlikely, but review the reaction history."}
+      ]
+    },
+    {
+      "key": "nsaid",
+      "label": "NSAIDs",
+      "synonyms": ["nsaid", "nsaids", "non-steroidal", "nonsteroidal", "anti-inflammatory", "anti inflammatory"],
+      "reactions": [
+        {"classes": ["NSAID"], "severity": "contraindicated", "note": "Documented NSAID hypersensitivity."},
+        {"classes": ["SALICYLATE"], "severity": "major", "note": "Aspirin commonly cross-reacts in NSAID hypersensitivity."}
+      ]
+    },
+    {
+      "key": "aspirin",
+      "label": "Aspirin / salicylates",
+      "synonyms": ["aspirin", "asa", "salicylate", "salicylates"],
+      "reactions": [
+        {"classes": ["SALICYLATE"], "severity": "contraindicated", "note": "Documented aspirin or salicylate allergy."},
+        {"classes": ["NSAID"], "severity": "major", "note": "Cross-reactivity with NSAIDs is common in aspirin hypersensitivity."}
+      ]
+    },
+    {
+      "key": "macrolide",
+      "label": "Macrolides",
+      "synonyms": ["macrolide", "macrolides", "erythromycin"],
+      "reactions": [
+        {"classes": ["MACROLIDE"], "severity": "contraindicated", "note": "Documented macrolide allergy."}
+      ]
+    },
+    {
+      "key": "fluoroquinolone",
+      "label": "Fluoroquinolones",
+      "synonyms": ["fluoroquinolone", "fluoroquinolones", "quinolone", "quinolones"],
+      "reactions": [
+        {"classes": ["FLUOROQUINOLONE"], "severity": "contraindicated", "note": "Documented fluoroquinolone allergy."}
+      ]
+    },
+    {
+      "key": "tetracycline",
+      "label": "Tetracyclines",
+      "synonyms": ["tetracycline", "tetracyclines"],
+      "reactions": [
+        {"classes": ["TETRACYCLINE"], "severity": "contraindicated", "note": "Documented tetracycline allergy."}
+      ]
+    },
+    {
+      "key": "opioid",
+      "label": "Opioids",
+      "synonyms": ["opioid", "opioids", "opiate", "opiates", "codeine", "hydrocodone", "oxycodone", "morphine"],
+      "reactions": [
+        {"classes": ["OPIOID"], "severity": "major", "note": "Documented opioid allergy or intolerance. Cross-reactivity varies between opioid structures. Confirm whether the reaction was a true allergy."}
+      ]
+    },
+    {
+      "key": "ace_inhibitor",
+      "label": "ACE inhibitors",
+      "synonyms": ["ace inhibitor", "ace inhibitors", "ace-inhibitor", "angioedema"],
+      "reactions": [
+        {"classes": ["ACE_INHIBITOR"], "severity": "contraindicated", "note": "History of ACE-inhibitor reaction or angioedema."},
+        {"classes": ["ARB"], "severity": "moderate", "note": "ARBs have a small cross-reactivity risk for angioedema. Use with caution."}
+      ]
+    },
+    {
+      "key": "statin",
+      "label": "Statins",
+      "synonyms": ["statin", "statins"],
+      "reactions": [
+        {"classes": ["STATIN"], "severity": "major", "note": "Documented statin reaction. Clarify whether it was an allergy or muscle-related intolerance."}
+      ]
+    },
+    {
+      "key": "benzodiazepine",
+      "label": "Benzodiazepines",
+      "synonyms": ["benzodiazepine", "benzodiazepines", "benzo", "benzos"],
+      "reactions": [
+        {"classes": ["BENZODIAZEPINE"], "severity": "contraindicated", "note": "Documented benzodiazepine allergy."}
+      ]
+    }
+  ],
+  "direct_match_cross_reactive_classes": [
+    "PENICILLIN",
+    "CEPHALOSPORIN",
+    "NSAID",
+    "SULFONAMIDE_ANTIBIOTIC",
+    "MACROLIDE",
+    "FLUOROQUINOLONE",
+    "TETRACYCLINE",
+    "OPIOID",
+    "BENZODIAZEPINE",
+    "STATIN",
+    "ACE_INHIBITOR"
+  ]
+}
