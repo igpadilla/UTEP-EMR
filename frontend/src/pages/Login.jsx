@@ -29,7 +29,7 @@ export default function Login() {
     return (
         <main className="login-page">
             <h1 className="login-title">UTEP EMR</h1>
-            <div className="scaffold-card">
+            <div className="scaffold-card login-card">
                 <p>Sign In</p>
 
                 <form onSubmit={handleSubmit}>

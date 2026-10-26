@@ -919,15 +919,21 @@ button {
   color: var(--text);
   text-align: center;
 }
+
 .scaffold-card {
+   width: min(90%, 600px);
+
+  margin: 4rem auto;
   padding: 2rem;
+
   text-align: center;
+
   background: var(--surface);
+
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
-  width: 100%; 
-  max-width: 450px;
+
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
 .scaffold-card h1 {
@@ -943,6 +949,17 @@ button {
   text-align: center;
   font-size: 1.75rem;
   font-weight: 500;
+}
+
+.login-card {
+  padding: 2rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
+  width: 100%; 
+  max-width: 450px;
 }
 
 .status-badge {
