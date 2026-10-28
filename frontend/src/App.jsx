@@ -19,6 +19,7 @@ import CourseForm from "./pages/CourseForm.jsx";
 import CourseDetail from "./pages/CourseDetail.jsx";
 import PatientChart from "./pages/PatientChart.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
+import IdleWarning from "./components/IdleWarning.jsx";
 
 import {
     getSession,
@@ -35,9 +36,11 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [accountWarning, setAccountWarning] = useState("");
+    const [showIdleWarning, setShowIdleWarning] = useState(false);
     const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
+    const stayIdleRef = useRef(() => {});
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -95,6 +98,49 @@ export default function App() {
             subscription.unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        if (!session) return;
+
+        const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 Minutes
+        const WARNING_MS = 2 * 60 * 1000; // 2 Minutes Warning
+        let idleTimer;
+        let warningTimer;
+        let warningShown = false;
+
+        function startTimers() {
+            clearTimeout(idleTimer);
+            clearTimeout(warningTimer);
+            warningShown = false;
+            setShowIdleWarning(false);
+            warningTimer = setTimeout(() => {
+                warningShown = true;
+                setShowIdleWarning(true);
+            }, IDLE_LIMIT_MS - WARNING_MS);
+            idleTimer = setTimeout(() => {
+                setShowIdleWarning(false);
+                logout().catch(() => {});
+            }, IDLE_LIMIT_MS);
+        }
+
+        function handleActivity() {
+            if (warningShown) return; // only the button counts once the warning is up
+            startTimers();
+        }
+
+        stayIdleRef.current = startTimers;
+
+        const events = ["mousemove", "keydown", "click", "touchstart"];
+        events.forEach((e) => window.addEventListener(e, handleActivity));
+        startTimers();
+
+        return () => {
+            clearTimeout(idleTimer);
+            clearTimeout(warningTimer);
+            stayIdleRef.current = () => {};
+            events.forEach((e) => window.removeEventListener(e, handleActivity));
+        };
+    }, [session]);
 
     async function loadUser({ background = false } = {}) {
         const request = ++accountRequest.current;
@@ -269,6 +315,7 @@ export default function App() {
             <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />
             {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
             {pageContent}
+            {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
             <footer className="emr-footer">
                 <span>Educational EMR Prototype</span>
                 <span>For educational use only</span>
