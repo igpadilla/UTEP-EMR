@@ -910,6 +910,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  min-height: 80vh;
 }
 
 .login-title {
@@ -944,11 +945,8 @@ button {
 }
 
 .scaffold-card p {
+  margin-bottom: 1.5rem;
   color: var(--text-muted);
-  margin: 0 0 2rem;
-  text-align: center;
-  font-size: 1.75rem;
-  font-weight: 500;
 }
 
 .login-card {
@@ -960,6 +958,21 @@ button {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
   width: 100%; 
   max-width: 450px;
+}
+
+.login-subtitle {
+  color: var(--text-muted);
+  margin: 0 0 2rem;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 500;
+}
+
+.login-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  text-align: center;
 }
 
 .status-badge {
@@ -1009,6 +1022,11 @@ button {
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
 }
 
 .signin-button {

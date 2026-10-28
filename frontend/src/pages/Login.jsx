@@ -30,7 +30,7 @@ export default function Login() {
         <main className="login-page">
             <h1 className="login-title">UTEP EMR</h1>
             <div className="scaffold-card login-card">
-                <p>Sign In</p>
+                <h2 className="login-subtitle">Sign In</h2>
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-fields">
@@ -66,7 +66,7 @@ export default function Login() {
                     </div>
 
                     {error && (
-                        <p role="alert">
+                        <p role="alert" className="login-error">
                             {error}
                         </p>
                     )}
