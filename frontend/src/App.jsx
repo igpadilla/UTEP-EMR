@@ -18,6 +18,7 @@ import StudentCourseDetail from "./pages/StudentCourseDetail.jsx";
 import CourseForm from "./pages/CourseForm.jsx";
 import CourseDetail from "./pages/CourseDetail.jsx";
 import PatientChart from "./pages/PatientChart.jsx";
+import ChangePassword from "./pages/ChangePassword.jsx";
 
 import {
     getSession,
@@ -145,6 +146,10 @@ export default function App() {
             <button type="button" onClick={() => logout().catch(() => setError("Unable to sign out. Please try again."))}>Sign out</button>
         </div>
     ) : <p>Loading account...</p>;
+
+    if (user.profile.must_change_password) {
+        return <ChangePassword onDone={() => loadUser()} />;
+    }
 
     const isAdmin = user.profile.account_type === "admin";
     const isInstructor = user.profile.account_type === "instructor";
