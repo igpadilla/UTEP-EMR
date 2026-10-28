@@ -1,5 +1,16 @@
 import { supabase } from "../supabase.js";
 
+export const NO_LIVE_PATIENT_ACCESS = { read: false, register: false, schedule: false, checkIn: false };
+export const FULL_LIVE_PATIENT_ACCESS = { read: true, register: true, schedule: true, checkIn: true };
+
+// What this user may do with live patients. Admins and instructors may do everything;
+// a student only through a non-clinical role (front desk, biller).
+export async function getLivePatientAccess() {
+    const { data, error } = await supabase.rpc("my_live_patient_access");
+    if (error) throw error;
+    return { ...NO_LIVE_PATIENT_ACCESS, ...(data ?? {}) };
+}
+
 export async function getMyClinicalRoles() {
     const {
         data: { user },
