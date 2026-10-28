@@ -39,3 +39,12 @@ Log of architectural and technical decisions made for the UTEP-EMR project.
 - **Context**: Students need discipline roles, such as Pharmacy, Nursing, and Physical Therapy, while retaining their student account type.
 - **Decision**: Assign clinical roles separately from account types, link roles to permissions, and check capabilities through `has_permission()`.
 - **Consequences**: Supports multiple disciplines per user and workflows such as PT SOAP notes. Existing access policies remain and permission-based database enforcement is still needed.
+
+---
+
+### ADR-004: Hybrid local rules engine and openFDA for medication safety checks
+- **Status**: Accepted
+- **Date**: 2026-10-23
+- **Context**: We needed to check drug interactions, allergies, duplicates, and doses in real time. Commercial drug APIs are expensive, free ones like NIH RxNav discontinued their interaction endpoints, and openFDA alone only gives raw label text rather than structured severity ratings.
+- **Decision**: Built a hybrid in FastAPI: a local rules engine backed by curated JSON files (`formulary.json`, `interactions.json`, `allergies.json`) for 139 common drugs, paired with an openFDA integration to fetch official FDA boxed warnings and drug labels on demand.
+- **Consequences**: Classroom simulation traps trigger instantly and reliably with zero API fees, while students can still pull live official FDA warnings. The curated rules are starter educational content, so clinical faculty will still review them before using them for formal grading.
