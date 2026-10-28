@@ -194,7 +194,7 @@ export async function getMyCourseCases(courseId) {
         .from("assigned_cases")
         .select(`
             id, encounter_status, assigned_at, due_date, score, instructor_feedback,
-            patient_templates ( first_name, last_name, chief_complaint )
+            patient_snapshot
         `)
         .eq("course_id", courseId)
         .order("due_date", { ascending: true, nullsFirst: false });

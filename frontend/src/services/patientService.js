@@ -17,7 +17,6 @@ export async function createPatient(patientData){
         const medsString = current_medications.map(m => `${m.medicine.name} ${m.dosage}${m.medicine.unit} ${m.frequency}x/day`).join(", ");
         const { error: visitError } = await supabase.from("visits").insert([{
             patient_id: data.id,
-            visit_date: new Date().toISOString().split("T")[0],
             notes: "Initial Patient Registration",
             medications: medsString
         }]);

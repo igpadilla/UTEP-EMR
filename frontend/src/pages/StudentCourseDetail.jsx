@@ -159,10 +159,10 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                         >
                                             <div>
                                                 <div className="course-detail-case-patient">
-                                                    {c.patient_templates?.first_name} {c.patient_templates?.last_name}
+                                                    {c.patient_snapshot?.first_name} {c.patient_snapshot?.last_name}
                                                 </div>
                                                 <div className="course-detail-case-complaint">
-                                                    {c.patient_templates?.chief_complaint}
+                                                    {c.patient_snapshot?.chief_complaint}
                                                 </div>
                                                 {c.encounter_status === "revision_requested" && c.instructor_feedback && (
                                                     <div style={{ fontSize: "0.75rem", color: "#d97706", marginTop: "0.2rem" }}>
@@ -229,7 +229,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                 return (
                                     <div key={c.id} style={{ marginBottom: "0.6rem", fontSize: "0.8rem" }}>
                                         <div style={{ fontWeight: 500, color: "var(--text)" }}>
-                                            {c.patient_templates?.first_name} {c.patient_templates?.last_name}
+                                            {c.patient_snapshot?.first_name} {c.patient_snapshot?.last_name}
                                         </div>
                                         <div style={{ color: overdue ? "#dc2626" : soon ? "#d97706" : "var(--text-muted)", fontWeight: overdue || soon ? 600 : 400 }}>
                                             {formatDate(c.due_date)}{overdue ? " — Overdue" : soon ? " — Due Soon" : ""}
