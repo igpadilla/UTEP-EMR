@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { getVitals, getVitalsHistory, markVitalsInError } from "../../services/vitalsService.js";
-import { hasPermission } from "../../services/permissionService.js";
+import { getVitals, getVitalsHistory, markVitalsInError, canRecordCaseVitals } from "../../services/vitalsService.js";
 import { getCurrentUserWithProfile } from "../../services/profile.js";
 import { getFlag, getBloodPressureFlag } from "./vitalRanges.js";
 import VitalsForm from "./VitalsForm.jsx";
@@ -41,12 +40,10 @@ export default function VitalsPanel({ patientId, caseId, locked = false }) {
         checkCanRecord().then(setCanRecord).catch(() => setCanRecord(false));
     }, [patientId, caseId, locked]);
 
-    // Clinical roles with vitals.write can record. Instructors and admins can also record
-    // on their own (live) patients, but never on a student's case.
+    // Only roles with vital write permissions can modify vitals.
     async function checkCanRecord() {
         if (locked) return false;
-        if (await hasPermission("vitals.write")) return true;
-        if (caseId) return false;
+        if (caseId) return canRecordCaseVitals(caseId);
         const user = await getCurrentUserWithProfile();
         return ["admin", "instructor"].includes(user?.profile?.account_type);
     }

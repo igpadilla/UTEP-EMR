@@ -89,6 +89,7 @@ try {
         }
         if (url.pathname.endsWith("/assigned_cases")) return reply({ patient_snapshot: casePatient, encounter_status: caseStatus });
         if (url.pathname.endsWith("/rpc/has_permission")) return reply(true);
+        if (url.pathname.endsWith("/rpc/can_record_case_vitals")) return reply(true);
         if (["current_vital_sign_sets", "vital_sign_sets", "referrals"].some((table) => url.pathname.endsWith(`/${table}`))) return reply([]);
         throw new Error(`Unexpected chart test request: ${request.method()} ${url.pathname}`);
     });

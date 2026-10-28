@@ -26,6 +26,7 @@ import {
 } from "./services/auth.js";
 
 import { getCurrentUserWithProfile } from "./services/profile.js";
+import { getLivePatientAccess, NO_LIVE_PATIENT_ACCESS, FULL_LIVE_PATIENT_ACCESS } from "./services/clinicalRoleService.js";
 
 export default function App() {
     const [session, setSession] = useState(null);
@@ -33,6 +34,7 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [accountWarning, setAccountWarning] = useState("");
+    const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
 
@@ -106,6 +108,12 @@ export default function App() {
                 await logout().catch((error) => console.error(error));
                 return;
             }
+            // Students on clinical courses work only on their cases; front desk and biller keep Patient Lookup.
+            const livePatients = currentUser.profile.account_type === "student"
+                ? await getLivePatientAccess().catch(() => NO_LIVE_PATIENT_ACCESS)
+                : FULL_LIVE_PATIENT_ACCESS;
+            if (request !== accountRequest.current) return;
+            setLiveAccess(livePatients);
             setUser(currentUser);
             setError("");
             setAccountWarning("");
@@ -140,12 +148,14 @@ export default function App() {
 
     const isAdmin = user.profile.account_type === "admin";
     const isInstructor = user.profile.account_type === "instructor";
+    const isStudent = user.profile.account_type === "student";
     const canManageStudents = ["admin", "instructor"].includes(
         user.profile.account_type,
     );
-    const canManageCases = ["admin", "instructor"].includes(
-        user.profile.account_type,
-    );
+    // Only instructors create and manage cases and templates; admins manage accounts
+    const canManageCases = isInstructor;
+    // Admins manage all courses and enrollments, so they keep the Courses pages
+    const canManageCourses = isAdmin || isInstructor;
 
     const navbarPage =
         nav.page === "studentManagement" ? "students"
@@ -163,14 +173,15 @@ export default function App() {
             navigate("studentManagement");
         } else if (page === "cases" && canManageCases) {
             navigate("instructorCases");
-        } else if (page === "courses" && canManageCases) {
+        } else if (page === "courses" && canManageCourses) {
             navigate("courses");
         } else if (page === "myCourses") {
             navigate("studentCourses");
         } else if (page === "myCases") {
             navigate("studentCases");
         } else if (page === "patients") {
-            navigate(isAdmin || isInstructor ? "patientManager" : "patientLookup");
+            // Clinical students work on their own case copies; front desk and biller use Patient Lookup
+            navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCases" : "patientLookup");
         } else if (page === "appointments") {
             navigate("appointments");
         } else {
@@ -178,8 +189,13 @@ export default function App() {
         }
     }
 
+    // Live patient pages are for staff and non-clinical roles; other students are sent to their own cases
+    const livePatientPage = ["patientLookup", "studentPatientDetail", "appointments"].includes(nav.page)
+        || (nav.page === "patientChart" && !nav.caseId);
+    const page = isStudent && !liveAccess.read && livePatientPage ? "studentCases" : nav.page;
+
     let pageContent;
-    switch (nav.page) {
+    switch (page) {
         case "patientManager":
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
@@ -187,10 +203,10 @@ export default function App() {
             pageContent = <PatientDetail id={nav.id} onNavigate={navigate} />;
             break;
         case "patientLookup":
-            pageContent = <PatientLookup onNavigate={navigate} />;
+            pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
         case "studentPatientDetail":
-            pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} />;
+            pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} access={liveAccess} />;
             break;
         case "patientChart":
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
@@ -200,25 +216,25 @@ export default function App() {
         case "studentManagement":
             pageContent = canManageStudents
                 ? <StudentManagement onNavigate={navigate} canManageAccounts={isAdmin} />
-                : <Dashboard user={user} onNavigate={navigate} />;
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "appointments":
-            pageContent = <Appointments onNavigate={navigate} />;
+            pageContent = <Appointments onNavigate={navigate} access={liveAccess} />;
             break;
         case "instructorCases":
             pageContent = canManageCases
                 ? <InstructorCases onNavigate={navigate} />
-                : <Dashboard user={user} onNavigate={navigate} />;
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "templateBuilder":
             pageContent = canManageCases
                 ? <TemplateBuilder templateId={nav.id} patientId={nav.fromPatientId ?? null} onNavigate={navigate} />
-                : <Dashboard user={user} onNavigate={navigate} />;
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "caseAssign":
             pageContent = canManageCases
                 ? <CaseAssign templateId={nav.id} onNavigate={navigate} />
-                : <Dashboard user={user} onNavigate={navigate} />;
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "studentCases":
             pageContent = <StudentCases onNavigate={navigate} openCaseId={nav.openCaseId ?? null} />;
@@ -230,16 +246,16 @@ export default function App() {
             pageContent = <StudentCourseDetail course={nav.course} onNavigate={navigate} />;
             break;
         case "courses":
-            pageContent = canManageCases
+            pageContent = canManageCourses
                 ? <CourseForm onNavigate={navigate} />
-                : <Dashboard user={user} onNavigate={navigate} />;
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "courseDetail":
             pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
             break;
         case "dashboard":
         default:
-            pageContent = <Dashboard user={user} onNavigate={navigate} />;
+            pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
     }
 
     return (

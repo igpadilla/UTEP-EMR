@@ -36,7 +36,7 @@ export default function Navbar({ currentPage, onNavigate, user }) {
           </button>
         )}
 
-        {isInstructorOrAdmin && (
+        {profile.account_type === "instructor" && (
           <button
             className={`nav-link ${currentPage === "cases" ? "active" : ""}`}
             type="button"

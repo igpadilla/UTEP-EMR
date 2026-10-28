@@ -5,7 +5,8 @@ import MedicationSelector from "../components/MedicationSelector.jsx";
 const VISIT_TYPES = ["Initial", "Follow-up", "Emergency", "Routine", "Specialist", "Other"];
 const APPT_TYPES  = ["Follow-up", "Initial Consultation", "Specialist Referral", "Routine Check-up", "Emergency", "Other"];
 
-export default function StudentPatientDetail({ id, onNavigate }) {
+// access says what this role may do with live patients; a biller only reads.
+export default function StudentPatientDetail({ id, onNavigate, access = { schedule: true, checkIn: true } }) {
     const [patient, setPatient] = useState(null);
     const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -130,12 +131,14 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                 <div style={sectionStyle}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <h3>Schedule Appointment</h3>
-                        <button onClick={() => { setShowApptForm(!showApptForm); setApptError(""); }}>
-                            {showApptForm ? "Cancel" : "+ Schedule"}
-                        </button>
+                        {access.schedule && (
+                            <button onClick={() => { setShowApptForm(!showApptForm); setApptError(""); }}>
+                                {showApptForm ? "Cancel" : "+ Schedule"}
+                            </button>
+                        )}
                     </div>
 
-                    {showApptForm && (
+                    {access.schedule && showApptForm && (
                         <form onSubmit={handleScheduleAppt} style={inlineFormStyle}>
                             <div style={fieldStyle}>
                                 <label>Appointment Type</label>
@@ -192,12 +195,14 @@ export default function StudentPatientDetail({ id, onNavigate }) {
                 <div style={sectionStyle}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <h3>Visits</h3>
-                        <button onClick={() => { setShowVisitForm(!showVisitForm); setVisitError(""); }}>
-                            {showVisitForm ? "Cancel" : "+ Add Visit"}
-                        </button>
+                        {access.checkIn && (
+                            <button onClick={() => { setShowVisitForm(!showVisitForm); setVisitError(""); }}>
+                                {showVisitForm ? "Cancel" : "+ Add Visit"}
+                            </button>
+                        )}
                     </div>
 
-                    {showVisitForm && (
+                    {access.checkIn && showVisitForm && (
                         <form onSubmit={handleAddVisit} style={inlineFormStyle}>
                             <div style={fieldStyle}>
                                 <label>Visit Type</label>

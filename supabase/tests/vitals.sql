@@ -1,6 +1,6 @@
 begin;
 
-select plan(19);
+select plan(20);
 
 -- --------------------------------------------------
 -- Test setup (runs as the database owner)
@@ -19,6 +19,7 @@ update public.profiles
 set account_type = 'instructor'
 where user_id = '10000000-0000-0000-0000-00000000a004';
 
+-- This case has no course, so the student's own clinical role decides (nursing has vitals.write).
 insert into public.profile_roles (user_id, role_id)
 select v.user_id, r.role_id
 from (values
@@ -45,31 +46,25 @@ values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'baseline', '10000000-0000-0000-
 set local role authenticated;
 
 
--- --------------------------------------------------
--- TEST 1: Nursing student can record vitals on a live patient
--- --------------------------------------------------
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a001', true);
+-- ==================================================
+-- Live patient: recorded by the instructor (students only chart on their own case copy)
+-- ==================================================
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a004', true);
 
 select lives_ok(
     $$
         insert into public.vital_sign_sets (id, patient_id, systolic_bp, diastolic_bp, weight_lb, height_in)
         values ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 148, 92, 192, 64);
     $$,
-    'Nursing student can record vitals'
+    'Instructor can record vitals on a live patient'
 );
 
--- --------------------------------------------------
--- TEST 2: BMI is calculated from weight and height
--- --------------------------------------------------
 select is(
     (select bmi from public.vital_sign_sets where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
     33.0,
     'BMI is calculated (192 lb, 64 in = 33.0)'
 );
 
--- --------------------------------------------------
--- TEST 3: Impossible values are rejected
--- --------------------------------------------------
 select throws_ok(
     $$
         insert into public.vital_sign_sets (patient_id, heart_rate)
@@ -80,9 +75,6 @@ select throws_ok(
     'Heart rate of 900 is rejected'
 );
 
--- --------------------------------------------------
--- TEST 4: Values cannot be edited in place
--- --------------------------------------------------
 select throws_ok(
     $$
         update public.vital_sign_sets set systolic_bp = 120
@@ -93,9 +85,6 @@ select throws_ok(
     'Recorded values cannot be edited'
 );
 
--- --------------------------------------------------
--- TEST 5: Vitals cannot be deleted
--- --------------------------------------------------
 select throws_ok(
     $$
         delete from public.vital_sign_sets
@@ -106,9 +95,7 @@ select throws_ok(
     'Vitals cannot be deleted'
 );
 
--- --------------------------------------------------
--- TEST 6: A correction replaces the old value in current vitals
--- --------------------------------------------------
+-- A correction replaces the old value in current vitals
 insert into public.vital_sign_sets (id, patient_id, systolic_bp, diastolic_bp, supersedes_id, correction_reason)
 values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 138, 88, 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Wrong cuff size');
 
@@ -118,18 +105,46 @@ select is(
     'Current vitals show the corrected value only'
 );
 
--- --------------------------------------------------
--- TEST 7: Case vitals are visible to the student on the case
--- --------------------------------------------------
+-- Marking a correction as entered in error hides the whole set (the original must not come back)
+update public.vital_sign_sets
+set status = 'entered_in_error', correction_reason = 'Charted on the wrong patient'
+where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+
+select is(
+    (select status from public.vital_sign_sets where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'),
+    'entered_in_error',
+    'Own entry can be marked entered in error'
+);
+
+select is(
+    (select count(*) from public.current_vital_sign_sets where patient_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+    0::bigint,
+    'Original set stays hidden after its correction is marked entered in error'
+);
+
+
+-- ==================================================
+-- Nursing student: works on their own case copy only
+-- ==================================================
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a001', true);
+
 select is(
     (select count(*) from public.vital_sign_sets where assigned_case_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
     1::bigint,
     'Student sees vitals on their own case'
 );
 
--- --------------------------------------------------
--- TEST: Recording vitals on a case writes to the case's audit log
--- --------------------------------------------------
+select throws_ok(
+    $$
+        insert into public.vital_sign_sets (patient_id, heart_rate)
+        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 80);
+    $$,
+    '42501',
+    null,
+    'Student cannot record vitals on a live patient'
+);
+
+-- Recording vitals on a case writes to the case's audit log
 insert into public.vital_sign_sets (id, assigned_case_id, heart_rate, spo2)
 values ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 92, 96);
 
@@ -140,9 +155,7 @@ select is(
     'Case vitals are logged with a summary'
 );
 
--- --------------------------------------------------
--- TEST: Once the case is submitted, the student cannot add or remove vitals
--- --------------------------------------------------
+-- Once the case is submitted, the student cannot add or remove vitals
 update public.assigned_cases
 set encounter_status = 'pending review'
 where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
@@ -167,29 +180,10 @@ select is(
     'Student cannot mark vitals in error on a submitted case'
 );
 
--- --------------------------------------------------
--- TEST 8: Marking a correction as entered in error hides the whole set
--- (the original must not come back)
--- --------------------------------------------------
-update public.vital_sign_sets
-set status = 'entered_in_error', correction_reason = 'Charted on the wrong patient'
-where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
-select is(
-    (select status from public.vital_sign_sets where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'),
-    'entered_in_error',
-    'Own entry can be marked entered in error'
-);
-
-select is(
-    (select count(*) from public.current_vital_sign_sets where patient_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-    0::bigint,
-    'Original set stays hidden after its correction is marked entered in error'
-);
-
--- --------------------------------------------------
--- TEST 9: Pharmacy student can read but not record
--- --------------------------------------------------
+-- ==================================================
+-- Other students and front desk
+-- ==================================================
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a002', true);
 
 select throws_ok(
@@ -203,14 +197,11 @@ select throws_ok(
 );
 
 select is(
-    (select count(*) from public.vital_sign_sets where patient_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-    2::bigint,
-    'Pharmacy student can read live-patient vitals'
+    (select count(*) from public.vital_sign_sets),
+    0::bigint,
+    'Another student sees no live-patient vitals and no one else''s case'
 );
 
--- --------------------------------------------------
--- TEST 10: Front desk cannot read vitals
--- --------------------------------------------------
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a003', true);
 
 select is(
@@ -219,9 +210,10 @@ select is(
     'Front desk cannot read vitals'
 );
 
--- --------------------------------------------------
--- TEST: The instructor who assigned the case sees the student's vitals and the log
--- --------------------------------------------------
+
+-- ==================================================
+-- The instructor who assigned the case sees the student's vitals and the log
+-- ==================================================
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-00000000a004', true);
 
 select is(
@@ -237,15 +229,12 @@ select is(
     'Instructor sees the vitals entry in the case audit log'
 );
 
--- --------------------------------------------------
--- TEST: Instructors record vitals on their live patients, but not on a student's case
--- --------------------------------------------------
 select lives_ok(
     $$
         insert into public.vital_sign_sets (patient_id, heart_rate)
         values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 76);
     $$,
-    'Instructor can record vitals on a live patient'
+    'Instructor can record another set on a live patient'
 );
 
 select throws_ok(

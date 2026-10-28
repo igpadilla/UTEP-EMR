@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
     getTemplateById,
-    getStudents,
     getMyCourses,
     getCourseStudents,
     assignCase,
@@ -24,14 +23,14 @@ export default function CaseAssign({ templateId, onNavigate }) {
     useEffect(() => {
         async function load() {
             try {
-                const [tmpl, studs, crs] = await Promise.all([
+                const [tmpl, crs] = await Promise.all([
                     getTemplateById(templateId),
-                    getStudents(),
                     getMyCourses(),
                 ]);
                 setTemplate(tmpl);
-                setStudents(studs);
                 setCourses(crs);
+                // Start with the template's own course, if the instructor teaches it
+                if (crs.some((c) => c.id === tmpl.course_id)) handleCourseSelect(tmpl.course_id);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load data.");
@@ -54,9 +53,10 @@ export default function CaseAssign({ templateId, onNavigate }) {
         setSelectedCourseId(courseId);
         setCourseLoadingId(courseId);
         try {
+            // Only students enrolled in the course can receive its cases
             const enrolled = await getCourseStudents(courseId);
-            const ids = enrolled.map((s) => s.user_id);
-            setSelected(ids);
+            setStudents(enrolled);
+            setSelected(enrolled.map((s) => s.user_id));
         } catch (err) {
             console.error(err);
             setError("Failed to load course students.");
@@ -73,6 +73,10 @@ export default function CaseAssign({ templateId, onNavigate }) {
     });
 
     async function handleAssign() {
+        if (!selectedCourseId) {
+            setError("Choose the course this case is for.");
+            return;
+        }
         if (selected.length === 0) {
             setError("Select at least one student.");
             return;
@@ -98,12 +102,9 @@ export default function CaseAssign({ templateId, onNavigate }) {
             current_medications: template.current_medications,
             chief_complaint: template.chief_complaint,
             clinical_baseline: template.clinical_baseline,
-            traps: template.traps || [],
-            rubric_criteria: template.rubric_criteria || [],
             student_instructions: template.student_instructions,
             expectations_rubric: template.expectations_rubric,
             initial_referral: template.initial_referral || null,
-            // hidden_diagnosis is intentionally excluded from this snapshot
         };
 
         const results = await Promise.allSettled(
@@ -116,7 +117,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
         if (failures.length > 0) {
             console.error("Some assignments failed:", failures);
             setError(
-                `${failures.length} assignment(s) failed. Some students may already have this case.`
+                `${failures.length} assignment(s) failed. Some students may already have this case open.`
             );
             setSubmitting(false);
             return;
@@ -175,12 +176,12 @@ export default function CaseAssign({ templateId, onNavigate }) {
                 <div className="instructor-form-section">
                     <h3 className="instructor-form-section-title">Assign by Course</h3>
                     <p className="instructor-baseline-hint">
-                        Select a course to automatically select all enrolled students.
+                        Choose the course this case is for. Its enrolled students are selected for you.
                     </p>
                     <div className="student-form-field">
                         <select
                             className="instructor-search-input"
-                            defaultValue=""
+                            value={selectedCourseId ?? ""}
                             onChange={(e) => handleCourseSelect(e.target.value)}
                             disabled={submitting || courseLoadingId !== null}
                         >
@@ -269,8 +270,8 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     {students.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">👤</div>
-                            <strong>No active students found</strong>
-                            <p>Create student accounts first via Student Management.</p>
+                            <strong>No students to show</strong>
+                            <p>{selectedCourseId ? "No students are enrolled in this course yet." : "Choose a course above to list its students."}</p>
                         </div>
                     ) : filteredStudents.length === 0 ? (
                         <p className="instructor-loading">No students match your search.</p>

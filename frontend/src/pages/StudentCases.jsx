@@ -4,6 +4,7 @@ import {
     startCase,
     saveCaseNotes,
     submitCase,
+    getAssignedCaseClinicalRole,
 } from "../services/studentCaseService.js";
 import { getMyClinicalRoles } from "../services/clinicalRoleService.js";
 import TagSelector from "../components/TagSelector.jsx";
@@ -59,7 +60,14 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     const [submitting, setSubmitting] = useState(false);
     const [modalError, setModalError] = useState("");
 
-    const isPTStudent = clinicalRoles.includes("physical_therapy");
+    // The open case's course decides the discipline (e.g. a PT course gets the PT SOAP note).
+    // Cases without a course discipline fall back to the student's own clinical roles.
+    const [caseRoleName, setCaseRoleName] = useState(null);
+    const isPTStudent = isPTCase(caseRoleName);
+
+    function isPTCase(roleName) {
+        return roleName ? roleName === "physical_therapy" : clinicalRoles.includes("physical_therapy");
+    }
 
     const [clinicalRole, setClinicalRole] = useState(null);
     const [noteTemplates, setNoteTemplates] = useState([]);
@@ -170,9 +178,12 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                 console.error(err);
             }
         }
+        // Know the case's discipline before showing it, so the right note form opens
+        const role = await getAssignedCaseClinicalRole(openedCase.id).catch(() => null);
+        setCaseRoleName(role?.roleName ?? null);
         setActiveCase(openedCase);
 
-        if (isPTStudent) {
+        if (isPTCase(role?.roleName)) {
             setPtSoap(loadPTSoap(openedCase.encounter_notes));
         } else {
             setNotes(openedCase.encounter_notes ?? "");
@@ -185,6 +196,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
     function closeModal() {
         setActiveCase(null);
+        setCaseRoleName(null);
         setNotes("");
         setPtSoap(EMPTY_PT_SOAP);
         setModalError("");

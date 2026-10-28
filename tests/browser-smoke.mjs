@@ -92,6 +92,7 @@ try {
             if (!enrolled) { enrolled = true; return reply({ error: "Test enrollment unavailable" }, 500); }
             return reply({ enrolled: true });
         }
+        if (url.pathname.endsWith("/rpc/my_live_patient_access")) return reply({ read: false, register: false, schedule: false, checkIn: false });
         if (url.pathname.endsWith("/patient_templates")) return reply([]);
         if (url.pathname.endsWith("/assigned_cases")) {
             if (request.method() === "PATCH") {
@@ -172,6 +173,10 @@ try {
     assert.ok(await page.getByRole("button", { name: "Start a new import", exact: true }).isVisible());
     console.log("PASS: course roster import stays open after failure and success, retaining credentials and retry");
 
+    // Cases belong to instructors; admins manage accounts and courses.
+    assert.equal(await page.getByRole("button", { name: "Cases", exact: true }).count(), 0);
+    accountType = "instructor";
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByRole("button", { name: "Cases", exact: true }).click();
     await page.getByRole("button", { name: "Grade", exact: true }).click();
     await page.getByText("Reference guide for the existing review workflow").waitFor();

@@ -5,6 +5,13 @@ function ownerColumns(owner) {
     return owner.caseId ? { assigned_case_id: owner.caseId } : { patient_id: owner.patientId };
 }
 
+// Whether the signed-in student may record vitals on this case.
+export async function canRecordCaseVitals(caseId) {
+    const { data, error } = await supabase.rpc("can_record_case_vitals", { p_case_id: caseId });
+    if (error) throw error;
+    return data === true;
+}
+
 // Current vitals, newest first.
 export async function getVitals(owner) {
     const { data, error } = await supabase
