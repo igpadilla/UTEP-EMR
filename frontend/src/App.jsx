@@ -102,8 +102,8 @@ export default function App() {
     useEffect(() => {
         if (!session) return;
 
-        const IDLE_LIMIT_MS = 30 * 1000;
-        const WARNING_MS = 10 * 1000;
+        const IDLE_LIMIT_MS = 30 * 60 * 1000;
+        const WARNING_MS = 2 * 60 * 1000;
         const CHECK_MS = 1000;
         const WRITE_MS = 5000;
         const ACTIVITY_KEY = "emr:lastActivity";
