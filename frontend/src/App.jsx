@@ -102,41 +102,64 @@ export default function App() {
     useEffect(() => {
         if (!session) return;
 
-        const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 Minutes
-        const WARNING_MS = 2 * 60 * 1000; // 2 Minutes Warning
-        let idleTimer;
-        let warningTimer;
+        const IDLE_LIMIT_MS = 30 * 1000;
+        const WARNING_MS = 10 * 1000;
+        const CHECK_MS = 1000;
+        const WRITE_MS = 5000;
+        const ACTIVITY_KEY = "emr:lastActivity";
+
+        let ownActivity = Date.now();
+        let lastWrite = 0;
         let warningShown = false;
 
-        function startTimers() {
-            clearTimeout(idleTimer);
-            clearTimeout(warningTimer);
+        function readActivity() {
+            try {
+                const stored = Number(localStorage.getItem(ACTIVITY_KEY));
+                if (stored > 0) return stored;
+            } catch {}
+            return ownActivity;
+        }
+
+        function markActive() {
+            const now = Date.now();
+            ownActivity = now;
+            lastWrite = now;
             warningShown = false;
             setShowIdleWarning(false);
-            warningTimer = setTimeout(() => {
-                warningShown = true;
-                setShowIdleWarning(true);
-            }, IDLE_LIMIT_MS - WARNING_MS);
-            idleTimer = setTimeout(() => {
-                setShowIdleWarning(false);
-                logout().catch(() => {});
-            }, IDLE_LIMIT_MS);
+            try {
+                localStorage.setItem(ACTIVITY_KEY, String(now));
+            } catch {}
         }
 
         function handleActivity() {
-            if (warningShown) return; // only the button counts once the warning is up
-            startTimers();
+            if (warningShown) return;
+            if (Date.now() - lastWrite < WRITE_MS) return;
+            markActive();
         }
 
-        stayIdleRef.current = startTimers;
+        function checkIdle() {
+            const idleFor = Date.now() - readActivity();
+            if (idleFor >= IDLE_LIMIT_MS) {
+                setShowIdleWarning(false);
+                logout().catch(() => {});
+            } else if (idleFor >= IDLE_LIMIT_MS - WARNING_MS) {
+                warningShown = true;
+                setShowIdleWarning(true);
+            } else if (warningShown) {
+                warningShown = false;
+                setShowIdleWarning(false);
+            }
+        }
+
+        stayIdleRef.current = markActive;
+        markActive();
 
         const events = ["mousemove", "keydown", "click", "touchstart"];
         events.forEach((e) => window.addEventListener(e, handleActivity));
-        startTimers();
+        const checkTimer = setInterval(checkIdle, CHECK_MS);
 
         return () => {
-            clearTimeout(idleTimer);
-            clearTimeout(warningTimer);
+            clearInterval(checkTimer);
             stayIdleRef.current = () => {};
             events.forEach((e) => window.removeEventListener(e, handleActivity));
         };
