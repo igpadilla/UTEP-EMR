@@ -1,5 +1,7 @@
 """Integration tests for FastAPI medication interaction and formulary endpoints."""
 
+from fda_fakes import FakeResponse, fda_label
+
 
 def test_endpoints_require_authentication(client):
     res_check = client.post("/api/medications/check-interactions", json={"medications": []})
@@ -106,7 +108,9 @@ def test_openfda_label_requires_auth(client):
     assert res.status_code == 401
 
 
-def test_openfda_label_authenticated(auth_client):
+def test_openfda_label_authenticated(auth_client, fake_openfda):
+    fake_openfda(lambda search, n: FakeResponse(200, fda_label(
+        "lisinopril", boxed="WARNING: FETAL TOXICITY", interactions="Avoid potassium supplements.")))
     res = auth_client.get("/api/medications/openfda/label?drug=lisinopril")
     assert res.status_code == 200
     data = res.json()
@@ -114,14 +118,17 @@ def test_openfda_label_authenticated(auth_client):
     assert "generic_names" in data
     assert "boxed_warning" in data
     assert "drug_interactions_text" in data
+    assert data["boxed_warning"] == "WARNING: FETAL TOXICITY"
 
 
-def test_openfda_label_not_found(auth_client):
+def test_openfda_label_not_found(auth_client, fake_openfda):
+    fake_openfda(lambda search, n: FakeResponse(404, {"error": {"code": "NOT_FOUND"}}))
     res = auth_client.get("/api/medications/openfda/label?drug=completelyfakedrugxyz123")
     assert res.status_code == 404
 
 
-def test_check_interactions_with_openfda_advisories(auth_client):
+def test_check_interactions_with_openfda_advisories(auth_client, fake_openfda):
+    fake_openfda(lambda search, n: FakeResponse(200, fda_label("warfarin", boxed="WARNING: BLEEDING RISK")))
     payload = {
         "candidate": {"name": "Warfarin", "dosage": 5, "unit": "mg"},
         "medications": [],

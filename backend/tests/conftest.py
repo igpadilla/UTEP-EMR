@@ -12,6 +12,7 @@ os.environ.setdefault("SUPABASE_JWT_SECRET", "super-secret-jwt-key-for-test-suit
 
 from app.auth import get_current_user
 from app.main import app
+from app.services import openfda
 
 
 @pytest.fixture
@@ -31,3 +32,41 @@ def auth_client():
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture(autouse=True)
+def clean_openfda_cache():
+    """Answers cached by one test must not leak into the next."""
+    openfda.clear_cache()
+    yield
+    openfda.clear_cache()
+
+
+@pytest.fixture
+def fake_openfda(monkeypatch):
+    """Replace the network with a handler: handler(search, call_number) -> FakeResponse or raises.
+
+    Returns a list that records the search text of every request made.
+    """
+
+    def install(handler):
+        searches = []
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def get(self, url, params=None, headers=None):
+                searches.append(params["search"])
+                return handler(params["search"], len(searches))
+
+        monkeypatch.setattr(openfda.httpx, "Client", FakeClient)
+        return searches
+
+    return install
