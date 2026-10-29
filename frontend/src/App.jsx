@@ -18,6 +18,8 @@ import StudentCourseDetail from "./pages/StudentCourseDetail.jsx";
 import CourseForm from "./pages/CourseForm.jsx";
 import CourseDetail from "./pages/CourseDetail.jsx";
 import PatientChart from "./pages/PatientChart.jsx";
+import ChangePassword from "./pages/ChangePassword.jsx";
+import IdleWarning from "./components/IdleWarning.jsx";
 
 import {
     getSession,
@@ -34,9 +36,11 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [accountWarning, setAccountWarning] = useState("");
+    const [showIdleWarning, setShowIdleWarning] = useState(false);
     const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
+    const stayIdleRef = useRef(() => {});
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -95,6 +99,72 @@ export default function App() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!session) return;
+
+        const IDLE_LIMIT_MS = 30 * 60 * 1000;
+        const WARNING_MS = 2 * 60 * 1000;
+        const CHECK_MS = 1000;
+        const WRITE_MS = 5000;
+        const ACTIVITY_KEY = "emr:lastActivity";
+
+        let ownActivity = Date.now();
+        let lastWrite = 0;
+        let warningShown = false;
+
+        function readActivity() {
+            try {
+                const stored = Number(localStorage.getItem(ACTIVITY_KEY));
+                if (stored > 0) return stored;
+            } catch {}
+            return ownActivity;
+        }
+
+        function markActive() {
+            const now = Date.now();
+            ownActivity = now;
+            lastWrite = now;
+            warningShown = false;
+            setShowIdleWarning(false);
+            try {
+                localStorage.setItem(ACTIVITY_KEY, String(now));
+            } catch {}
+        }
+
+        function handleActivity() {
+            if (warningShown) return;
+            if (Date.now() - lastWrite < WRITE_MS) return;
+            markActive();
+        }
+
+        function checkIdle() {
+            const idleFor = Date.now() - readActivity();
+            if (idleFor >= IDLE_LIMIT_MS) {
+                setShowIdleWarning(false);
+                logout().catch(() => {});
+            } else if (idleFor >= IDLE_LIMIT_MS - WARNING_MS) {
+                warningShown = true;
+                setShowIdleWarning(true);
+            } else if (warningShown) {
+                warningShown = false;
+                setShowIdleWarning(false);
+            }
+        }
+
+        stayIdleRef.current = markActive;
+        markActive();
+
+        const events = ["mousemove", "keydown", "click", "touchstart"];
+        events.forEach((e) => window.addEventListener(e, handleActivity));
+        const checkTimer = setInterval(checkIdle, CHECK_MS);
+
+        return () => {
+            clearInterval(checkTimer);
+            stayIdleRef.current = () => {};
+            events.forEach((e) => window.removeEventListener(e, handleActivity));
+        };
+    }, [session]);
+
     async function loadUser({ background = false } = {}) {
         const request = ++accountRequest.current;
         try {
@@ -145,6 +215,10 @@ export default function App() {
             <button type="button" onClick={() => logout().catch(() => setError("Unable to sign out. Please try again."))}>Sign out</button>
         </div>
     ) : <p>Loading account...</p>;
+
+    if (user.profile.must_change_password) {
+        return <ChangePassword onDone={() => loadUser()} />;
+    }
 
     const isAdmin = user.profile.account_type === "admin";
     const isInstructor = user.profile.account_type === "instructor";
@@ -264,6 +338,7 @@ export default function App() {
             <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />
             {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
             {pageContent}
+            {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
             <footer className="emr-footer">
                 <span>Educational EMR Prototype</span>
                 <span>For educational use only</span>

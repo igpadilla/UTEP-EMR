@@ -122,6 +122,7 @@ export default {
       first_name: firstName,
       last_name: lastName,
       account_type: "student",
+      must_change_password: true
     })
     .eq("user_id", createdUser.user.id)
     .select("user_id")
