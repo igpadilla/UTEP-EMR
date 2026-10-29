@@ -177,6 +177,10 @@ button {
 /* Navigation Bar */
 
 .main-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
   width: 100%;
   min-height: var(--nav-height);
 

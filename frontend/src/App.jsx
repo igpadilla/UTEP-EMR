@@ -332,17 +332,22 @@ export default function App() {
             pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
     }
 
+    // The template builder uses the whole screen for the case form and the patient chart.
+    const isTemplateBuilder = page === "templateBuilder";
+
     return (
-        <div className="emr-app">
-            <Header user={user} />
-            <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />
+        <div className={`emr-app ${isTemplateBuilder ? "emr-app-fullscreen" : ""}`}>
+            {!isTemplateBuilder && <Header user={user} />}
+            {!isTemplateBuilder && <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />}
             {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
             {pageContent}
             {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
-            <footer className="emr-footer">
-                <span>Educational EMR Prototype</span>
-                <span>For educational use only</span>
-            </footer>
+            {!isTemplateBuilder && (
+                <footer className="emr-footer">
+                    <span>Educational EMR Prototype</span>
+                    <span>For educational use only</span>
+                </footer>
+            )}
         </div>
     );
 }

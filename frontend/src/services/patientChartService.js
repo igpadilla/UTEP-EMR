@@ -37,6 +37,17 @@ async function saveSection(patient, changes) {
 }
 
 
+// A new patient starts with demographics only; the rest of the chart is filled in afterwards.
+export async function createPatientFromChart(form) {
+    const row = demographicsToUpdate(form, {});
+    const { data, error } = await supabase.from("patients")
+        .insert({ ...row, allergies: [], medical_history: [] })
+        .select(PATIENT_FIELDS).single();
+    if (error || !data) throw new Error("Could not create the patient. Your entries are still here; try again.");
+    return data;
+}
+
+
 export function saveDemographics(patient, form) {
     return saveSection(patient, demographicsToUpdate(form, patient));
 }

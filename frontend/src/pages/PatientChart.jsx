@@ -11,7 +11,12 @@ const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
 const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History", "Visits", "Referrals"];
 
 
-export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPatient = false }) {
+export default function PatientChart({
+    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated,
+}) {
+    // With no patient yet, the chart opens on an empty demographics form that creates one.
+    // The other sections stay locked until the patient exists.
+    const creating = !id && !caseId && canEditPatient && Boolean(onPatientCreated);
     const [patient, setPatient] = useState(null);
     const [caseStatus, setCaseStatus] = useState(null);
     const [activeTab, setActiveTab] = useState("Summary");
@@ -21,9 +26,22 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
     const [reload, setReload] = useState(0);
     const [editingSection, setEditingSection] = useState(null);
     const tabButtons = useRef([]);
+    const noticeTimerRef = useRef(null);
+
+    useEffect(() => {
+        return () => {
+            if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
+        if (creating) {
+            setPatient({});
+            setEditingSection("demographics");
+            setLoading(false);
+            return;
+        }
         async function load() {
             setLoading(true);
             setError("");
@@ -41,7 +59,7 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
         }
         load();
         return () => { cancelled = true; };
-    }, [id, caseId, reload]);
+    }, [id, caseId, reload, creating]);
 
     function goBack() {
         onNavigate(backTo ?? "patientLookup", id);
@@ -49,8 +67,27 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
 
     function chooseTab(tab) {
         if (editingSection) return;
-        setNotice("");
+        dismissNotice();
         setActiveTab(tab);
+    }
+
+    function dismissNotice() {
+        if (noticeTimerRef.current) {
+            clearTimeout(noticeTimerRef.current);
+            noticeTimerRef.current = null;
+        }
+        setNotice("");
+    }
+
+    function triggerNotice(message) {
+        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        setNotice(message);
+        if (message) {
+            noticeTimerRef.current = setTimeout(() => {
+                setNotice("");
+                noticeTimerRef.current = null;
+            }, 2000);
+        }
     }
 
     function moveTab(event, index) {
@@ -67,33 +104,38 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
     }
 
     function savedPatient(saved, message) {
+        if (creating) {
+            onPatientCreated(saved);
+            return;
+        }
         setPatient(saved);
         setEditingSection(null);
-        setNotice(message);
+        triggerNotice(message);
+        onPatientSaved?.(saved);
     }
 
     if (loading) return <main className="chart-content"><p role="status">Loading chart…</p>
-        <button type="button" className="secondary-action-button" onClick={goBack}>← Back</button></main>;
+        {!embedded && <button type="button" className="secondary-action-button" onClick={goBack}>← Back</button>}</main>;
     if (error || !patient) return <main className="chart-content">
         <p className="form-message form-message-error" role="alert">{error || "Patient not found."}</p>
         <div className="chart-actions"><button type="button" className="secondary-action-button" onClick={() => setReload((value) => value + 1)}>Try again</button>
-            <button type="button" className="secondary-action-button" onClick={goBack}>← Back</button></div>
+            {!embedded && <button type="button" className="secondary-action-button" onClick={goBack}>← Back</button>}</div>
     </main>;
 
     const allergies = patientList(patient.allergies);
-    const canEdit = canEditPatient && !caseId && Boolean(patient.id);
+    const canEdit = canEditPatient && !caseId && (Boolean(patient.id) || creating);
     const locked = Boolean(caseId) && !EDITABLE_STATUSES.includes(caseStatus);
     const activeIndex = TABS.indexOf(activeTab);
     const sectionProps = {
-        patient, canEdit, onCancel: () => setEditingSection(null), onSaved: savedPatient,
+        patient, canEdit, onCancel: () => setEditingSection(null), onSaved: savedPatient, creating,
     };
 
     return (
-        <main className="chart-page">
+        <main className={embedded ? "chart-page chart-embedded" : "chart-page"}>
             <section className="chart-header">
                 <div className="chart-banner">
                     <div>
-                        <h1>{[patient.first_name, patient.last_name].filter(Boolean).join(" ") || "Patient"}
+                        <h1>{[patient.first_name, patient.last_name].filter(Boolean).join(" ") || (creating ? "New patient" : "Patient")}
                             {caseId && <span className="chart-case-tag">Case copy</span>}
                         </h1>
                         <p className="chart-banner-details">
@@ -106,9 +148,9 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
                             : <span className="chart-no-allergies">No allergies recorded</span>}
                         <div className="chart-actions">
                             <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={() => {
-                                setNotice(""); setReload((value) => value + 1);
+                                dismissNotice(); setReload((value) => value + 1);
                             }}>Refresh chart</button>
-                            <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>← Back</button>
+                            {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>← Back</button>}
                         </div>
                     </div>
                 </div>
@@ -125,8 +167,20 @@ export default function PatientChart({ id, caseId, backTo, onNavigate, canEditPa
             </section>
 
             <div className="chart-content" role="tabpanel" id={`chart-panel-${activeIndex}`} aria-labelledby={`chart-tab-${activeIndex}`}>
-                {notice && <p className="form-message form-message-success" role="status">{notice}</p>}
-                {editingSection && <p className="chart-edit-hint">Save or cancel your edits before switching sections or leaving the chart.</p>}
+                {notice && (
+                    <div className="form-message form-message-success chart-notice-dismissible" role="status">
+                        <span>{notice}</span>
+                        <button
+                            type="button"
+                            className="chart-notice-close-button"
+                            onClick={dismissNotice}
+                            aria-label="Dismiss message"
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
+                {creating && <p className="chart-edit-hint">Create the patient to open the rest of the chart.</p>}
                 {caseId && ["Summary", "Allergies & History"].includes(activeTab)
                     && <p className="chart-edit-hint">These are the patient details saved with this case. They are read-only here.</p>}
 

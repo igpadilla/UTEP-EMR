@@ -1,18 +1,6 @@
 import { useState } from "react";
-import { saveDemographics } from "../../services/patientChartService.js";
+import { createPatientFromChart, saveDemographics } from "../../services/patientChartService.js";
 import { demographicsToForm, localToday } from "./patientChartForm.js";
-
-const FIELDS = [
-    { key: "first_name", label: "First name", required: true },
-    { key: "last_name", label: "Last name", required: true },
-    { key: "age", label: "Age", type: "number", required: true },
-    { key: "date_of_birth", label: "Date of birth", type: "date" },
-    { key: "occupation", label: "Occupation" },
-    { key: "phone_number", label: "Phone", type: "tel" },
-    { key: "email", label: "Email", type: "email" },
-    { key: "contact_name", label: "Primary emergency contact name" },
-    { key: "contact_phone", label: "Primary emergency contact phone", type: "tel" },
-];
 
 
 function Detail({ label, value }) {
@@ -20,7 +8,8 @@ function Detail({ label, value }) {
 }
 
 
-export default function PatientSummary({ patient, canEdit, editing, onEdit, onCancel, onSaved }) {
+// creating: the patient does not exist yet; the form creates it instead of saving changes.
+export default function PatientSummary({ patient, canEdit, editing, onEdit, onCancel, onSaved, creating = false }) {
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -41,8 +30,8 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
         setSaving(true);
         setError("");
         try {
-            const saved = await saveDemographics(patient, form);
-            onSaved(saved, "Patient demographics saved.");
+            const saved = creating ? await createPatientFromChart(form) : await saveDemographics(patient, form);
+            onSaved(saved, creating ? "Patient created." : "Patient demographics saved.");
         } catch (saveError) {
             setError(saveError.message);
         } finally {
@@ -52,37 +41,75 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
 
     if (editing && canEdit) {
         return <section className="chart-card" aria-labelledby="demographics-edit-heading">
-            <h2 id="demographics-edit-heading">Edit demographics</h2>
-            <p>Change the patient details below. Other chart sections will stay the same.</p>
+            <h2 id="demographics-edit-heading" style={{ fontSize: "1.15rem", margin: "0 0 0.25rem" }}>{creating ? "New patient" : "Edit demographics"}</h2>
             <form onSubmit={save}>
-                <fieldset className="chart-form-grid" disabled={saving}>
+                <fieldset className="chart-form-grid chart-demographics-grid" disabled={saving}>
                     <legend className="chart-sr-only">Patient demographics</legend>
-                    {FIELDS.map((field) => <div className="chart-field" key={field.key}>
-                        <label htmlFor={`chart-${field.key}`}>{field.label}{field.required ? " *" : ""}</label>
-                        <input id={`chart-${field.key}`} name={field.key} type={field.type || "text"}
-                            value={form[field.key] ?? ""} onChange={changeField} required={field.required}
-                            min={field.type === "number" ? 0 : undefined}
-                            max={field.type === "number" ? 150 : field.type === "date" ? localToday() : undefined}
-                            step={field.type === "number" ? 1 : undefined} />
-                    </div>)}
+                    <div className="chart-field">
+                        <label htmlFor="chart-first_name">First name *</label>
+                        <input id="chart-first_name" name="first_name" type="text"
+                            value={form.first_name ?? ""} onChange={changeField} required />
+                    </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-last_name">Last name *</label>
+                        <input id="chart-last_name" name="last_name" type="text"
+                            value={form.last_name ?? ""} onChange={changeField} required />
+                    </div>
                     <div className="chart-field">
                         <label htmlFor="chart-sex">Sex</label>
-                        <select id="chart-sex" name="sex" value={form.sex} onChange={changeField}>
+                        <select id="chart-sex" name="sex" value={form.sex ?? ""} onChange={changeField}>
                             <option value="">Not recorded</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
                             {form.sex && !["Male", "Female"].includes(form.sex) && <option value={form.sex}>{form.sex}</option>}
                         </select>
                     </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-age">Age *</label>
+                        <input id="chart-age" name="age" type="number" min={0} max={150} step={1}
+                            value={form.age ?? ""} onChange={changeField} required />
+                    </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-date_of_birth">Date of birth</label>
+                        <input id="chart-date_of_birth" name="date_of_birth" type="date" max={localToday()}
+                            value={form.date_of_birth ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-occupation">Occupation</label>
+                        <input id="chart-occupation" name="occupation" type="text"
+                            value={form.occupation ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-phone_number">Phone</label>
+                        <input id="chart-phone_number" name="phone_number" type="tel"
+                            value={form.phone_number ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-email">Email</label>
+                        <input id="chart-email" name="email" type="email"
+                            value={form.email ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field chart-field-half">
+                        <label htmlFor="chart-contact_name">Primary emergency contact name</label>
+                        <input id="chart-contact_name" name="contact_name" type="text"
+                            value={form.contact_name ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field chart-field-half">
+                        <label htmlFor="chart-contact_phone">Primary emergency contact phone</label>
+                        <input id="chart-contact_phone" name="contact_phone" type="tel"
+                            value={form.contact_phone ?? ""} onChange={changeField} />
+                    </div>
                     <div className="chart-field chart-field-wide">
                         <label htmlFor="chart-address">Address</label>
-                        <textarea id="chart-address" name="address" rows={3} value={form.address} onChange={changeField} />
+                        <textarea id="chart-address" name="address" rows={2} value={form.address ?? ""} onChange={changeField} />
                     </div>
                 </fieldset>
                 {error && <p className="form-message form-message-error" role="alert">{error}</p>}
-                <div className="chart-actions">
-                    <button className="primary-action-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save demographics"}</button>
-                    <button className="secondary-action-button" type="button" disabled={saving} onClick={onCancel}>Cancel</button>
+                <div className="chart-actions" style={{ marginTop: "0.75rem" }}>
+                    <button className="primary-action-button" type="submit" disabled={saving}>
+                        {creating ? (saving ? "Creating…" : "Create patient") : (saving ? "Saving…" : "Save demographics")}
+                    </button>
+                    {!creating && <button className="secondary-action-button" type="button" disabled={saving} onClick={onCancel}>Cancel</button>}
                 </div>
             </form>
         </section>;

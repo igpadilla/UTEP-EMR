@@ -269,3 +269,95 @@ test("front desk and biller keep Patient Lookup; clinical students do not", asyn
         await db.close();
     }
 });
+
+test("a case built from a patient snapshots the whole chart into the student's case", async () => {
+    const db = await setup();
+    const CHART_TEMPLATE = "10000000-0000-4000-8000-000000000002";
+    const CHART_CASE = "20000000-0000-4000-8000-000000000003";
+    try {
+        // The instructor builds the patient's chart: allergies, then two readings, one later marked as an error.
+        await db.exec(`update patients set allergies = '{penicillin}', current_medications = '[{"name":"Metformin"}]' where id = '${PATIENT}'`);
+        await as(db, TEACHER, `insert into vital_sign_sets(patient_id, systolic_bp, diastolic_bp, heart_rate, measured_at)
+            values ('${PATIENT}', 158, 94, 88, now() - interval '1 day'), ('${PATIENT}', 150, 90, 84, now())`);
+        await as(db, TEACHER, `insert into vital_sign_sets(patient_id, heart_rate) values ('${PATIENT}', 200)`);
+        await as(db, TEACHER, `update vital_sign_sets set status = 'entered_in_error', correction_reason = 'typo' where heart_rate = 200`);
+
+        await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
+            values ('${CHART_TEMPLATE}','${TEACHER}','John','Doe',45,'headache','${PATIENT}')`);
+        await as(db, TEACHER, `insert into assigned_cases(id, template_id, student_id, assigned_by, course_id, patient_snapshot)
+            values ('${CHART_CASE}','${CHART_TEMPLATE}','${NURSE_STUDENT}','${TEACHER}','${NURSING_COURSE}','{"first_name":"Old copy","chief_complaint":"headache"}')`);
+
+        // The record comes from the chart as it is now, and the case's own fields are kept.
+        const [{ patient_snapshot: snap }] = await as(db, NURSE_STUDENT, `select patient_snapshot from assigned_cases where id = '${CHART_CASE}'`);
+        assert.equal(snap.first_name, "John");
+        assert.equal(snap.last_name, "Doe");
+        assert.deepEqual(snap.allergies, ["penicillin"]);
+        assert.deepEqual(snap.current_medications, [{ name: "Metformin" }]);
+        assert.equal(snap.chief_complaint, "headache");
+        assert.equal(snap.id, undefined);
+
+        // The student sees both current readings on their own case, as baseline rows; the error is not copied.
+        const copied = await as(db, NURSE_STUDENT, `select source, systolic_bp, recorded_by from current_vital_sign_sets
+            where assigned_case_id = '${CHART_CASE}' order by measured_at`);
+        assert.deepEqual(copied.map((v) => [v.source, v.systolic_bp]), [["baseline", 158], ["baseline", 150]]);
+        assert.ok(copied.every((v) => v.recorded_by === TEACHER));
+
+        // Baseline rows are the instructor's: the student cannot remove them, and they are not logged as the student's work.
+        assert.equal((await as(db, NURSE_STUDENT, `update vital_sign_sets set status = 'entered_in_error', correction_reason = 'x'
+            where assigned_case_id = '${CHART_CASE}' returning id`)).length, 0);
+        assert.equal((await db.query(`select 1 from audit_logs where case_id = '${CHART_CASE}' and action_type like 'VITALS%'`)).rows.length, 0);
+
+        // Later chart edits do not change the case that was already assigned.
+        await as(db, TEACHER, `insert into vital_sign_sets(patient_id, systolic_bp) values ('${PATIENT}', 120)`);
+        await db.exec(`update patients set allergies = '{sulfa}' where id = '${PATIENT}'`);
+        assert.equal((await db.query(`select 1 from vital_sign_sets where assigned_case_id = '${CHART_CASE}'`)).rows.length, 2);
+        assert.deepEqual((await db.query(`select patient_snapshot->'allergies' a from assigned_cases where id = '${CHART_CASE}'`)).rows[0].a, ["penicillin"]);
+
+        // Older templates with no patient keep the snapshot they were given and copy no vitals.
+        assert.equal((await db.query(`select 1 from vital_sign_sets where assigned_case_id in ('${NURSE_CASE}','${PT_CASE}')`)).rows.length, 0);
+        assert.equal((await db.query(`select patient_snapshot->>'first_name' f from assigned_cases where id = '${PT_CASE}'`)).rows[0].f, "Maria");
+
+        // A patient that a template is built from cannot be deleted out from under it.
+        await db.exec(`insert into patients(id, first_name, last_name, age) values ('40000000-0000-4000-8000-000000000002','Ana','Ruiz',30);
+            update patient_templates set patient_id = '40000000-0000-4000-8000-000000000002' where id = '${TEMPLATE}'`);
+        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /patient_templates_patient_id_fkey/);
+    } finally {
+        await db.close();
+    }
+});
+
+test("referrals on a patient's chart are copied into a case built from that patient", async () => {
+    const db = await setup();
+    const REF_TEMPLATE = "10000000-0000-4000-8000-000000000003";
+    const REF_CASE = "20000000-0000-4000-8000-000000000004";
+    try {
+        // The instructor records two referrals on the chart; one is already accepted.
+        await as(db, TEACHER, `insert into referrals(patient_id, referring_user_id, target_discipline, priority, status, reason, notes)
+            values ('${PATIENT}', '${TEACHER}', 'Physical Therapy', 'urgent', 'pending', 'gait training', 'uses a cane'),
+                   ('${PATIENT}', '${TEACHER}', 'Pharmacy', 'routine', 'accepted', 'med review', null)`);
+
+        await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
+            values ('${REF_TEMPLATE}','${TEACHER}','John','Doe',45,'headache','${PATIENT}')`);
+        await as(db, TEACHER, `insert into assigned_cases(id, template_id, student_id, assigned_by, course_id, patient_snapshot)
+            values ('${REF_CASE}','${REF_TEMPLATE}','${NURSE_STUDENT}','${TEACHER}','${NURSING_COURSE}','{"chief_complaint":"headache"}')`);
+
+        // The student sees both on their own case, as they stood on the chart.
+        const copied = await as(db, NURSE_STUDENT, `select target_discipline, priority, status, reason, notes from referrals
+            where case_id = '${REF_CASE}' order by target_discipline`);
+        assert.deepEqual(copied.map((r) => [r.target_discipline, r.priority, r.status, r.reason, r.notes]), [
+            ["Pharmacy", "routine", "accepted", "med review", null],
+            ["Physical Therapy", "urgent", "pending", "gait training", "uses a cane"],
+        ]);
+
+        // The chart's own referrals are untouched, and later chart changes do not reach the case.
+        await as(db, TEACHER, `insert into referrals(patient_id, referring_user_id, target_discipline, reason)
+            values ('${PATIENT}', '${TEACHER}', 'Nursing', 'wound care')`);
+        assert.equal((await db.query(`select 1 from referrals where case_id = '${REF_CASE}'`)).rows.length, 2);
+        assert.equal((await db.query(`select 1 from referrals where patient_id = '${PATIENT}'`)).rows.length, 3);
+
+        // Older templates with no patient copy nothing.
+        assert.equal((await db.query(`select 1 from referrals where case_id in ('${NURSE_CASE}','${PT_CASE}')`)).rows.length, 0);
+    } finally {
+        await db.close();
+    }
+});
