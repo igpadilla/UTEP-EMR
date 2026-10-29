@@ -68,8 +68,14 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
     // A linked case takes its patient details from the patient's chart.
     const [linkedPatientId, setLinkedPatientId] = useState(isFromPatient ? patientId : null);
     const isLinked = Boolean(linkedPatientId);
+    // A brand-new template creates its patient in the chart on the right.
+    const isNew = !isEditing && !patientId;
+    const needsPatient = isNew && !isLinked;
+    // Older templates whose patient was typed in here keep the Patient step so they can still be edited.
+    const isTypedPatient = !isLinked && !isNew;
+    const splitView = !isTypedPatient;
     // A linked case edits the patient on the chart, so it has no Patient step.
-    const steps = STEPS.filter((step) => !step.scratchOnly || !isLinked);
+    const steps = STEPS.filter((step) => !step.scratchOnly || isTypedPatient);
     const stepIndex = Math.min(currentStep, steps.length - 1);
     const stepId = steps[stepIndex].id;
 
@@ -269,9 +275,19 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
         setRubricCriteria((prev) => prev.filter((_, i) => i !== index));
     }
 
+    function handlePatientCreated(created) {
+        setLinkedPatientId(created.id);
+        fillFromPatient(created);
+        setError("");
+    }
+
     async function handleSubmit(e) {
         e.preventDefault();
         setError("");
+        if (needsPatient) {
+            setError("Create the patient in the chart first.");
+            return;
+        }
 
         // Check everything first so every missing field is highlighted, not just the first.
         const age = parseInt(form.age, 10);
@@ -337,7 +353,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
             student_instructions: form.student_instructions.trim() || null,
             hidden_diagnosis: form.hidden_diagnosis.trim() || null,
             expectations_rubric: expectationsRubric.trim() || null,
-            initial_referral: !isLinked && initialReferral.target_discipline ? initialReferral : null,
+            initial_referral: isTypedPatient && initialReferral.target_discipline ? initialReferral : null,
             patient_id: linkedPatientId,
         };
 
@@ -358,7 +374,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
 
     if (loading) {
         return (
-            <main className={`instructor-main ${isLinked ? "template-builder-split-main" : ""}`}>
+            <main className={`instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
                 <p className="instructor-loading">Loading…</p>
             </main>
         );
@@ -367,8 +383,8 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
     const pageTitle = isEditing ? "Edit Template" : isFromPatient ? "New Template from Patient" : "New Template";
 
     return (
-        <main className={`instructor-main ${isLinked ? "template-builder-split-main" : ""}`}>
-            {!isLinked && (
+        <main className={`instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
+            {!splitView && (
                 <div className="instructor-page-header">
                     <div>
                         <p className="section-title">Instructor</p>
@@ -389,15 +405,15 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                 </div>
             )}
 
-            <div className={isLinked ? "template-builder-split" : undefined}>
-                <div className={isLinked ? "template-builder-setup-col" : undefined}>
-                    {isLinked && (
+            <div className={splitView ? "template-builder-split" : undefined}>
+                <div className={splitView ? "template-builder-setup-col" : undefined}>
+                    {splitView && (
                         <div className="template-builder-setup-header">
                             <h2 className="template-builder-title">{pageTitle}</h2>
                             <p className="template-builder-desc">
-                                {isFromPatient
-                                    ? "Edit chart on right, case details on left, then save."
-                                    : "Define a training patient scenario for your students."}
+                                {needsPatient
+                                    ? "Create the patient in the chart on the right, then fill in the case and save."
+                                    : "Edit chart on right, case details on left, then save."}
                             </p>
                         </div>
                     )}
@@ -658,7 +674,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                         <div>
                             <h3 className="instructor-form-section-title">Labs & Other Findings</h3>
                             <p className="instructor-baseline-hint">
-                                {isLinked
+                                {!isTypedPatient
                                     ? "Add labs or other findings the student will see (e.g. A1C → 10.5%). Vitals come from the patient's chart."
                                     : "Add vitals, labs, history, or any data the student will see (e.g. BP → 140/90)."}
                             </p>
@@ -709,7 +725,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                 </div>
 
                 {/* Linked cases keep referrals on the patient's chart (Referrals tab); they are copied on assignment. */}
-                {!isLinked && (
+                {isTypedPatient && (
                 <div className="instructor-form-section">
                     <h3 className="instructor-form-section-title">Pre-loaded Referral (Optional)</h3>
                     <p className="instructor-baseline-hint">
@@ -1040,11 +1056,12 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                 >
                     Cancel
                 </button>
+                {needsPatient && <span className="template-builder-wait-hint">Create the patient first</span>}
                 <button
                     className="primary-action-button"
                     type="button"
                     onClick={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || needsPatient}
                 >
                     {submitting
                         ? isEditing ? "Saving…" : "Creating…"
@@ -1053,10 +1070,11 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
             </div>
             </div>
 
-            {isLinked && (
+            {splitView && (
                 <aside className="template-builder-chart-pane" aria-label="Patient chart">
-                    <PatientChart key={linkedPatientId} id={linkedPatientId} canEditPatient
-                        embedded onPatientSaved={fillFromPatient} onNavigate={onNavigate} />
+                    <PatientChart key={linkedPatientId ?? "new"} id={linkedPatientId} canEditPatient embedded
+                        onPatientSaved={fillFromPatient} onPatientCreated={needsPatient ? handlePatientCreated : undefined}
+                        onNavigate={onNavigate} />
                 </aside>
             )}
             </div>

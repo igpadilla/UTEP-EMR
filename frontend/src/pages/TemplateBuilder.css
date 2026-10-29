@@ -375,3 +375,13 @@
     background: #dc2626;
     color: #fff;
 }
+
+/* Shown beside a disabled Create Template button until the new patient exists */
+.template-builder-wait-hint {
+    flex-basis: 100%;
+    order: -1;
+    text-align: right;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.template-builder-external-actions { flex-wrap: wrap; }

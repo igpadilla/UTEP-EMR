@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { saveDemographics } from "../../services/patientChartService.js";
+import { createPatientFromChart, saveDemographics } from "../../services/patientChartService.js";
 import { demographicsToForm, localToday } from "./patientChartForm.js";
 
 
@@ -8,7 +8,8 @@ function Detail({ label, value }) {
 }
 
 
-export default function PatientSummary({ patient, canEdit, editing, onEdit, onCancel, onSaved }) {
+// creating: the patient does not exist yet; the form creates it instead of saving changes.
+export default function PatientSummary({ patient, canEdit, editing, onEdit, onCancel, onSaved, creating = false }) {
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -29,8 +30,8 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
         setSaving(true);
         setError("");
         try {
-            const saved = await saveDemographics(patient, form);
-            onSaved(saved, "Patient demographics saved.");
+            const saved = creating ? await createPatientFromChart(form) : await saveDemographics(patient, form);
+            onSaved(saved, creating ? "Patient created." : "Patient demographics saved.");
         } catch (saveError) {
             setError(saveError.message);
         } finally {
@@ -40,7 +41,7 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
 
     if (editing && canEdit) {
         return <section className="chart-card" aria-labelledby="demographics-edit-heading">
-            <h2 id="demographics-edit-heading" style={{ fontSize: "1.15rem", margin: "0 0 0.25rem" }}>Edit demographics</h2>
+            <h2 id="demographics-edit-heading" style={{ fontSize: "1.15rem", margin: "0 0 0.25rem" }}>{creating ? "New patient" : "Edit demographics"}</h2>
             <form onSubmit={save}>
                 <fieldset className="chart-form-grid chart-demographics-grid" disabled={saving}>
                     <legend className="chart-sr-only">Patient demographics</legend>
@@ -105,8 +106,10 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
                 </fieldset>
                 {error && <p className="form-message form-message-error" role="alert">{error}</p>}
                 <div className="chart-actions" style={{ marginTop: "0.75rem" }}>
-                    <button className="primary-action-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save demographics"}</button>
-                    <button className="secondary-action-button" type="button" disabled={saving} onClick={onCancel}>Cancel</button>
+                    <button className="primary-action-button" type="submit" disabled={saving}>
+                        {creating ? (saving ? "Creating…" : "Create patient") : (saving ? "Saving…" : "Save demographics")}
+                    </button>
+                    {!creating && <button className="secondary-action-button" type="button" disabled={saving} onClick={onCancel}>Cancel</button>}
                 </div>
             </form>
         </section>;

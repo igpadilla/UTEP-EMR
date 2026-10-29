@@ -12,8 +12,11 @@ const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History"
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved,
+    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated,
 }) {
+    // With no patient yet, the chart opens on an empty demographics form that creates one.
+    // The other sections stay locked until the patient exists.
+    const creating = !id && !caseId && canEditPatient && Boolean(onPatientCreated);
     const [patient, setPatient] = useState(null);
     const [caseStatus, setCaseStatus] = useState(null);
     const [activeTab, setActiveTab] = useState("Summary");
@@ -33,6 +36,12 @@ export default function PatientChart({
 
     useEffect(() => {
         let cancelled = false;
+        if (creating) {
+            setPatient({});
+            setEditingSection("demographics");
+            setLoading(false);
+            return;
+        }
         async function load() {
             setLoading(true);
             setError("");
@@ -50,7 +59,7 @@ export default function PatientChart({
         }
         load();
         return () => { cancelled = true; };
-    }, [id, caseId, reload]);
+    }, [id, caseId, reload, creating]);
 
     function goBack() {
         onNavigate(backTo ?? "patientLookup", id);
@@ -95,6 +104,10 @@ export default function PatientChart({
     }
 
     function savedPatient(saved, message) {
+        if (creating) {
+            onPatientCreated(saved);
+            return;
+        }
         setPatient(saved);
         setEditingSection(null);
         triggerNotice(message);
@@ -110,11 +123,11 @@ export default function PatientChart({
     </main>;
 
     const allergies = patientList(patient.allergies);
-    const canEdit = canEditPatient && !caseId && Boolean(patient.id);
+    const canEdit = canEditPatient && !caseId && (Boolean(patient.id) || creating);
     const locked = Boolean(caseId) && !EDITABLE_STATUSES.includes(caseStatus);
     const activeIndex = TABS.indexOf(activeTab);
     const sectionProps = {
-        patient, canEdit, onCancel: () => setEditingSection(null), onSaved: savedPatient,
+        patient, canEdit, onCancel: () => setEditingSection(null), onSaved: savedPatient, creating,
     };
 
     return (
@@ -122,7 +135,7 @@ export default function PatientChart({
             <section className="chart-header">
                 <div className="chart-banner">
                     <div>
-                        <h1>{[patient.first_name, patient.last_name].filter(Boolean).join(" ") || "Patient"}
+                        <h1>{[patient.first_name, patient.last_name].filter(Boolean).join(" ") || (creating ? "New patient" : "Patient")}
                             {caseId && <span className="chart-case-tag">Case copy</span>}
                         </h1>
                         <p className="chart-banner-details">
@@ -167,6 +180,7 @@ export default function PatientChart({
                         </button>
                     </div>
                 )}
+                {creating && <p className="chart-edit-hint">Create the patient to open the rest of the chart.</p>}
                 {caseId && ["Summary", "Allergies & History"].includes(activeTab)
                     && <p className="chart-edit-hint">These are the patient details saved with this case. They are read-only here.</p>}
 
