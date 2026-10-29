@@ -141,7 +141,10 @@ export default function VitalsPanel({ patientId, caseId, locked = false }) {
                                             {set.supersedes_id && (
                                                 <span className="vitals-corrected-tag" title={`Reason: ${set.correction_reason}`}>corrected</span>
                                             )}
-                                            {canRecord && (
+                                            {set.source === "baseline" && (
+                                                <span className="vitals-baseline-tag" title="Recorded by the instructor when the case was assigned">baseline</span>
+                                            )}
+                                            {canRecord && set.source !== "baseline" && (
                                                 <div className="vitals-column-actions">
                                                     <button type="button" className="vitals-link-button" title="Fix a wrong value, like a typo" onClick={() => setCorrecting(set)}>
                                                         Correct

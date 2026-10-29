@@ -104,7 +104,8 @@ export default function CaseAssign({ templateId, onNavigate }) {
             clinical_baseline: template.clinical_baseline,
             student_instructions: template.student_instructions,
             expectations_rubric: template.expectations_rubric,
-            initial_referral: template.initial_referral || null,
+            // A case built from a patient gets the chart's referrals copied by the database on assignment.
+            initial_referral: template.patient_id ? null : template.initial_referral || null,
         };
 
         const results = await Promise.allSettled(
