@@ -3,6 +3,7 @@ import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import ReferralManager from "../components/ReferralManager.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
+import PatientMedications from "../components/patient-chart/PatientMedications.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { loadPatientChart } from "../services/patientChartService.js";
 import "./PatientChart.css";
@@ -189,6 +190,8 @@ export default function PatientChart({
                     : activeTab === "Allergies & History" ? <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
                         onEdit={() => setEditingSection("history")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
+                        onEdit={() => setEditingSection("medications")} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
