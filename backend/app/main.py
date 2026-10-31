@@ -2,10 +2,12 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import get_current_user
+from .routers.diagnostics import router as diagnostics_router
 from .routers.medications import router as medications_router
 
 app = FastAPI()
 app.include_router(medications_router)
+app.include_router(diagnostics_router)
 
 app.add_middleware(
     CORSMiddleware,
