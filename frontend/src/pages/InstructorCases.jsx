@@ -20,7 +20,7 @@ const STATUS_LABELS = {
     "completed":          "Completed",
 };
 
-export default function InstructorCases({ onNavigate }) {
+export default function InstructorCases({ onNavigate, fromCourseId = null, fromCourseName = null, embedded = false, onOpenBuilder = null }) {
     const [templates, setTemplates] = useState([]);
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export default function InstructorCases({ onNavigate }) {
 
     function handleSelectPatient(patient) {
         setPickerOpen(false);
-        onNavigate("templateBuilder", null, { fromPatientId: patient.id });
+        onNavigate("templateBuilder", null, { fromPatientId: patient.id, fromCourseId, fromCourseName });
     }
 
     function openReview(c) {
@@ -236,15 +236,32 @@ export default function InstructorCases({ onNavigate }) {
         }
     }
 
-    return (
-        <main className="instructor-main">
-            <div className="instructor-page-header">
-                <div>
-                    <p className="section-title">Instructor</p>
-                    <h2>Case Management</h2>
-                    <p>Create patient templates and assign training cases to students.</p>
+    const visibleCases = fromCourseId
+        ? cases.filter((c) => c.course_id === fromCourseId)
+        : cases;
+
+    const content = (
+        <>
+            {!embedded && fromCourseId && (
+                <div style={{ padding: "0.75rem 1.5rem 0" }}>
+                    <button
+                        className="secondary-action-button"
+                        type="button"
+                        onClick={() => onNavigate("courseDetail", fromCourseId)}
+                    >
+                        ← {fromCourseName || "Course"}
+                    </button>
                 </div>
-            </div>
+            )}
+            {!embedded && (
+                <div className="instructor-page-header">
+                    <div>
+                        <p className="section-title">{fromCourseName ? fromCourseName : "Instructor"}</p>
+                        <h2>Case Management</h2>
+                        <p>{fromCourseId ? "Manage cases assigned in this course." : "Create patient templates and assign training cases to students."}</p>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <p className="form-message form-message-error" role="alert">{error}</p>
@@ -270,7 +287,7 @@ export default function InstructorCases({ onNavigate }) {
                         <button
                             className="primary-action-button"
                             type="button"
-                            onClick={() => onNavigate("templateBuilder", null)}
+                            onClick={() => onOpenBuilder ? onOpenBuilder(null) : onNavigate("templateBuilder", null, { fromCourseId, fromCourseName })}
                         >
                             + New Template
                         </button>
@@ -312,14 +329,14 @@ export default function InstructorCases({ onNavigate }) {
                                                     <button
                                                         className="instructor-action-btn instructor-action-edit"
                                                         type="button"
-                                                        onClick={() => onNavigate("templateBuilder", t.id)}
+                                                        onClick={() => onOpenBuilder ? onOpenBuilder(t.id) : onNavigate("templateBuilder", t.id, { fromCourseId, fromCourseName })}
                                                     >
                                                         Edit
                                                     </button>
                                                     <button
                                                         className="instructor-action-btn instructor-action-assign"
                                                         type="button"
-                                                        onClick={() => onNavigate("caseAssign", t.id)}
+                                                        onClick={() => onNavigate("caseAssign", t.id, { fromCourseId, fromCourseName })}
                                                     >
                                                         Assign
                                                     </button>
@@ -365,11 +382,11 @@ export default function InstructorCases({ onNavigate }) {
                 <div className="patient-results">
                     {loading ? (
                         <p className="instructor-loading">Loading cases…</p>
-                    ) : cases.length === 0 ? (
+                    ) : visibleCases.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">📂</div>
                             <strong>No cases assigned yet</strong>
-                            <p>Assign a template to a student to get started.</p>
+                            <p>{fromCourseId ? "No cases have been assigned in this course yet." : "Assign a template to a student to get started."}</p>
                         </div>
                     ) : (
                         <div className="patient-table-wrapper">
@@ -387,7 +404,7 @@ export default function InstructorCases({ onNavigate }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {cases.map((c) => {
+                                    {visibleCases.map((c) => {
                                         const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
                                         const patientName = c.patient_templates
                                             ? `${c.patient_templates.first_name} ${c.patient_templates.last_name}`
@@ -904,8 +921,12 @@ export default function InstructorCases({ onNavigate }) {
                     </div>
                 </div>
             )}
-        </main>
+        </>
     );
+
+    return embedded
+        ? <div>{content}</div>
+        : <main className="instructor-main">{content}</main>;
 }
 
 const overlayStyle = {

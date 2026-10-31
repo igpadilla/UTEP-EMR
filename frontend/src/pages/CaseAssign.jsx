@@ -6,7 +6,14 @@ import {
     assignCase,
 } from "../services/instructorService.js";
 
-export default function CaseAssign({ templateId, onNavigate }) {
+export default function CaseAssign({ templateId, fromCourseId = null, fromCourseName = null, onNavigate }) {
+    function goBack() {
+        if (fromCourseId) {
+            onNavigate("courseDetail", fromCourseId);
+        } else {
+            goBack();
+        }
+    }
     const [template, setTemplate] = useState(null);
     const [students, setStudents] = useState([]);
     const [selected, setSelected] = useState([]);
@@ -124,7 +131,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
             return;
         }
 
-        onNavigate("instructorCases");
+        goBack();
     }
 
     if (loading) {
@@ -146,7 +153,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                 <button
                     className="secondary-action-button"
                     type="button"
-                    onClick={() => onNavigate("instructorCases")}
+                    onClick={() => goBack()}
                 >
                     ← Back
                 </button>
@@ -304,7 +311,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     <button
                         className="secondary-action-button"
                         type="button"
-                        onClick={() => onNavigate("instructorCases")}
+                        onClick={() => goBack()}
                         disabled={submitting}
                         style={{ marginRight: "0.75rem" }}
                     >

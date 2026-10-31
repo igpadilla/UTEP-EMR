@@ -38,7 +38,7 @@ const EMPTY_PT_SOAP = {
     plan: "",
 };
 
-export default function StudentCases({ onNavigate, openCaseId = null }) {
+export default function StudentCases({ onNavigate, openCaseId = null, fromCourse = null }) {
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -264,11 +264,26 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
     const isEditable = activeCase && EDITABLE_STATUSES.includes(activeCase.encounter_status);
 
+    const visibleCases = fromCourse
+        ? cases.filter((c) => c.course_id === fromCourse.id)
+        : cases;
+
     return (
         <main className="instructor-main">
+            {fromCourse && (
+                <div style={{ padding: "0.75rem 1.5rem 0" }}>
+                    <button
+                        className="secondary-action-button"
+                        type="button"
+                        onClick={() => onNavigate("studentCourseDetail", null, { course: fromCourse })}
+                    >
+                        ← {fromCourse.course_number}
+                    </button>
+                </div>
+            )}
             <div className="instructor-page-header">
                 <div>
-                    <p className="section-title">Student</p>
+                    <p className="section-title">{fromCourse ? fromCourse.course_number : "Student"}</p>
                     <h2>My Cases</h2>
                     <p>Training cases assigned to you by your instructor.</p>
                 </div>
@@ -281,7 +296,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
             <div className="patient-results">
                 {loading || rolesLoading ? (
                     <p className="instructor-loading">Loading your cases…</p>
-                ) : cases.length === 0 ? (
+                ) : visibleCases.length === 0 ? (
                     <div className="patients-empty-state">
                         <div className="patients-empty-icon" aria-hidden="true">📋</div>
                         <strong>No cases assigned yet</strong>
@@ -301,7 +316,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {cases.map((c) => {
+                                {visibleCases.map((c) => {
                                     const snap = c.patient_snapshot ?? {};
                                     const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
                                     const actionLabel =

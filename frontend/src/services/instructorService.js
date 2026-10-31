@@ -357,3 +357,34 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
 
     return data;
 }
+
+// ── Course Announcements ──────────────────────────────────────────────────────
+
+export async function getCourseAnnouncements(courseId) {
+    const { data, error } = await supabase
+        .from("course_announcements")
+        .select("id, title, body, created_at, author_id, profiles!author_id ( first_name, last_name )")
+        .eq("course_id", courseId)
+        .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+}
+
+export async function createAnnouncement(courseId, { title, body }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+        .from("course_announcements")
+        .insert({ course_id: courseId, author_id: user.id, title: title.trim(), body: body.trim() })
+        .select("id, title, body, created_at, author_id, profiles!author_id ( first_name, last_name )")
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteAnnouncement(announcementId) {
+    const { error } = await supabase
+        .from("course_announcements")
+        .delete()
+        .eq("id", announcementId);
+    if (error) throw error;
+}
