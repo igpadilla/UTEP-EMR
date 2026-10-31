@@ -1,0 +1,38 @@
+.chart-icd10-search {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.chart-icd10-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-dark);
+  border-radius: 0.4rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  z-index: 20;
+}
+
+.chart-icd10-dropdown li button {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chart-icd10-dropdown li button:hover {
+  background: var(--primary-light, #f0f6ff);
+}
+
