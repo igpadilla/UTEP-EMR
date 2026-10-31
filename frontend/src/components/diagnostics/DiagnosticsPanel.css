@@ -1,0 +1,195 @@
+.diagnostics-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.diagnostics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.diagnostics-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.diagnostics-subtitle {
+    margin: 0.2rem 0 0;
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.diagnostics-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.diagnostics-filter-group {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 0.2rem;
+    border-radius: 8px;
+    gap: 0.2rem;
+}
+
+.diagnostics-filter-btn {
+    border: none;
+    background: transparent;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+}
+
+.diagnostics-filter-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.diagnostics-form-card,
+.diagnostics-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+}
+
+.diagnostics-card-critical {
+    border-left: 4px solid #dc2626;
+}
+
+.diagnostics-card-abnormal {
+    border-left: 4px solid #d97706;
+}
+
+.diagnostics-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.diagnostics-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.diagnostics-field label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.diagnostics-field input,
+.diagnostics-field select,
+.diagnostics-field textarea {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.diagnostics-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.diagnostics-badges {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.diag-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.diag-badge-category-lab { background: #e0f2fe; color: #0369a1; }
+.diag-badge-category-imaging { background: #f3e8ff; color: #6b21a8; }
+.diag-badge-code { background: #f1f5f9; color: #334155; font-family: monospace; }
+.diag-badge-priority-routine { background: #f1f5f9; color: #475569; }
+.diag-badge-priority-urgent { background: #fef3c7; color: #b45309; }
+.diag-badge-priority-stat { background: #fee2e2; color: #b91c1c; }
+.diag-badge-status-ordered,
+.diag-badge-status-in_progress { background: #eff6ff; color: #1d4ed8; }
+.diag-badge-status-completed { background: #dcfce7; color: #15803d; }
+.diag-badge-status-cancelled { background: #f1f5f9; color: #64748b; }
+
+.diag-flag-normal { color: #15803d; font-weight: 600; }
+.diag-flag-low,
+.diag-flag-high,
+.diag-flag-abnormal { color: #b45309; font-weight: 700; }
+.diag-flag-critical_low,
+.diag-flag-critical_high,
+.diag-flag-critical { color: #dc2626; font-weight: 700; }
+
+.diagnostics-meta {
+    margin: 0.35rem 0;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.diagnostics-indication {
+    margin: 0.35rem 0;
+    font-size: 0.9rem;
+    color: #1e293b;
+}
+
+.diagnostics-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+}
+
+.diagnostics-table th,
+.diagnostics-table td {
+    text-align: left;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.diagnostics-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+}
+
+.diagnostics-report-box {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 6px;
+    font-size: 0.88rem;
+}
+
+.diagnostics-report-box p {
+    margin: 0.25rem 0;
+}
+
+.diagnostics-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+

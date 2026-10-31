@@ -361,3 +361,45 @@ test("referrals on a patient's chart are copied into a case built from that pati
         await db.close();
     }
 });
+
+test("diagnostic orders and results respect RLS and copy from patient to assigned case", async () => {
+    const db = await setup();
+    const DIAG_TEMPLATE = "10000000-0000-4000-8000-000000000004";
+    const DIAG_CASE = "20000000-0000-4000-8000-000000000005";
+    try {
+        const [labOrder] = await as(db, TEACHER, `insert into diagnostic_orders(
+            patient_id, category, test_code, test_name, coding_system, clinical_code, priority, status, clinical_indication
+        ) values ('${PATIENT}', 'lab', 'cbc', 'Complete Blood Count (CBC)', 'LOINC', '58410-2', 'stat', 'completed', 'anemia') returning id`);
+
+        await as(db, TEACHER, `insert into diagnostic_results(
+            order_id, structured_values, report_impression, overall_flag
+        ) values ('${labOrder.id}', '[{"code":"hgb","name":"Hemoglobin","value":9.8,"unit":"g/dL","flag":"low"}]'::jsonb, 'Mild anemia', 'abnormal')`);
+
+        await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
+            values ('${DIAG_TEMPLATE}','${TEACHER}','John','Doe',45,'fatigue','${PATIENT}')`);
+        await as(db, TEACHER, `insert into assigned_cases(id, template_id, student_id, assigned_by, course_id, patient_snapshot)
+            values ('${DIAG_CASE}','${DIAG_TEMPLATE}','${NURSE_STUDENT}','${TEACHER}','${NURSING_COURSE}','{"chief_complaint":"fatigue"}')`);
+
+        const copiedOrders = await as(db, NURSE_STUDENT, `select id, source, test_code, status from diagnostic_orders where case_id = '${DIAG_CASE}'`);
+        assert.equal(copiedOrders.length, 1);
+        assert.equal(copiedOrders[0].source, "baseline");
+        assert.equal(copiedOrders[0].test_code, "cbc");
+
+        const copiedResults = await as(db, NURSE_STUDENT, `select overall_flag, report_impression from diagnostic_results where order_id = '${copiedOrders[0].id}'`);
+        assert.equal(copiedResults.length, 1);
+        assert.equal(copiedResults[0].overall_flag, "abnormal");
+
+        assert.equal((await as(db, PT_STUDENT, `select id from diagnostic_orders where case_id = '${DIAG_CASE}'`)).length, 0);
+        assert.equal((await as(db, NURSE_STUDENT, `select id from diagnostic_orders where patient_id = '${PATIENT}'`)).length, 0);
+
+        const [studentOrder] = await as(db, NURSE_STUDENT, `insert into diagnostic_orders(
+            case_id, category, test_code, test_name, coding_system, clinical_code, clinical_indication
+        ) values ('${DIAG_CASE}', 'imaging', 'cxr_pa_lat', 'Chest X-Ray (PA & Lateral)', 'CPT', '71046', 'dyspnea') returning id`);
+        assert.ok(studentOrder.id);
+
+        await as(db, NURSE_STUDENT, `insert into audit_logs(case_id, actor_id, action_type, new_value)
+            values ('${DIAG_CASE}', '${NURSE_STUDENT}', 'IMAGING_ORDERED', 'Chest X-Ray')`);
+    } finally {
+        await db.close();
+    }
+});
