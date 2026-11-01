@@ -334,6 +334,27 @@ button {
   color: var(--primary);
 }
 
+.course-sidenav-item-disabled,
+.course-sidenav-item-disabled:hover {
+  opacity: 0.45;
+  cursor: default;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.course-sidenav-coming-soon {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .course-tab-content {
   padding: 1.5rem 2rem;
   min-width: 0;

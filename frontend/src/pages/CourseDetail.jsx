@@ -49,7 +49,7 @@ const TABS = [
     { id: "patients",      label: "Patients"      },
     { id: "roster",        label: "Roster"        },
     { id: "gradebook",     label: "Gradebook"     },
-    { id: "announcements", label: "Announcements" },
+    { id: "announcements", label: "Announcements", disabled: true },
     { id: "settings",      label: "Settings"      },
 ];
 
@@ -274,9 +274,11 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     {TABS.map((tab) => (
                         <button
                             key={tab.id}
-                            className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""}`}
+                            className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""} ${tab.disabled ? "course-sidenav-item-disabled" : ""}`}
                             type="button"
-                            onClick={() => { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); }}
+                            disabled={tab.disabled}
+                            title={tab.disabled ? "Coming soon" : undefined}
+                            onClick={() => { if (!tab.disabled) { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); } }}
                         >
                             {tab.label}
                             {tab.id === "cases" && cases.length > 0 && (
@@ -284,9 +286,6 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             )}
                             {tab.id === "roster" && students.length > 0 && (
                                 <span className="course-sidenav-badge">{students.length}</span>
-                            )}
-                            {tab.id === "announcements" && announcements.length > 0 && (
-                                <span className="course-sidenav-badge">{announcements.length}</span>
                             )}
                         </button>
                     ))}

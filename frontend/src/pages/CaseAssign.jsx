@@ -38,10 +38,14 @@ export default function CaseAssign({ templateId, fromCourseId = null, fromCourse
                 ]);
                 setTemplate(tmpl);
                 setCourses(crs);
-                // Pre-select: prefer the course the instructor is currently in,
-                // fall back to the template's own course_id.
-                const preselect = fromCourseId ?? tmpl.course_id;
-                if (preselect && crs.some((c) => c.id === preselect)) handleCourseSelect(preselect);
+                // When embedded inside a course, fromCourseId is authoritative (admins may not own it).
+                // Otherwise fall back to the template's own course_id if it is in the list.
+                if (fromCourseId) {
+                    handleCourseSelect(fromCourseId);
+                } else {
+                    const preselect = tmpl.course_id;
+                    if (preselect && crs.some((c) => c.id === preselect)) handleCourseSelect(preselect);
+                }
             } catch (err) {
                 console.error(err);
                 setError("Failed to load data.");

@@ -31,7 +31,7 @@ const DISCIPLINE_ABBR = {
 const TABS = [
     { id: "home",          label: "Home"          },
     { id: "cases",         label: "Cases"         },
-    { id: "announcements", label: "Announcements" },
+    { id: "announcements", label: "Announcements", disabled: true },
 ];
 
 function formatDate(iso) {
@@ -142,16 +142,15 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                     {TABS.map((tab) => (
                         <button
                             key={tab.id}
-                            className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""}`}
+                            className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""} ${tab.disabled ? "course-sidenav-item-disabled" : ""}`}
                             type="button"
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                            disabled={tab.disabled}
+                            title={tab.disabled ? "Coming soon" : undefined}
                         >
                             {tab.label}
                             {tab.id === "cases" && cases.length > 0 && (
                                 <span className="course-sidenav-badge">{cases.length}</span>
-                            )}
-                            {tab.id === "announcements" && announcements.length > 0 && (
-                                <span className="course-sidenav-badge">{announcements.length}</span>
                             )}
                         </button>
                     ))}

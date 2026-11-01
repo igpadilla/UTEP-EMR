@@ -405,7 +405,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                                 </div>
                             )}
 
-                            <button type="button" className="primary-action-button open-chart-button" onClick={() => onNavigate("patientChart", null, { caseId: activeCase.id, backTo: "studentCases" })}>Open patient chart</button>
+                            <button type="button" className="primary-action-button open-chart-button" onClick={() => onNavigate("patientChart", null, { caseId: activeCase.id, backTo: "studentCases", fromCourse })}>Open patient chart</button>
 
                             {/* Patient snapshot */}
                             <div className="case-modal-section">

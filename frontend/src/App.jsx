@@ -280,7 +280,8 @@ export default function App() {
         case "patientChart":
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
-                canEditPatient={user.profile.active && (isAdmin || isInstructor)} />;
+                canEditPatient={user.profile.active && (isAdmin || isInstructor)}
+                fromCourse={nav.fromCourse ?? null} />;
             break;
         case "studentManagement":
             pageContent = canManageStudents
