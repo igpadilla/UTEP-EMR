@@ -48,9 +48,19 @@ const STEPS = [
     { id: "grading",  label: "Grading & Answer Key", short: "Grading" },
 ];
 
-export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
+export default function TemplateBuilder({ templateId, patientId, fromCourseId = null, fromCourseName = null, onNavigate, embedded = false, onClose = null }) {
     const isEditing = Boolean(templateId);
     const isFromPatient = Boolean(patientId) && !isEditing;
+
+    function goBack() {
+        if (onClose) {
+            onClose();
+        } else if (fromCourseId) {
+            onNavigate("courseDetail", fromCourseId);
+        } else {
+            onNavigate("instructorCases");
+        }
+    }
 
     const [form, setForm] = useState(EMPTY_FORM);
     const [expectationsRubric, setExpectationsRubric] = useState("");
@@ -364,7 +374,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
             } else {
                 await createTemplate(payload);
             }
-            onNavigate("instructorCases");
+            goBack();
         } catch (err) {
             console.error(err);
             setError("Failed to save template. Please try again.");
@@ -372,19 +382,22 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
         setSubmitting(false);
     }
 
+    const pageTitle = isEditing ? "Edit Template" : isFromPatient ? "New Template from Patient" : "New Template";
+
     if (loading) {
+        const Wrapper = embedded ? "div" : "main";
         return (
-            <main className={`instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
+            <Wrapper className={`instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
                 <p className="instructor-loading">Loading…</p>
-            </main>
+            </Wrapper>
         );
     }
 
-    const pageTitle = isEditing ? "Edit Template" : isFromPatient ? "New Template from Patient" : "New Template";
+    const Wrapper = embedded ? "div" : "main";
 
     return (
-        <main className={`instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
-            {!splitView && (
+        <Wrapper className={embedded ? undefined : `instructor-main ${splitView ? "template-builder-split-main" : ""}`}>
+            {!splitView && !embedded && (
                 <div className="instructor-page-header">
                     <div>
                         <p className="section-title">Instructor</p>
@@ -398,9 +411,26 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                     <button
                         className="secondary-action-button"
                         type="button"
-                        onClick={() => onNavigate("instructorCases")}
+                        onClick={() => goBack()}
                     >
                         ← Back
+                    </button>
+                </div>
+            )}
+            {embedded && (
+                <div className="course-tab-header">
+                    <div>
+                        <h3 className="course-tab-title">{pageTitle}</h3>
+                        <p className="course-tab-subtitle">
+                            {isEditing ? "Update this patient scenario." : "Define a new training patient scenario."}
+                        </p>
+                    </div>
+                    <button
+                        className="secondary-action-button"
+                        type="button"
+                        onClick={() => goBack()}
+                    >
+                        ← Back to Cases
                     </button>
                 </div>
             )}
@@ -1051,7 +1081,7 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                 <button
                     className="secondary-action-button"
                     type="button"
-                    onClick={() => onNavigate("instructorCases")}
+                    onClick={() => goBack()}
                     disabled={submitting}
                 >
                     Cancel
@@ -1078,6 +1108,6 @@ export default function TemplateBuilder({ templateId, patientId, onNavigate }) {
                 </aside>
             )}
             </div>
-        </main>
+        </Wrapper>
     );
 }

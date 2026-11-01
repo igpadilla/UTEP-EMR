@@ -6,7 +6,16 @@ import {
     assignCase,
 } from "../services/instructorService.js";
 
-export default function CaseAssign({ templateId, onNavigate }) {
+export default function CaseAssign({ templateId, fromCourseId = null, fromCourseName = null, onNavigate, embedded = false, onClose = null }) {
+    function goBack() {
+        if (onClose) {
+            onClose();
+        } else if (fromCourseId) {
+            onNavigate("courseDetail", fromCourseId);
+        } else {
+            onNavigate("instructorCases");
+        }
+    }
     const [template, setTemplate] = useState(null);
     const [students, setStudents] = useState([]);
     const [selected, setSelected] = useState([]);
@@ -29,8 +38,10 @@ export default function CaseAssign({ templateId, onNavigate }) {
                 ]);
                 setTemplate(tmpl);
                 setCourses(crs);
-                // Start with the template's own course, if the instructor teaches it
-                if (crs.some((c) => c.id === tmpl.course_id)) handleCourseSelect(tmpl.course_id);
+                // Pre-select: prefer the course the instructor is currently in,
+                // fall back to the template's own course_id.
+                const preselect = fromCourseId ?? tmpl.course_id;
+                if (preselect && crs.some((c) => c.id === preselect)) handleCourseSelect(preselect);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load data.");
@@ -124,33 +135,39 @@ export default function CaseAssign({ templateId, onNavigate }) {
             return;
         }
 
-        onNavigate("instructorCases");
+        goBack();
     }
 
     if (loading) {
-        return (
-            <main className="instructor-main">
-                <p className="instructor-loading">Loading…</p>
-            </main>
-        );
+        return embedded
+            ? <div><p className="instructor-loading">Loading…</p></div>
+            : <main className="instructor-main"><p className="instructor-loading">Loading…</p></main>;
     }
 
-    return (
-        <main className="instructor-main">
-            <div className="instructor-page-header">
-                <div>
-                    <p className="section-title">Instructor</p>
-                    <h2>Assign Case</h2>
-                    <p>Choose the students who will receive this training case.</p>
+    const inner = (
+        <>
+            {embedded ? (
+                <div className="course-tab-header">
+                    <div>
+                        <h3 className="course-tab-title">Assign Case</h3>
+                        <p className="course-tab-subtitle">Choose the students who will receive this training case.</p>
+                    </div>
+                    <button className="secondary-action-button" type="button" onClick={goBack}>
+                        ← Back to Cases
+                    </button>
                 </div>
-                <button
-                    className="secondary-action-button"
-                    type="button"
-                    onClick={() => onNavigate("instructorCases")}
-                >
-                    ← Back
-                </button>
-            </div>
+            ) : (
+                <div className="instructor-page-header">
+                    <div>
+                        <p className="section-title">Instructor</p>
+                        <h2>Assign Case</h2>
+                        <p>Choose the students who will receive this training case.</p>
+                    </div>
+                    <button className="secondary-action-button" type="button" onClick={goBack}>
+                        ← Back
+                    </button>
+                </div>
+            )}
 
             {/* ── Template Summary ───────────────────────────── */}
             {template && (
@@ -172,8 +189,8 @@ export default function CaseAssign({ templateId, onNavigate }) {
                 </div>
             )}
 
-            {/* ── Assign by Course ──────────────────────────── */}
-            <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
+            {/* ── Assign by Course — hidden when already inside a course ── */}
+            {!embedded && <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
                 <div className="instructor-form-section">
                     <h3 className="instructor-form-section-title">Assign by Course</h3>
                     <p className="instructor-baseline-hint">
@@ -206,7 +223,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                         </p>
                     )}
                 </div>
-            </div>
+            </div>}
 
             {/* ── Assignment Details ────────────────────────── */}
             <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
@@ -304,7 +321,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     <button
                         className="secondary-action-button"
                         type="button"
-                        onClick={() => onNavigate("instructorCases")}
+                        onClick={() => goBack()}
                         disabled={submitting}
                         style={{ marginRight: "0.75rem" }}
                     >
@@ -322,6 +339,9 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     </button>
                 </div>
             </div>
-        </main>
+        </>
     );
+
+    if (embedded) return <div>{inner}</div>;
+    return <main className="instructor-main">{inner}</main>;
 }
