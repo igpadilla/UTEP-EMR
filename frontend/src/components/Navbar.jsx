@@ -36,16 +36,6 @@ export default function Navbar({ currentPage, onNavigate, user }) {
           </button>
         )}
 
-        {profile.account_type === "instructor" && (
-          <button
-            className={`nav-link ${currentPage === "cases" ? "active" : ""}`}
-            type="button"
-            onClick={() => onNavigate("cases")}
-          >
-            Cases
-          </button>
-        )}
-
         {profile.account_type === "student" && (
           <button
             className={`nav-link ${currentPage === "myCourses" ? "active" : ""}`}
@@ -56,35 +46,14 @@ export default function Navbar({ currentPage, onNavigate, user }) {
           </button>
         )}
 
-        {profile.account_type === "student" && (
-          <button
-            className={`nav-link ${currentPage === "myCases" ? "active" : ""}`}
-            type="button"
-            onClick={() => onNavigate("myCases")}
-          >
-            My Cases
-          </button>
-        )}
-
         {isInstructorOrAdmin && (
-          <div className="nav-dropdown">
-            <button
-              className={`nav-link ${currentPage === "courses" ? "active" : ""}`}
-              type="button"
-            >
-              Courses
-            </button>
-            <div className="nav-dropdown-menu" role="menu">
-              <button
-                className={`nav-dropdown-item ${currentPage === "courses" ? "active" : ""}`}
-                type="button"
-                role="menuitem"
-                onClick={() => onNavigate("courses")}
-              >
-                Course Management
-              </button>
-            </div>
-          </div>
+          <button
+            className={`nav-link ${currentPage === "courses" ? "active" : ""}`}
+            type="button"
+            onClick={() => onNavigate("courses")}
+          >
+            Courses
+          </button>
         )}
 
         <button className="nav-link" type="button" disabled title="Provider Directory is not yet available">
