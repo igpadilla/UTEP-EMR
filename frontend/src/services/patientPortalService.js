@@ -37,12 +37,3 @@ export async function releaseVisitSummary(visitId, summary) {
     if (error) throw new Error(error.message);
 }
 
-export async function releaseLabResult(patientId, fields) {
-    const { error } = await supabase.from("patient_lab_results").insert({
-        patient_id: patientId, test_name: fields.test.trim(), result_value: fields.result.trim(),
-        unit: fields.unit.trim() || null, reference_range: fields.range.trim() || null,
-        result_note: fields.note.trim() || null, collected_at: new Date(fields.collected).toISOString(),
-        released_at: new Date().toISOString(),
-    });
-    if (error) throw new Error("Unable to release the lab result. Please try again.");
-}

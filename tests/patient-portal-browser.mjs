@@ -54,7 +54,7 @@ try {
         if (path.endsWith('/rpc/set_patient_portal_access')) {
             const body = req.postDataJSON(); changes.push(body); portalAccount.active = body.p_active; return reply(null);
         }
-        if (path.endsWith('/patient_lab_results') || path.endsWith('/rpc/release_patient_visit_summary')) {
+        if (path.endsWith('/rpc/release_patient_visit_summary')) {
             changes.push(req.postDataJSON()); return reply(null);
         }
         if (path.endsWith('/rpc/set_must_change_password_false')) { mustChange = false; return reply(null); }
@@ -127,12 +127,6 @@ try {
     await page.getByRole('button', { name:'Deactivate portal access', exact:true }).click();
     await page.getByRole('button', { name:'Reactivate portal access', exact:true }).click();
     await page.getByRole('button', { name:'Deactivate portal access', exact:true }).waitFor();
-    await page.getByText('Share a lab result', { exact:true }).click();
-    await page.getByLabel('Test name', { exact:true }).fill('Staff demo result');
-    await page.getByLabel('Result', { exact:true }).fill('Recorded value');
-    await page.getByLabel('Collected at', { exact:true }).fill('2026-10-01T12:00');
-    await page.getByRole('button', { name:'Release lab result to portal', exact:true }).click();
-    await page.getByText('Lab result released to the patient portal.', { exact:true }).waitFor();
     await page.getByText('Share a visit summary', { exact:true }).click();
     await page.getByLabel('Recorded visit', { exact:true }).selectOption(visitId);
     await page.getByLabel('Summary for the patient', { exact:true }).fill('Summary entered by staff');
@@ -140,8 +134,7 @@ try {
     await page.getByText('Visit summary released to the patient portal.', { exact:true }).waitFor();
     assert.equal(changes[0].create.patientId, patientId);
     assert.deepEqual(changes.slice(1,3).map((change) => change.p_active), [false,true]);
-    assert.equal(changes[3].patient_id, patientId);
-    assert.deepEqual(changes[4], { p_visit_id:visitId, p_summary:'Summary entered by staff' });
+    assert.deepEqual(changes[3], { p_visit_id:visitId, p_summary:'Summary entered by staff' });
     await page.screenshot({ path:`${output}/07-staff-portal-controls.png`, fullPage:true });
     await page.getByRole('button', { name:'Sign Out', exact:true }).click();
     await page.getByRole('button', { name:'Sign In', exact:true }).waitFor();
@@ -149,7 +142,7 @@ try {
     await signInAndOpenPatient();
     assert.equal(await page.getByRole('button', { name:'Create patient portal access', exact:true }).count(), 0);
     assert.equal(await page.getByRole('button', { name:'Deactivate portal access', exact:true }).count(), 0);
-    await page.getByText('Share a lab result', { exact:true }).waitFor();
+    await page.getByText('Share a visit summary', { exact:true }).waitFor();
     assert.deepEqual(unexpected, []);
     assert.deepEqual(errors, []);
     console.log('PASS: patient sign-in, first password change, portal-only navigation, records, empty states, retry, mobile layout, sign-out, admin account controls and staff release forms');

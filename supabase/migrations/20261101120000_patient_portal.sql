@@ -34,24 +34,6 @@ begin
 end;
 $$;
 
-create table public.patient_lab_results (
-    id uuid primary key default gen_random_uuid(),
-    patient_id uuid not null references public.patients(id) on delete cascade,
-    test_name text not null check (length(trim(test_name)) between 1 and 200),
-    result_value text not null check (length(trim(result_value)) between 1 and 500),
-    unit text,
-    reference_range text,
-    result_note text,
-    collected_at timestamptz not null,
-    released_at timestamptz,
-    created_by uuid default auth.uid() references auth.users(id),
-    created_at timestamptz not null default now()
-);
-create index patient_lab_results_patient_date on public.patient_lab_results(patient_id, collected_at desc);
-alter table public.patient_lab_results enable row level security;
-create policy "Staff manage lab results" on public.patient_lab_results for all to authenticated
-    using (private.is_staff()) with check (private.is_staff());
-
 alter table public.visits add column portal_summary text,
     add column portal_released_at timestamptz;
 
@@ -125,11 +107,7 @@ begin
             'prescriber', m->>'prescriber', 'status', m->>'status'))
             from jsonb_array_elements(case when jsonb_typeof(patient_record.current_medications) = 'array'
                 then patient_record.current_medications else '[]'::jsonb end) m), '[]'::jsonb),
-        'labs', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'test_name', l.test_name,
-            'result_value', l.result_value, 'unit', l.unit, 'reference_range', l.reference_range,
-            'result_note', l.result_note, 'collected_at', l.collected_at)
-            order by l.collected_at desc, l.id) from public.patient_lab_results l
-            where l.patient_id = portal_user and l.released_at <= now()), '[]'::jsonb),
+        'labs', '[]'::jsonb,
         'last_visit', (select jsonb_build_object('visit_type', v.visit_type, 'date', v.created_at,
             'summary', v.portal_summary) from public.visits v where v.patient_id = portal_user
             and v.portal_released_at <= now() and nullif(trim(v.portal_summary), '') is not null

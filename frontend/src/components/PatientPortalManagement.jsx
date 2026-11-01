@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { createPatientPortalAccount, portalAccountStatus, releaseLabResult, releaseVisitSummary, setPortalAccess } from "../services/patientPortalService.js";
+import { createPatientPortalAccount, portalAccountStatus, releaseVisitSummary, setPortalAccess } from "../services/patientPortalService.js";
 import "../pages/PatientPortal.css";
-
-const EMPTY_LAB = { test: "", result: "", unit: "", range: "", note: "", collected: "" };
 
 export default function PatientPortalManagement({ patient, visits, canManageAccounts }) {
     const [account, setAccount] = useState(null);
@@ -14,7 +12,6 @@ export default function PatientPortalManagement({ patient, visits, canManageAcco
     const [notice, setNotice] = useState("");
     const [visitId, setVisitId] = useState("");
     const [summary, setSummary] = useState("");
-    const [lab, setLab] = useState(EMPTY_LAB);
     const [refresh, setRefresh] = useState(0);
 
     useEffect(() => {
@@ -46,7 +43,7 @@ export default function PatientPortalManagement({ patient, visits, canManageAcco
 
     return <section className="portal-management" aria-label="Patient portal management">
         <h2>Patient portal</h2>
-        <p>Patients can view their recorded medications, released lab results and visit summaries.</p>
+        <p>Patients can view their recorded medications and visit summaries.</p>
         {error && <p className="form-message form-message-error" role="alert">{error}</p>}
         {notice && <p className="form-message form-message-success" role="status">{notice}</p>}
         {canManageAccounts && <>
@@ -66,20 +63,6 @@ export default function PatientPortalManagement({ patient, visits, canManageAcco
             </form>}
             <button type="button" disabled={checking || busy} onClick={() => { setError(""); setRefresh((value) => value + 1); }}>Refresh portal status</button>
         </>}
-
-        <details><summary>Share a lab result</summary>
-            <p>Submitting this form makes the result visible in this patient's portal.</p>
-            <form onSubmit={(event) => {
-                event.preventDefault();
-                perform(async () => { await releaseLabResult(patient.id, lab); setLab(EMPTY_LAB); setNotice("Lab result released to the patient portal."); });
-            }}>
-                {[['test', 'Test name', true, 200], ['result', 'Result', true, 500], ['unit', 'Unit', false, 100], ['range', 'Reference range', false, 500]].map(([field, label, required, maxLength]) =>
-                    <label key={field}>{label}<input required={required} maxLength={maxLength} value={lab[field]} onChange={(event) => setLab({ ...lab, [field]: event.target.value })} /></label>)}
-                <label>Collected at<input type="datetime-local" required value={lab.collected} onChange={(event) => setLab({ ...lab, collected: event.target.value })} /></label>
-                <label>Message for the patient<textarea rows={3} maxLength={10000} value={lab.note} onChange={(event) => setLab({ ...lab, note: event.target.value })} /></label>
-                <button type="submit" disabled={busy}>Release lab result to portal</button>
-            </form>
-        </details>
 
         <details><summary>Share a visit summary</summary>
             <p>Only the summary entered here is shared. Internal visit notes stay private.</p>

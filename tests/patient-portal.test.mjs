@@ -40,11 +40,6 @@ test("patient portal isolates records and exposes only released patient-facing c
             select finish_patient_portal_account('${BOB}','${PATIENT_B}');
             insert into visits(id,patient_id,visit_type,notes,created_at) values
                 ('${VISIT}','${PATIENT_A}','Follow-up','INTERNAL NOTES NEVER SHARE','2026-01-02');
-            insert into patient_lab_results(patient_id,test_name,result_value,collected_at,released_at) values
-                ('${PATIENT_A}','Released test','5','2026-01-01','2026-01-01'),
-                ('${PATIENT_A}','Unreleased draft','6','2026-01-02',null),
-                ('${PATIENT_A}','Future release','7','2026-01-03','2099-01-01'),
-                ('${PATIENT_B}','Bobs test','8','2026-01-01','2026-01-01');
             insert into courses(instructor_id,course_number,crn) values ('${TEACHER}','DEMO','1');
             insert into profile_roles(user_id,role_id) select '${ALICE}',role_id from roles where role_name = 'front_desk';
         `);
@@ -54,13 +49,13 @@ test("patient portal isolates records and exposes only released patient-facing c
             const alice = await portal(ALICE), bob = await portal(BOB);
             assert.equal(alice.patient.first_name, 'Alice');
             assert.equal(bob.patient.first_name, 'Bob');
-            assert.deepEqual(alice.labs.map((l) => l.test_name), ['Released test']);
-            assert.deepEqual(bob.labs.map((l) => l.test_name), ['Bobs test']);
+            assert.deepEqual(alice.labs, []);
+            assert.deepEqual(bob.labs, []);
             assert.equal(alice.last_visit, null);
             assert.equal(alice.medications[0].name, 'Recorded medicine');
             assert.ok(!JSON.stringify(alice).includes('internal'));
             assert.ok(!JSON.stringify(alice).includes('INTERNAL NOTES'));
-            for (const table of ['patients','visits','patient_lab_results','courses','profile_roles','assigned_cases','patient_templates','clinical_notes','referrals','appointments']) {
+            for (const table of ['patients','visits','courses','profile_roles','assigned_cases','patient_templates','clinical_notes','referrals','appointments']) {
                 assert.equal((await as(db, ALICE, `select * from ${table}`)).length, 0, table);
             }
             await assert.rejects(as(db, ALICE, 'select get_my_patient_portal($1)', [PATIENT_B]), /does not exist/);
@@ -69,7 +64,6 @@ test("patient portal isolates records and exposes only released patient-facing c
         await t.test("portal access stays read-only even with a leftover front desk role", async () => {
             await assert.rejects(as(db, ALICE, `insert into patients(first_name,last_name,age) values ('X','Y',5)`), /row-level security/);
             await assert.rejects(as(db, ALICE, `insert into visits(patient_id,notes) values ('${PATIENT_A}','bad')`), /row-level security/);
-            await assert.rejects(as(db, ALICE, `insert into patient_lab_results(patient_id,test_name,result_value,collected_at) values ('${PATIENT_A}','bad','1',now())`), /row-level security/);
             assert.equal((await as(db, ALICE, `update patients set first_name='bad' where id='${PATIENT_A}' returning id`)).length, 0);
             await assert.rejects(as(db, ALICE, `select release_patient_visit_summary('${VISIT}','bad')`), /Only active staff/);
             await assert.rejects(as(db, TEACHER, `select set_patient_portal_access('${PATIENT_A}',false)`), /Only active admins/);
