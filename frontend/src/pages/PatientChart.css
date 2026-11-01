@@ -292,3 +292,25 @@
   .chart-tabs { gap: 0.4rem 1rem; }
   .chart-card { padding: 1rem; }
 }
+
+.chart-diagnosis-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.chart-diagnosis-label {
+  flex: 1 1 200px;
+}
+
+.chart-diagnosis-row select,
+.chart-diagnosis-row input[type="date"] {
+  border: 1px solid var(--border-dark);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+}

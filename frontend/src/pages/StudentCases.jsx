@@ -34,7 +34,7 @@ const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
 const EMPTY_PT_SOAP = {
     subjective: "",
     objective: "",
-    assessment: { icd10_code: "", clinical_rationale: "" },
+    assessment: { icd10_code: "", icd10_description: "", clinical_rationale: "" },
     plan: "",
 };
 
