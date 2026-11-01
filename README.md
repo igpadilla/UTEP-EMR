@@ -90,5 +90,3 @@ npm --prefix frontend run build
 ```
 
 The browser checks use Microsoft Edge on Windows. On other platforms, install the Playwright Chromium browser with `npx playwright install chromium`. `PLAYWRIGHT_CHANNEL` can select another installed browser channel. Tests use an in-memory PostgreSQL engine and intercepted test API responses; they do not connect to a live Supabase project. Browser screenshots are written to `.cache/verification/`.
-
-See [student-management verification notes](docs/STUDENT_MANAGEMENT_VERIFICATION.md) for migration requirements, manual checks, and the grading fixes included with this work.

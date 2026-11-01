@@ -2,7 +2,14 @@ import { supabase } from "../supabase.js";
 import { logCaseAction, ACTION_TYPES } from "./auditService.js";
 import { validateGrade } from "../lib/grading.js";
 
+
+
+
+
+
+
 export async function searchPatients(query) {
+
     let q = supabase
         .from("patients")
         .select("id, first_name, last_name, age, sex, occupation, current_medications, last_visit_notes")
@@ -92,6 +99,7 @@ export async function getMyCourses() {
 export async function getCourseById(courseId) {
     const { data, error } = await supabase
         .from("courses")
+        
         .select("id, course_number, crn, discipline, instructor_id, profiles!instructor_id ( first_name, last_name )")
         .eq("id", courseId)
         .single();
@@ -173,12 +181,14 @@ export async function getCourseStudents(courseId) {
 }
 
 export async function unenrollStudent(courseId, studentId) {
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from("course_enrollments")
         .delete()
         .eq("course_id", courseId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId)
+        .select("id");
     if (error) throw error;
+    if (!data?.length) throw new Error("The student was not removed. Refresh the roster and try again.");
 }
 
 export async function getMyEnrolledCourses() {
@@ -203,6 +213,7 @@ export async function getMyCourseCases(courseId) {
 }
 
 export async function getStudents() {
+
     const { data, error } = await supabase
         .from("profiles")
         .select("user_id, first_name, last_name")
@@ -354,7 +365,7 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
     return data;
 }
 
-// ── Course Announcements ──────────────────────────────────────────────────────
+// ------------------- Course Announcements -------------------
 
 export async function getCourseAnnouncements(courseId) {
     const { data, error } = await supabase
@@ -368,16 +379,19 @@ export async function getCourseAnnouncements(courseId) {
 
 export async function createAnnouncement(courseId, { title, body }) {
     const { data: { user } } = await supabase.auth.getUser();
+    
     const { data, error } = await supabase
         .from("course_announcements")
         .insert({ course_id: courseId, author_id: user.id, title: title.trim(), body: body.trim() })
         .select("id, title, body, created_at, author_id, profiles!author_id ( first_name, last_name )")
         .single();
+        
     if (error) throw error;
     return data;
 }
 
 export async function deleteAnnouncement(announcementId) {
+
     const { error } = await supabase
         .from("course_announcements")
         .delete()

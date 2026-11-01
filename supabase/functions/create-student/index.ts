@@ -61,15 +61,13 @@ export default {
       return errorResponse("Unable to verify your account.", 500);
     }
 
-    // Only admins and instructors may create student accounts
+    //     Only admins create the student accounts
     // someone could call the endpoint directly so we need to limit the access
 
-    const allowedRoles = ["admin", "instructor"];
-
-    if(!callerProfile.active || !allowedRoles.includes(callerProfile.account_type))
+    if(!callerProfile.active || callerProfile.account_type !== "admin")
     {
       return errorResponse(
-        "Only active admins and instructors can create students.", 403,
+        "Only active admins can create students.", 403,
       );
     }
 

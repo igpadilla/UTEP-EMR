@@ -4,13 +4,17 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "../frontend/node_modules/vite/dist/node/index.js";
 
+
+
 const root = fileURLToPath(new URL("../frontend", import.meta.url));
 const output = fileURLToPath(new URL("../.cache/patient-chart/", import.meta.url));
+
 await mkdir(output, { recursive: true });
 
 //     Show the real chart on a small test page, without signing into a live project
 const fixture = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div>
 <script type="module" src="/__chart-entry.js"></script></body></html>`;
+
 const fixtureScript = `
 import React from 'react';
 import {createRoot} from 'react-dom/client';
@@ -111,6 +115,7 @@ try {
     assert.equal(patches.length, 0);
     await page.getByLabel("First name", { exact: false }).fill("Ana Maria");
     await page.getByLabel("Phone", { exact: true }).fill("555-0199");
+    
     assert.ok(await page.getByRole("tab", { name: "Vitals", exact: true }).isDisabled());
     failSave = true;
     await page.getByRole("button", { name: "Save demographics", exact: true }).click();
@@ -178,7 +183,7 @@ try {
     await page.getByRole("tab", { name: "Referrals", exact: true }).click();
     await page.getByRole("heading", { name: "Specialty Referrals", exact: true }).waitFor();
     await page.getByRole("button", { name: "← Back", exact: true }).click();
-    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientDetail", "patient-one"]);
+    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientDetail", "patient-one", {}]);
     console.log("PASS: keyboard tab navigation, Vitals, Referrals, and back navigation still work");
 
     await visit("role=instructor");

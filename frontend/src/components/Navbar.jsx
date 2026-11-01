@@ -3,11 +3,13 @@ import React from "react";
 export default function Navbar({ currentPage, onNavigate, user }) {
   const profile = user?.profile ?? {};
 
-  const canManageStudents = ["admin", "instructor"].includes(profile.account_type);
+  const canManageStudents = profile.account_type === "admin";
+  
   const isInstructorOrAdmin = profile.account_type === "instructor" || profile.account_type === "admin";
 
   return (
     <nav className="main-navigation" aria-label="Main navigation">
+    
       <div className="navigation-inner">
 
         <button
@@ -37,6 +39,7 @@ export default function Navbar({ currentPage, onNavigate, user }) {
         )}
 
         {profile.account_type === "student" && (
+        
           <button
             className={`nav-link ${currentPage === "myCourses" ? "active" : ""}`}
             type="button"
@@ -58,6 +61,7 @@ export default function Navbar({ currentPage, onNavigate, user }) {
 
         <button className="nav-link" type="button" disabled title="Provider Directory is not yet available">
           Providers
+          
         </button>
 
         <button className="nav-link" type="button" disabled title="Scheduling is not yet available">
@@ -70,5 +74,7 @@ export default function Navbar({ currentPage, onNavigate, user }) {
 
       </div>
     </nav>
+    
+    
   );
 }

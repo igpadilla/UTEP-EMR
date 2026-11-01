@@ -103,6 +103,7 @@ test("students never see the answer key", async () => {
 
 test("cases go only to enrolled students, one open copy per template", async () => {
     const db = await setup();
+    
     try {
         const assign = (student, course) => as(db, TEACHER, `insert into assigned_cases(template_id, student_id, assigned_by, course_id)
             values ('${TEMPLATE}','${student}','${TEACHER}','${course}') returning id`);
@@ -180,7 +181,7 @@ test("clinical notes: student drafts and submits, instructor finalizes", async (
     }
 });
 
-test("enrollments belong to the course owner", async () => {
+test("only admins change enrollments while instructors keep their rosters and grading", async () => {
     const db = await setup();
     try {
         // The admin enrolled these students; the course owner still sees them.
@@ -188,6 +189,26 @@ test("enrollments belong to the course owner", async () => {
         assert.equal((await as(db, OTHER_TEACHER, `select id from course_enrollments`)).length, 0);
         await assert.rejects(as(db, OTHER_TEACHER, `insert into course_enrollments(course_id, student_id, enrolled_by)
             values ('${NURSING_COURSE}','${PT_STUDENT}','${OTHER_TEACHER}')`), /row-level security/);
+        await assert.rejects(as(db, TEACHER, `insert into course_enrollments(course_id, student_id, enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${TEACHER}')`), /row-level security/);
+        assert.equal((await as(db, TEACHER, `delete from course_enrollments where course_id='${NURSING_COURSE}' returning id`)).length, 0);
+        assert.equal((await as(db, TEACHER, `update course_enrollments set course_id='${PT_COURSE}' returning id`)).length, 0);
+        await assert.rejects(as(db, TEACHER, `delete from courses where id='${NURSING_COURSE}'`), /Only admins can delete a course with enrolled students/);
+
+        await as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${ADMIN}')`);
+        assert.equal((await as(db, TEACHER, `select id from course_enrollments where course_id='${NURSING_COURSE}'`)).length, 2);
+        await as(db, ADMIN, `delete from course_enrollments where course_id='${NURSING_COURSE}' and student_id='${NURSE_STUDENT}'`);
+        assert.equal((await as(db, NURSE_STUDENT, `select id from assigned_cases where id='${NURSE_CASE}'`)).length, 1);
+        assert.equal(Number((await as(db, TEACHER, `update assigned_cases set score=80 where id='${NURSE_CASE}' returning score`))[0].score), 80);
+
+        await db.exec(`update profiles set active=false where user_id='${PT_STUDENT}'`);
+        await assert.rejects(as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${ADMIN}')`), /row-level security/);
+        await assert.rejects(as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${OTHER_TEACHER}','${ADMIN}')`), /row-level security/);
+        await db.exec(`update profiles set active=false where user_id='${ADMIN}'`);
+        assert.equal((await as(db, ADMIN, `delete from course_enrollments returning id`)).length, 0);
     } finally {
         await db.close();
     }
@@ -364,6 +385,8 @@ test("referrals on a patient's chart are copied into a case built from that pati
     }
 });
 
+
+
 test("diagnostic orders and results respect RLS and copy from patient to assigned case", async () => {
     const db = await setup();
     const DIAG_TEMPLATE = "10000000-0000-4000-8000-000000000004";
@@ -393,6 +416,8 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
 
         assert.equal((await as(db, PT_STUDENT, `select id from diagnostic_orders where case_id = '${DIAG_CASE}'`)).length, 0);
         assert.equal((await as(db, NURSE_STUDENT, `select id from diagnostic_orders where patient_id = '${PATIENT}'`)).length, 0);
+
+
 
         const [studentOrder] = await as(db, NURSE_STUDENT, `insert into diagnostic_orders(
             case_id, category, test_code, test_name, coding_system, clinical_code, clinical_indication
