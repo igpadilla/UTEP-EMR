@@ -265,14 +265,31 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
         setTemplatesLoading(false);
     }
 
+
+    function serializeClinicalNote() {
+        if (!selectedTemplate) {
+            throw new Error("No clinical note template selected.");
+        }
+
+        return JSON.stringify({
+            format: "clinical-note-v1",
+            template: {
+                id: selectedTemplate.id,
+                name: selectedTemplate.name,
+                description: selectedTemplate.description,
+                fields: selectedTemplate.fields,
+            },
+            data: dynamicNoteData,
+        });
+    }
+
     async function handleSaveDraft() {
-        if (!hasLegacyNote) return;
+        if (submitting) return;
+        if (!hasLegacyNote && !noteFormReady) return;
         setModalError("");
         setSubmitting(true);
         try {
-            const encounterNotes = isPTStudent
-                ? JSON.stringify(ptSoap)
-                : notes;
+            const encounterNotes = hasLegacyNote ? isPTStudent ? JSON.stringify(ptSoap) : notes : serializeClinicalNote();
 
             const updated = await saveCaseNotes(activeCase.id, encounterNotes);
 
@@ -290,27 +307,47 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     }
 
     async function handleSubmit() {
-        if (!hasLegacyNote) return;
-        if (isPTStudent) {
-            const hasRequiredSOAP =
-                ptSoap.subjective.trim() &&
-                ptSoap.objective.trim() &&
-                ptSoap.assessment.icd10_code.trim() &&
-                ptSoap.assessment.clinical_rationale.trim() &&
-                ptSoap.plan.trim();
+        if (submitting) return;
+        if (!hasLegacyNote && !noteFormReady) return;
 
-            if (!hasRequiredSOAP) {
-                setModalError("Please complete all PT SOAP sections before submitting for signature.");
+        if (hasLegacyNote) {
+            if (isPTStudent) {
+                const hasRequiredSOAP =
+                    ptSoap.subjective.trim() &&
+                    ptSoap.objective.trim() &&
+                    ptSoap.assessment.icd10_code.trim() &&
+                    ptSoap.assessment.clinical_rationale.trim() &&
+                    ptSoap.plan.trim();
+
+                if (!hasRequiredSOAP) {
+                    setModalError("Please complete all PT SOAP sections before submitting for signature.");
+                    return;
+                }
+            } else if (!notes.trim()) {
+                setModalError("Please add encounter notes before submitting.");
                 return;
             }
-        } else if (!notes.trim()) {
-            setModalError("Please add encounter notes before submitting.");
-            return;
         }
+        else {
+            // Validate required fields in the selected dynamic template.
+            const missingFields = (selectedTemplate.fields ?? []).filter((field) => {
+                if (!field.required) return false;
+
+                const value = field.key.split(".").reduce((current, key) => current?.[key], dynamicNoteData);
+
+                return !String(value ?? "").trim();
+            });
+
+            if (missingFields.length > 0) {
+                setModalError(`Please complete: ${ missingFields.map((field) => field.label).join(", ") }.`);
+                return;
+            }
+        }
+            
         setModalError("");
         setSubmitting(true);
         try {
-            const encounterNotes = isPTStudent ? JSON.stringify(ptSoap) : notes;
+            const encounterNotes = hasLegacyNote ? isPTStudent ? JSON.stringify(ptSoap) : notes : serializeClinicalNote();
             const updated = await submitCase(activeCase.id, encounterNotes);
             setCases((prev) => prev.map((x) => x.id === activeCase.id ? updated : x));
 
@@ -671,6 +708,27 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                                     value={selectedNoteTemplateId}
                                                     disabled={!isEditable || submitting}
                                                     onChange={(event) => {
+                                                        const nextTemplateId = event.target.value;
+
+                                                        if (nextTemplateId === selectedNoteTemplateId) return;
+
+                                                        const hasEnteredData = Object.keys(dynamicNoteData).some((value) => {
+                                                            if (value && typeof value === "object") {
+                                                                return JSON.stringify(value) !== "{}";
+                                                            }
+                                                            return String(value ?? "").trim() !== "";
+                                                        });
+
+                                                        if (hasEnteredData) {
+                                                            const confirmChange = window.confirm(
+                                                                "Changing the clinical note form will clear any data you have entered. Are you sure you want to continue?"
+                                                            );
+                                                            
+                                                            if (!confirmChange) {
+                                                                return;
+                                                            }
+                                                        }
+                                                        
                                                         setSelectedNoteTemplateId(
                                                             event.target.value
                                                         );
@@ -721,7 +779,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                     className="secondary-action-button"
                                     type="button"
                                     onClick={handleSaveDraft}
-                                    disabled={submitting || !hasLegacyNote}
+                                    disabled={submitting || (!hasLegacyNote && !noteFormReady)}
                                 >
                                     {submitting ? "Saving…" : "Save Draft"}
                                 </button>
@@ -729,7 +787,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                     className="primary-action-button"
                                     type="button"
                                     onClick={handleSubmit}
-                                    disabled={submitting || !hasLegacyNote}
+                                    disabled={submitting || (!hasLegacyNote && !noteFormReady)}
                                 >
                                     {submitting
                                         ? "Submitting…"

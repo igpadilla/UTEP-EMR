@@ -90,6 +90,7 @@ export default function DynamicClinicalNoteForm({
                                     )
                                 }
                                 style={{ width: "100%" }}
+                                required={Boolean(field.required)}
                             />
                         ) : (
                             <input
@@ -110,6 +111,7 @@ export default function DynamicClinicalNoteForm({
                                     )
                                 }
                                 style={{ width: "100%" }}
+                                required={Boolean(field.required)}
                             />
                         )}
                     </div>
