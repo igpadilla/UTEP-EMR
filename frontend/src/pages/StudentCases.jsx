@@ -38,7 +38,7 @@ const EMPTY_PT_SOAP = {
     plan: "",
 };
 
-export default function StudentCases({ onNavigate, openCaseId = null, fromCourse = null }) {
+export default function StudentCases({ onNavigate, openCaseId = null, fromCourse = null, embedded = false }) {
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -268,9 +268,9 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         ? cases.filter((c) => c.course_id === fromCourse.id)
         : cases;
 
-    return (
-        <main className="instructor-main">
-            {fromCourse && (
+    const content = (
+        <>
+            {!embedded && fromCourse && (
                 <div style={{ padding: "0.75rem 1.5rem 0" }}>
                     <button
                         className="secondary-action-button"
@@ -281,13 +281,23 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                     </button>
                 </div>
             )}
-            <div className="instructor-page-header">
-                <div>
-                    <p className="section-title">{fromCourse ? fromCourse.course_number : "Student"}</p>
-                    <h2>My Cases</h2>
-                    <p>Training cases assigned to you by your instructor.</p>
+            {!embedded && (
+                <div className="instructor-page-header">
+                    <div>
+                        <p className="section-title">{fromCourse ? fromCourse.course_number : "Student"}</p>
+                        <h2>My Cases</h2>
+                        <p>Training cases assigned to you by your instructor.</p>
+                    </div>
                 </div>
-            </div>
+            )}
+            {embedded && (
+                <div className="course-tab-header">
+                    <div>
+                        <h3 className="course-tab-title">My Cases</h3>
+                        <p className="course-tab-subtitle">{visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""} assigned</p>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <p className="form-message form-message-error" role="alert">{error}</p>
@@ -694,8 +704,11 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                     </div>
                 </div>
             )}
-        </main>
+        </>
     );
+
+    if (embedded) return <div>{content}</div>;
+    return <main className="instructor-main">{content}</main>;
 }
 
 const overlayStyle = {

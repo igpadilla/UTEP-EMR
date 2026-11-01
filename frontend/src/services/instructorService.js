@@ -214,7 +214,7 @@ export async function getStudents() {
 }
 
 export async function getMyAssignedCases(includeArchived = false) {
-    let query = supabase
+    const baseQuery = () => supabase
         .from("assigned_cases")
         .select(`
             *,
@@ -224,12 +224,20 @@ export async function getMyAssignedCases(includeArchived = false) {
         .order("assigned_at", { ascending: false });
 
     if (!includeArchived) {
-        query = query.eq("is_archived", false);
+        const { data, error } = await baseQuery().eq("is_archived", false);
+        // 400 means the is_archived column doesn't exist yet (migration pending) — fall back
+        if (error && error.code !== "PGRST116" && error.message?.includes("is_archived")) {
+            const { data: fallback, error: fallbackError } = await baseQuery();
+            if (fallbackError) throw fallbackError;
+            return fallback ?? [];
+        }
+        if (error) throw error;
+        return data ?? [];
     }
 
-    const { data, error } = await query;
+    const { data, error } = await baseQuery();
     if (error) throw error;
-    return data;
+    return data ?? [];
 }
 
 export async function archiveCase(caseId) {

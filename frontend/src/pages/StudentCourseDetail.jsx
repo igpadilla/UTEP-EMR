@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getMyCourseCases, getCourseAnnouncements } from "../services/instructorService.js";
-import { supabase } from "../supabase.js";
+import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
     pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
@@ -27,21 +27,6 @@ const DISCIPLINE_ABBR = {
     inpatient_physician:       "MD",
 };
 
-const STATUS_LABELS = {
-    "not started":        "Not Started",
-    "in progress":        "In Progress",
-    "revision_requested": "Needs Revision",
-    "pending review":     "Pending Review",
-    "completed":          "Completed",
-};
-
-const STATUS_COLORS = {
-    "not started":        "#64748b",
-    "in progress":        "#0284c7",
-    "revision_requested": "#d97706",
-    "pending review":     "#7c3aed",
-    "completed":          "#047857",
-};
 
 const TABS = [
     { id: "home",          label: "Home"          },
@@ -214,7 +199,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                             const overdue = isOverdue(c.due_date, c.encounter_status);
                                             const soon = isDueSoon(c.due_date);
                                             return (
-                                                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
+                                                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem", cursor: "pointer" }} onClick={() => setActiveTab("cases")}>
                                                     <span style={{ fontWeight: 500, color: "var(--text)" }}>
                                                         {c.patient_snapshot?.first_name} {c.patient_snapshot?.last_name}
                                                     </span>
@@ -268,67 +253,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
 
                     {/* ── CASES ── */}
                     {activeTab === "cases" && (
-                        <div>
-                            <div className="course-tab-header">
-                                <div>
-                                    <h3 className="course-tab-title">My Cases</h3>
-                                    <p className="course-tab-subtitle">{cases.length} case{cases.length !== 1 ? "s" : ""} assigned</p>
-                                </div>
-                            </div>
-
-                            {cases.length === 0 ? (
-                                <div className="patients-empty-state">
-                                    <strong>No cases assigned yet.</strong>
-                                    <p>Your instructor hasn't assigned any cases for this course.</p>
-                                </div>
-                            ) : (
-                                <div className="course-detail-section" style={{ margin: "0 1.25rem 1.25rem" }}>
-                                    <div className="course-detail-case-row" style={{ background: "#f8fafc", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", gridTemplateColumns: "1fr 120px 110px 70px" }}>
-                                        <span>Patient / Case</span>
-                                        <span>Due</span>
-                                        <span>Status</span>
-                                        <span>Score</span>
-                                    </div>
-                                    {cases.map((c) => {
-                                        const overdue = isOverdue(c.due_date, c.encounter_status);
-                                        const soon = isDueSoon(c.due_date);
-                                        return (
-                                            <div
-                                                key={c.id}
-                                                className="course-detail-case-row"
-                                                style={{ gridTemplateColumns: "1fr 120px 110px 70px", cursor: "pointer" }}
-                                                onClick={() => onNavigate("studentCases", null, { openCaseId: c.id, fromCourse: course })}
-                                            >
-                                                <div>
-                                                    <div className="course-detail-case-patient">
-                                                        {c.patient_snapshot?.first_name} {c.patient_snapshot?.last_name}
-                                                    </div>
-                                                    <div className="course-detail-case-complaint">
-                                                        {c.patient_snapshot?.chief_complaint}
-                                                    </div>
-                                                    {c.encounter_status === "revision_requested" && c.instructor_feedback && (
-                                                        <div style={{ fontSize: "0.75rem", color: "#d97706", marginTop: "0.2rem" }}>
-                                                            Feedback: {c.instructor_feedback}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <span style={{ fontSize: "0.8rem", color: overdue ? "#dc2626" : soon ? "#d97706" : "var(--text-muted)", fontWeight: overdue || soon ? 600 : 400 }}>
-                                                    {c.due_date ? formatDate(c.due_date) : "—"}
-                                                    {overdue && " (Overdue)"}
-                                                    {!overdue && soon && " (Soon)"}
-                                                </span>
-                                                <span style={{ color: STATUS_COLORS[c.encounter_status] ?? "#64748b", fontWeight: 500, fontSize: "0.8rem" }}>
-                                                    {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
-                                                </span>
-                                                <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                                                    {c.score != null ? c.score : "—"}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                        <StudentCases embedded fromCourse={course} onNavigate={onNavigate} />
                     )}
 
                     {/* ── ANNOUNCEMENTS ── */}

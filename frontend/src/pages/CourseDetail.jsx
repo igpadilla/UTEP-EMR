@@ -15,6 +15,7 @@ import InstructorCases from "./InstructorCases.jsx";
 import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
 import PatientDetail from "./PatientDetail.jsx";
+import CaseAssign from "./CaseAssign.jsx";
 
 const DISCIPLINE_BANNERS = {
     pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
@@ -66,8 +67,9 @@ export default function CourseDetail({ courseId, onNavigate }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState("home");
-    // null = show cases list; { templateId } = show embedded builder
+    // null = show cases list; { templateId } = show embedded builder/assign
     const [builderState, setBuilderState] = useState(null);
+    const [assignState, setAssignState] = useState(null);
 
     // Settings / edit state
     const [editing, setEditing] = useState(false);
@@ -274,7 +276,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             key={tab.id}
                             className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""}`}
                             type="button"
-                            onClick={() => { setActiveTab(tab.id); setBuilderState(null); }}
+                            onClick={() => { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); }}
                         >
                             {tab.label}
                             {tab.id === "cases" && cases.length > 0 && (
@@ -328,7 +330,16 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                     {/* ── CASES ── */}
                     {activeTab === "cases" && (
-                        builderState !== null ? (
+                        assignState !== null ? (
+                            <CaseAssign
+                                embedded
+                                templateId={assignState.templateId}
+                                fromCourseId={courseId}
+                                fromCourseName={course.course_number}
+                                onNavigate={onNavigate}
+                                onClose={() => setAssignState(null)}
+                            />
+                        ) : builderState !== null ? (
                             <TemplateBuilder
                                 embedded
                                 templateId={builderState.templateId}
@@ -344,6 +355,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                 fromCourseName={course.course_number}
                                 onNavigate={onNavigate}
                                 onOpenBuilder={(templateId) => setBuilderState({ templateId })}
+                                onOpenAssign={(templateId) => setAssignState({ templateId })}
                             />
                         )
                     )}

@@ -20,7 +20,7 @@ const STATUS_LABELS = {
     "completed":          "Completed",
 };
 
-export default function InstructorCases({ onNavigate, fromCourseId = null, fromCourseName = null, embedded = false, onOpenBuilder = null }) {
+export default function InstructorCases({ onNavigate, fromCourseId = null, fromCourseName = null, embedded = false, onOpenBuilder = null, onOpenAssign = null }) {
     const [templates, setTemplates] = useState([]);
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -57,17 +57,28 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
     async function fetchAll() {
         setLoading(true);
         setError("");
-        try {
-            const [tmpl, assigned] = await Promise.all([
-                getMyTemplates(),
-                getMyAssignedCases(showArchived),
-            ]);
-            setTemplates(tmpl);
-            setCases(assigned);
-        } catch (err) {
-            console.error(err);
+
+        const [tmplResult, casesResult] = await Promise.allSettled([
+            getMyTemplates(),
+            getMyAssignedCases(showArchived),
+        ]);
+
+        if (tmplResult.status === "fulfilled") {
+            setTemplates(tmplResult.value);
+        } else {
+            console.error("Failed to load templates:", tmplResult.reason);
+        }
+
+        if (casesResult.status === "fulfilled") {
+            setCases(casesResult.value);
+        } else {
+            console.error("Failed to load cases:", casesResult.reason);
+        }
+
+        if (tmplResult.status === "rejected" && casesResult.status === "rejected") {
             setError("Failed to load data. Please try again.");
         }
+
         setLoading(false);
     }
 
@@ -336,7 +347,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                                     <button
                                                         className="instructor-action-btn instructor-action-assign"
                                                         type="button"
-                                                        onClick={() => onNavigate("caseAssign", t.id, { fromCourseId, fromCourseName })}
+                                                        onClick={() => onOpenAssign ? onOpenAssign(t.id) : onNavigate("caseAssign", t.id, { fromCourseId, fromCourseName })}
                                                     >
                                                         Assign
                                                     </button>
