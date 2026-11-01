@@ -1,7 +1,7 @@
 create table public.diagnostic_orders (
     id uuid primary key default gen_random_uuid(),
-    patient_id uuid references public.patients(id) on delete cascade,
-    case_id uuid references public.assigned_cases(id) on delete cascade,
+    patient_id uuid references public.patients(id) on delete restrict,
+    case_id uuid references public.assigned_cases(id) on delete restrict,
     constraint diagnostic_orders_one_owner check (
         (patient_id is null) <> (case_id is null)
     ),
@@ -217,9 +217,12 @@ begin
         )
         on conflict (id) do nothing;
 
-        execute 'create policy "Authenticated users read diagnostic attachments"
+        execute 'create policy "Read diagnostic attachments for readable results"
             on storage.objects for select to authenticated
-            using (bucket_id = ''diagnostic-attachments'')';
+            using (bucket_id = ''diagnostic-attachments'' and exists (
+                select 1 from public.diagnostic_results r
+                where r.file_path = name
+                  and private.can_read_diagnostic_order(r.order_id)))';
 
         execute 'create policy "Authenticated users upload diagnostic attachments"
             on storage.objects for insert to authenticated
@@ -227,4 +230,11 @@ begin
     end if;
 end;
 $$;
+
+create policy "Portal accounts use their own portal only" on public.diagnostic_orders
+    as restrictive for all to authenticated
+    using (not private.is_portal_patient()) with check (not private.is_portal_patient());
+create policy "Portal accounts use their own portal only" on public.diagnostic_results
+    as restrictive for all to authenticated
+    using (not private.is_portal_patient()) with check (not private.is_portal_patient());
 

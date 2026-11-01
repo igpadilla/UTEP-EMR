@@ -117,6 +117,8 @@ export default {
           ctx.supabaseAdmin.from("clinical_notes").select("note_id", { count: "exact", head: true }).or(`author_id.eq.${userId},reviewed_by.eq.${userId}`),
           ctx.supabaseAdmin.from("referrals").select("id", { count: "exact", head: true }).eq("referring_user_id", userId),
           ctx.supabaseAdmin.from("vital_sign_sets").select("id", { count: "exact", head: true }).eq("recorded_by", userId),
+          ctx.supabaseAdmin.from("diagnostic_orders").select("id", { count: "exact", head: true }).eq("ordered_by", userId),
+          ctx.supabaseAdmin.from("diagnostic_results").select("id", { count: "exact", head: true }).eq("resulted_by", userId),
         ]);
         if (references.some((result) => result.error)) {
           return errorResponse("Unable to check this student's records.", 500);
