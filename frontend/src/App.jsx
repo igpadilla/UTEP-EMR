@@ -18,6 +18,7 @@ import StudentCourseDetail from "./pages/StudentCourseDetail.jsx";
 import CourseForm from "./pages/CourseForm.jsx";
 import CourseDetail from "./pages/CourseDetail.jsx";
 import PatientChart from "./pages/PatientChart.jsx";
+import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
 
@@ -179,7 +180,7 @@ export default function App() {
                 return;
             }
             // Students on clinical courses work only on their cases; front desk and biller keep Patient Lookup.
-            const livePatients = currentUser.profile.account_type === "student"
+            const livePatients = currentUser.profile.account_type === "patient" ? NO_LIVE_PATIENT_ACCESS : currentUser.profile.account_type === "student"
                 ? await getLivePatientAccess().catch(() => NO_LIVE_PATIENT_ACCESS)
                 : FULL_LIVE_PATIENT_ACCESS;
             if (request !== accountRequest.current) return;
@@ -218,6 +219,12 @@ export default function App() {
 
     if (user.profile.must_change_password) {
         return <ChangePassword onDone={() => loadUser()} />;
+    }
+
+    //     Patient logins go straight to their own view, with no staff navigation
+    if (user.profile.account_type === "patient") {
+        return <PatientPortal key={user.id} user={user} accountWarning={accountWarning}
+            idleWarning={showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />} />;
     }
 
     const isAdmin = user.profile.account_type === "admin";
@@ -274,7 +281,7 @@ export default function App() {
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
         case "patientDetail":
-            pageContent = <PatientDetail id={nav.id} onNavigate={navigate} />;
+            pageContent = <PatientDetail key={nav.id} id={nav.id} onNavigate={navigate} canManagePortal={isAdmin} />;
             break;
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
