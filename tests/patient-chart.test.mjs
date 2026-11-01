@@ -73,7 +73,7 @@ registerHooks({ resolve(specifier, context, next) {
     }
     return next(specifier, context);
 } });
-const { loadPatientChart, saveDemographics, saveAllergiesAndHistory } = await import("../frontend/src/services/patientChartService.js");
+const { loadPatientChart, saveDemographics, saveAllergiesAndHistory, saveDiagnoses } = await import("../frontend/src/services/patientChartService.js");
 
 test("case charts use their saved snapshot without fetching the live patient", async () => {
     calls.length = 0;
@@ -102,6 +102,13 @@ test("history save writes only its own fields and refuses empty update results",
     assert.deepEqual(Object.keys(calls[0].update).sort(), ["allergies", "medical_history", "updated_at"]);
     response = { data: null, error: null };
     await assert.rejects(saveAllergiesAndHistory(patient, historyToForm(patient)), /changed or you no longer have edit access/);
+});
+
+test("diagnoses save writes only its own fields", async () => {
+    calls.length = 0;
+    response = { data: { ...patient, diagnoses: [{ code: "I10", description: "Hypertension", status: "active", onset_date: "" }] } };
+    await saveDiagnoses(patient, [{ code: "I10", description: "Hypertension", status: "active", onset_date: "" }]);
+    assert.deepEqual(Object.keys(calls[0].update).sort(), ["diagnoses", "updated_at"]);
 });
 
 test("load and save failures return useful errors instead of staying in loading state", async () => {

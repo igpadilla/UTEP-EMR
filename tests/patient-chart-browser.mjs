@@ -64,12 +64,13 @@ try {
         occupation: "Teacher", phone_number: "555-0100", email: "ana@example.edu", address: "123 Example Street",
         emergency_contacts: [{ name: "Pat", phone: "555-0101", relationship: "Sibling" }, { name: "Sam", phone: "555-0102" }],
         allergies: ["Penicillin"], medical_history: ["Asthma"], current_medications: [{ name: "Existing medicine" }],
+        diagnoses: [],
         updated_at: "2026-10-01T00:00:00.000Z",
     };
     let failLoad = true, failSave = false, conflict = false;
     let caseStatus = "in progress";
     const patches = [], reads = [];
-    const casePatient = { first_name: "Case", last_name: "Patient", age: 70, sex: "Male", allergies: ["Case pollen"], medical_history: ["Case condition"] };
+    const casePatient = { first_name: "Case", last_name: "Patient", age: 70, sex: "Male", allergies: ["Case pollen"], medical_history: ["Case condition"], diagnoses: [{ code: "I10", description: "Essential (primary) hypertension", status: "active" }] };
 
     await page.route("http://127.0.0.1:54321/**", async (route) => {
         const request = route.request(), url = new URL(request.url());
@@ -159,6 +160,14 @@ try {
     await page.screenshot({ path: `${output}/allergies-mobile.png`, fullPage: true });
     console.log("PASS: allergies/history save independently, banner updates, conflicts are shown, and mobile layout fits");
 
+    await page.getByRole("tab", { name: "Diagnoses", exact: true }).click();
+    await page.getByRole("button", { name: "Edit diagnoses", exact: true }).click();
+    await page.getByPlaceholder("Search diagnosis code or description…").fill("I10");
+    await page.getByRole("button", { name: "I10 — Essential (primary) hypertension" }).click();
+    await page.getByRole("button", { name: "Save diagnoses", exact: true }).click();
+    await page.getByText("Diagnoses saved.", { exact: true }).waitFor();
+    await page.getByText("I10 — Essential (primary) hypertension (active)").waitFor();
+
     await page.setViewportSize({ width: 1280, height: 950 });
     await page.getByRole("tab", { name: "Allergies & History", exact: true }).focus();
     await page.keyboard.press("Home");
@@ -188,6 +197,9 @@ try {
         await page.getByRole("tab", { name: "Allergies & History", exact: true }).click();
         await page.getByText("Case pollen", { exact: true }).waitFor();
         assert.equal(await page.getByRole("button", { name: "Edit allergies and history", exact: true }).count(), 0);
+        await page.getByRole("tab", { name: "Diagnoses", exact: true }).click();
+        await page.getByText("I10 — Essential (primary) hypertension (active)", { exact: true }).waitFor();
+        assert.equal(await page.getByRole("button", { name: "Edit diagnoses", exact: true }).count(), 0);
         await page.getByRole("tab", { name: "Vitals", exact: true }).click();
         if (status === "in progress") await page.getByRole("button", { name: "+ Record vitals", exact: true }).waitFor();
         else {

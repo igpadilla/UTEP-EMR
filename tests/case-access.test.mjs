@@ -143,6 +143,7 @@ test("live patients, referrals and audit logs are scoped", async () => {
     const db = await setup();
     try {
         assert.equal((await as(db, NURSE_STUDENT, `select id from patients`)).length, 0);
+        assert.equal((await as(db, NURSE_STUDENT, `update patients set diagnoses = '[{"code":"I10"}]' where id = '${PATIENT}' returning id`)).length, 0);
         assert.equal((await as(db, TEACHER, `select id from patients`)).length, 1);
         await assert.rejects(as(db, NURSE_STUDENT, `insert into visits(patient_id, created_by) values ('${PATIENT}','${NURSE_STUDENT}')`), /row-level security/);
         await assert.rejects(as(db, TEACHER, `insert into visits(patient_id, created_by) values ('${PATIENT}','${ADMIN}')`), /row-level security/);
@@ -276,7 +277,7 @@ test("a case built from a patient snapshots the whole chart into the student's c
     const CHART_CASE = "20000000-0000-4000-8000-000000000003";
     try {
         // The instructor builds the patient's chart: allergies, then two readings, one later marked as an error.
-        await db.exec(`update patients set allergies = '{penicillin}', current_medications = '[{"name":"Metformin"}]' where id = '${PATIENT}'`);
+        await db.exec(`update patients set allergies = '{penicillin}', current_medications = '[{"name":"Metformin"}]', diagnoses = '[{"code":"I10","description":"Hypertension","status":"active","onset_date":"2026-01-01"}]' where id = '${PATIENT}'`);
         await as(db, TEACHER, `insert into vital_sign_sets(patient_id, systolic_bp, diastolic_bp, heart_rate, measured_at)
             values ('${PATIENT}', 158, 94, 88, now() - interval '1 day'), ('${PATIENT}', 150, 90, 84, now())`);
         await as(db, TEACHER, `insert into vital_sign_sets(patient_id, heart_rate) values ('${PATIENT}', 200)`);
@@ -293,6 +294,7 @@ test("a case built from a patient snapshots the whole chart into the student's c
         assert.equal(snap.last_name, "Doe");
         assert.deepEqual(snap.allergies, ["penicillin"]);
         assert.deepEqual(snap.current_medications, [{ name: "Metformin" }]);
+        assert.deepEqual(snap.diagnoses, [{ code: "I10", description: "Hypertension", status: "active", onset_date: "2026-01-01" }]);
         assert.equal(snap.chief_complaint, "headache");
         assert.equal(snap.id, undefined);
 

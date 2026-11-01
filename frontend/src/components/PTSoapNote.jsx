@@ -1,3 +1,5 @@
+import Icd10Search from "./patient-chart/Icd10Search.jsx";
+
 export default function PTSoapNote({
     value,
     onChange,
@@ -11,6 +13,7 @@ export default function PTSoapNote({
         ...value,
         assessment: {
             icd10_code: "",
+            icd10_description: "",
             clinical_rationale: "",
             ...(value?.assessment ?? {}),
         },
@@ -134,27 +137,21 @@ export default function PTSoapNote({
                             ICD-10 Diagnosis
                         </label>
 
-                        {readOnly ? (
+                        {readOnly || disabled ? (
                             <div className="case-notes-readonly">
-                                {soap.assessment.icd10_code || (
+                                {soap.assessment.icd10_code ? (
+                                    soap.assessment.icd10_description
+                                        ? `${soap.assessment.icd10_code} — ${soap.assessment.icd10_description}`
+                                        : soap.assessment.icd10_code
+                                ) : (
                                     <em>Not documented.</em>
                                 )}
                             </div>
                         ) : (
-                            <input
+                            <Icd10Search
                                 id="pt-icd10"
-                                className="instructor-input"
-                                type="text"
-                                value={soap.assessment.icd10_code}
-                                onChange={(e) =>
-                                    updateAssessment(
-                                        "icd10_code",
-                                        e.target.value
-                                    )
-                                }
-                                disabled={disabled}
-                                placeholder="Enter ICD-10 code"
-                            />
+                                value={soap.assessment.icd10_code ? { code: soap.assessment.icd10_code, description: soap.assessment.icd10_description } : null}
+                                onChange={({ code, description }) => onChange({ ...soap, assessment: { ...soap.assessment, icd10_code: code, icd10_description: description } })} />
                         )}
                     </div>
 

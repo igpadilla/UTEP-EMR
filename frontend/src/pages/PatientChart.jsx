@@ -4,16 +4,18 @@ import ReferralManager from "../components/ReferralManager.jsx";
 import DiagnosticsPanel from "../components/diagnostics/DiagnosticsPanel.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
+import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { loadPatientChart } from "../services/patientChartService.js";
 import "./PatientChart.css";
 
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
-const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Allergies & History", "Visits", "Referrals"];
+
+const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Allergies & History", "Diagnoses", "Visits", "Referrals"];
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated,
+    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated, fromCourse = null,
 }) {
     // With no patient yet, the chart opens on an empty demographics form that creates one.
     // The other sections stay locked until the patient exists.
@@ -63,7 +65,7 @@ export default function PatientChart({
     }, [id, caseId, reload, creating]);
 
     function goBack() {
-        onNavigate(backTo ?? "patientLookup", id);
+        onNavigate(backTo ?? "patientLookup", id, fromCourse ? { fromCourse } : {});
     }
 
     function chooseTab(tab) {
@@ -182,13 +184,15 @@ export default function PatientChart({
                     </div>
                 )}
                 {creating && <p className="chart-edit-hint">Create the patient to open the rest of the chart.</p>}
-                {caseId && ["Summary", "Allergies & History"].includes(activeTab)
+                {caseId && ["Summary", "Allergies & History", "Diagnoses"].includes(activeTab)
                     && <p className="chart-edit-hint">These are the patient details saved with this case. They are read-only here.</p>}
 
                 {activeTab === "Summary" ? <PatientSummary {...sectionProps} editing={editingSection === "demographics"}
                     onEdit={() => setEditingSection("demographics")} />
                     : activeTab === "Allergies & History" ? <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
                         onEdit={() => setEditingSection("history")} />
+                    : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
+                        onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
                     : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
