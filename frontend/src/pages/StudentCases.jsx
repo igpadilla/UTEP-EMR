@@ -3,10 +3,8 @@ import {
     getMyAssignedCases,
     startCase,
     saveCaseNotes,
-    submitCase,
-    getAssignedCaseClinicalRole,
+    submitCase
 } from "../services/studentCaseService.js";
-import { getMyClinicalRoles } from "../services/clinicalRoleService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
@@ -43,10 +41,6 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    // Clinical roles for the logged-in student
-    const [clinicalRoles, setClinicalRoles] = useState([]);
-    const [rolesLoading, setRolesLoading] = useState(true);
-
     // Modal state
     const [activeCase, setActiveCase] = useState(null);
     const templateRequestId = useRef(0);
@@ -64,11 +58,6 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     // The open case's course decides the discipline (e.g. a PT course gets the PT SOAP note).
     // Cases without a course discipline fall back to the student's own clinical roles.
     const [caseRoleName, setCaseRoleName] = useState(null);
-    const isPTStudent = isPTCase(caseRoleName);
-
-    function isPTCase(roleName) {
-        return roleName ? roleName === "physical_therapy" : clinicalRoles.includes("physical_therapy");
-    }
 
     const [clinicalRole, setClinicalRole] = useState(null);
     const [noteTemplates, setNoteTemplates] = useState([]);
@@ -76,6 +65,8 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
     const [selectedNoteTemplateId, setSelectedNoteTemplateId] = useState("");
     const [dynamicNoteData, setDynamicNoteData] = useState({});
+
+    const isPTStudent = clinicalRole?.roleName === "physical_therapy";
 
     const [templatesError, setTemplatesError] = useState("");
     const selectedTemplate = noteTemplates.find((template) => template.id === selectedNoteTemplateId);
@@ -86,7 +77,6 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
     useEffect(() => {
         fetchCases();
-        fetchClinicalRoles();
     }, []);
 
     // Open a specific case when arriving from another page (e.g. a course's case list).
@@ -111,21 +101,8 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
         }
         setLoading(false);
     }
-    
-    async function fetchClinicalRoles() {
-        setRolesLoading(true);
-        try {
-            const roles = await getMyClinicalRoles();
-            setClinicalRoles(roles);
-        } catch (err) {
-            console.error("Failed to load clinical roles:", err);
-            setClinicalRoles([]);
-        }
 
-        setRolesLoading(false);
-    }
-
-    async function loadCaseNoteTemplates(caseId) {
+    async function loadCaseNoteTemplates(assignedCase) {
         const requestId = ++templateRequestId.current;
         setTemplatesLoading(true);
         setClinicalRole(null);
@@ -216,32 +193,50 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
 
     async function openCase(c) {
+        // Invalidate any previous template request immediately.
+        const openingRequestId = ++templateRequestId.current;
         let openedCase = c;
 
         // Auto-start if not yet started
         if (c.encounter_status === "not started") {
             try {
                 const updated = await startCase(c.id);
+
+                // Ignore results if another case was opened or this one closed.
+                if (openingRequestId !== templateRequestId.current) {
+                    return;
+                }
+
                 setCases((prev) => prev.map((x) => x.id === c.id ? updated : x));
                 openedCase = updated;
             } catch (err) {
-                console.error(err);
+                if (openingRequestId !== templateRequestId.current) {
+                    return;
+                }
+
+                console.error("Failed to start case:", err);
+                setModalError("Unable to start this case. Please try again.");
+                return;
             }
         }
-        // Know the case's discipline before showing it, so the right note form opens
-        const role = await getAssignedCaseClinicalRole(openedCase.id).catch(() => null);
-        setCaseRoleName(role?.roleName ?? null);
-        setActiveCase(openedCase);
+        // Ignore results if another case was opened or this one closed.
+        if (openingRequestId !== templateRequestId.current) {
+            return;
+        }
 
-        if (isPTCase(role?.roleName)) {
-            setPtSoap(loadPTSoap(openedCase.encounter_notes));
-        } else {
-            setNotes(openedCase.encounter_notes ?? "");
-        }
+        // Reset the previous case's legacy note state.
+        setNotes("");
+        setPtSoap(EMPTY_PT_SOAP);
+
+        // Display the selected case.
+        setActiveCase(openedCase);
         setModalError("");
-        if (ENABLE_DYNAMIC_CLINICAL_NOTES) {
-            loadCaseNoteTemplates(openedCase.id);
-        }
+
+        // Load the clinical discipline and its matching templates.
+        await loadCaseNoteTemplates(openedCase);
+
+        setPtSoap(loadPTSoap(openedCase.encounter_notes));
+        setNotes(openedCase.encounter_notes ?? "");
     }
 
     function closeModal() {
@@ -251,6 +246,12 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
         setNotes("");
         setPtSoap(EMPTY_PT_SOAP);
         setModalError("");
+        setClinicalRole(null);
+        setNoteTemplates([]);
+        setSelectedNoteTemplateId("");
+        setDynamicNoteData({});
+        setTemplatesError("");
+        setTemplatesLoading(false);
     }
 
     async function handleSaveDraft() {
@@ -330,7 +331,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
             )}
 
             <div className="patient-results">
-                {loading || rolesLoading ? (
+                {loading ? (
                     <p className="instructor-loading">Loading your cases…</p>
                 ) : cases.length === 0 ? (
                     <div className="patients-empty-state">
