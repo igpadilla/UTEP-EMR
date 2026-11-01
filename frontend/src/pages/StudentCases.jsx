@@ -72,8 +72,19 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     const selectedTemplate = noteTemplates.find((template) => template.id === selectedNoteTemplateId);
     const noteFormReady = !templatesLoading && !templatesError && Boolean(selectedTemplate);
 
-    // Temporarily disabled until dynamic notes can be saved/submitted.
-    const ENABLE_DYNAMIC_CLINICAL_NOTES = false;
+    // Identify the saved note format.
+    let savedNote = null;
+
+    try {
+        savedNote = JSON.parse(activeCase?.encounter_notes ?? "null");
+    } catch {
+        // Legacy plain-text notes are not JSON.
+    }
+
+    const isStructuredNote =
+        savedNote?.format === "clinical-note-v1";
+
+    const hasLegacyNote = Boolean(activeCase?.encounter_notes) &&  !isStructuredNote;
 
     useEffect(() => {
         fetchCases();
@@ -255,6 +266,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     }
 
     async function handleSaveDraft() {
+        if (!hasLegacyNote) return;
         setModalError("");
         setSubmitting(true);
         try {
@@ -278,6 +290,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     }
 
     async function handleSubmit() {
+        if (!hasLegacyNote) return;
         if (isPTStudent) {
             const hasRequiredSOAP =
                 ptSoap.subjective.trim() &&
@@ -586,95 +599,115 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                 </div>
                             )}
 
-                            {/* Clinical note template selection */}
-                            {ENABLE_DYNAMIC_CLINICAL_NOTES && (
-                                <div className="case-modal-section">
-                                    <p className="case-modal-section-label">Clinical Note Template</p>
+                            
+                            {/* Clinical documentation */}
+                            <div className="case-modal-section">
+                                <p className="case-modal-section-label">
+                                    Clinical Documentation
+                                </p>
 
-                                    {templatesLoading ? (
-                                        <p>Loading clinical note templates...</p>
-                                    ) : clinicalRole ? (
-                                        <>
-                                            <p><strong>Clinical Role:</strong>{" "}{clinicalRole.roleDisplayName}</p>
-
-                                            {noteTemplates.length > 0 ? (
-                                                <>
-                                                    <label
-                                                        htmlFor="clinical-note-template"
-                                                        className="case-info-label"
-                                                    >
-                                                        Select Note Template
-                                                    </label>
-
-                                                    <select
-                                                        id="clinical-note-template"
-                                                        className="instructor-input"
-                                                        value={selectedNoteTemplateId}
-                                                        onChange={(e) => {
-                                                            setSelectedNoteTemplateId(e.target.value);
-                                                            setDynamicNoteData({});
-                                                        }}
-                                                        disabled={!isEditable || submitting}
-                                                        style={{ width: "100%", marginTop: "0.5rem" }}
-                                                    >
-                                                        <option value="">-- Select a template -- </option>
-
-                                                        {noteTemplates.map((template) => (
-                                                            <option key={template.id} value={template.id}>{template.name}</option>
-                                                        ))}
-                                                    </select>
-
-                                                    {selectedNoteTemplateId && (
-                                                        <div style={{ marginTop: "1.5rem" }}>
-                                                            <DynamicClinicalNoteForm
-                                                                template={noteTemplates.find(
-                                                                    (template) =>
-                                                                        template.id === selectedNoteTemplateId
-                                                                )}
-                                                                value={dynamicNoteData}
-                                                                onChange={setDynamicNoteData}
-                                                                disabled={submitting}
-                                                                readOnly={!isEditable}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <p>No active note templates are available for this role.</p>
-                                            )}
-                                        </>
-                                    ) : (
+                                {templatesLoading ? (
+                                    <p>Loading clinical note form…</p>
+                                ) : hasLegacyNote ? (
+                                    <>
                                         <p>
-                                            This case does not have a course-specific clinical
-                                            role assigned yet.
+                                            This case contains a note saved using the
+                                            previous documentation format.
                                         </p>
-                                    )}
-                                </div>
-                            )}
 
-                            {/* Encounter notes */}
-                            {isPTStudent ? (
-                                <div className="case-modal-section"><PTSoapNote value={ptSoap} onChange={setPtSoap} disabled={submitting} readOnly={!isEditable}/></div>
-                            ) : (
-                                <div className="case-modal-section">
-                                    <p className="case-modal-section-label">Encounter Notes</p>
-                                    {isEditable ? (
-                                        <textarea
-                                            className="instructor-textarea"
-                                            rows={6}
-                                            placeholder="Document your clinical reasoning, findings, assessment, and plan…"
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            disabled={submitting}
-                                            style={{ width: "100%" }}
-                                        />
-                                    ) : (
-                                        <div className="case-notes-readonly">
-                                            {activeCase.encounter_notes || <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>}
+                                        {isPTStudent ? (
+                                            <PTSoapNote
+                                                value={ptSoap}
+                                                onChange={setPtSoap}
+                                                disabled={submitting}
+                                                readOnly={!isEditable}
+                                            />
+                                        ) : (
+                                            <>
+                                                <p className="case-modal-section-label">
+                                                    Encounter Notes
+                                                </p>
+
+                                                {isEditable ? (
+                                                    <textarea
+                                                        className="instructor-textarea"
+                                                        rows={6}
+                                                        value={notes}
+                                                        onChange={(event) =>
+                                                            setNotes(event.target.value)
+                                                        }
+                                                        disabled={submitting}
+                                                        style={{ width: "100%" }}
+                                                    />
+                                                ) : (
+                                                    <div className="case-notes-readonly">
+                                                        {notes || "No notes recorded."}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </>
+                                ) : templatesError ? (
+                                    <p role="alert" className="form-message form-message-error">
+                                        {templatesError} Please contact your instructor.
+                                    </p>
+                                ) : selectedTemplate ? (
+                                    <>
+                                        <p>
+                                            <strong>Discipline:</strong>{" "}
+                                            {clinicalRole?.roleDisplayName}
+                                        </p>
+
+                                        {noteTemplates.length > 1 && (
+                                            <label
+                                                htmlFor="clinical-note-template"
+                                                className="case-info-label"
+                                            >
+                                                Clinical Note Form
+
+                                                <select
+                                                    id="clinical-note-template"
+                                                    className="instructor-input"
+                                                    value={selectedNoteTemplateId}
+                                                    disabled={!isEditable || submitting}
+                                                    onChange={(event) => {
+                                                        setSelectedNoteTemplateId(
+                                                            event.target.value
+                                                        );
+                                                        setDynamicNoteData({});
+                                                    }}
+                                                    style={{
+                                                        width: "100%",
+                                                        marginTop: "0.5rem"
+                                                    }}
+                                                >
+                                                    {noteTemplates.map((template) => (
+                                                        <option
+                                                            key={template.id}
+                                                            value={template.id}
+                                                        >
+                                                            {template.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        )}
+
+                                        <div style={{ marginTop: "1rem" }}>
+                                            <DynamicClinicalNoteForm
+                                                template={selectedTemplate}
+                                                value={dynamicNoteData}
+                                                onChange={setDynamicNoteData}
+                                                disabled={submitting}
+                                                readOnly={!isEditable}
+                                            />
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                    </>
+                                ) : (
+                                    <p>No clinical note form is available.</p>
+                                )}
+                            </div>
+
 
                             {modalError && (
                                 <p className="form-message form-message-error" role="alert">{modalError}</p>
@@ -688,7 +721,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                     className="secondary-action-button"
                                     type="button"
                                     onClick={handleSaveDraft}
-                                    disabled={submitting}
+                                    disabled={submitting || !hasLegacyNote}
                                 >
                                     {submitting ? "Saving…" : "Save Draft"}
                                 </button>
@@ -696,7 +729,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
                                     className="primary-action-button"
                                     type="button"
                                     onClick={handleSubmit}
-                                    disabled={submitting}
+                                    disabled={submitting || !hasLegacyNote}
                                 >
                                     {submitting
                                         ? "Submitting…"
