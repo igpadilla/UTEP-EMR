@@ -76,6 +76,10 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     const [selectedNoteTemplateId, setSelectedNoteTemplateId] = useState("");
     const [dynamicNoteData, setDynamicNoteData] = useState({});
 
+    const [templatesError, setTemplatesError] = useState("");
+    const selectedTemplate = noteTemplates.find((template) => template.id === selectedNoteTemplateId);
+    const noteFormReady = !templatesLoading && !templatesError && Boolean(selectedTemplate);
+
     // Temporarily disabled until dynamic notes can be saved/submitted.
     const ENABLE_DYNAMIC_CLINICAL_NOTES = false;
 
