@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import VitalsPanel from "../components/vitals/VitalsPanel.jsx";
 import ReferralManager from "../components/ReferralManager.jsx";
+import DiagnosticsPanel from "../components/diagnostics/DiagnosticsPanel.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
 import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
@@ -9,7 +10,8 @@ import { loadPatientChart } from "../services/patientChartService.js";
 import "./PatientChart.css";
 
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
-const TABS = ["Summary", "Vitals", "Notes", "Medications", "Allergies & History", "Diagnoses", "Visits", "Referrals"];
+
+const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Allergies & History", "Diagnoses", "Visits", "Referrals"];
 
 
 export default function PatientChart({
@@ -192,6 +194,7 @@ export default function PatientChart({
                     : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
