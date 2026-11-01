@@ -7,7 +7,6 @@ import {
     getClinicalRoles,
     updateCourse,
     unenrollStudent,
-    getCourseAnnouncements,
     createAnnouncement,
     deleteAnnouncement,
 } from "../services/instructorService.js";
@@ -105,8 +104,6 @@ export default function CourseDetail({ courseId, onNavigate }) {
                 setStudents(s);
                 setCases(ca);
                 setRoles(r);
-                // Announcements table may not exist yet — load separately so it doesn't block the page
-                getCourseAnnouncements(courseId).then(setAnnouncements).catch(() => {});
             } catch (err) {
                 console.error(err);
                 setError("Failed to load course.");
@@ -271,7 +268,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     <div className="course-sidenav-divider" />
 
                     {/* Tab links */}
-                    {TABS.map((tab) => (
+                    {TABS.filter((tab) => tab.id !== "cases" || isOwner).map((tab) => (
                         <button
                             key={tab.id}
                             className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""} ${tab.disabled ? "course-sidenav-item-disabled" : ""}`}

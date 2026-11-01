@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMyCourseCases, getCourseAnnouncements } from "../services/instructorService.js";
+import { getMyCourseCases } from "../services/instructorService.js";
 import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
@@ -62,10 +62,6 @@ export default function StudentCourseDetail({ course, onNavigate }) {
             .then(setCases)
             .catch((err) => { console.error(err); setError("Failed to load cases."); })
             .finally(() => setLoading(false));
-
-        getCourseAnnouncements(course.id)
-            .then(setAnnouncements)
-            .catch(() => {});
     }, [course.id]);
 
     const instructor = course.profiles;

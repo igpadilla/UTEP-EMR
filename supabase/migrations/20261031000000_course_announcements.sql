@@ -1,7 +1,7 @@
 create table public.course_announcements (
   id          uuid primary key default gen_random_uuid(),
   course_id   uuid references public.courses(id) on delete cascade not null,
-  author_id   uuid references auth.users(id) not null,
+  author_id   uuid not null references public.profiles(user_id),
   title       text not null check (char_length(title) > 0),
   body        text not null check (char_length(body) > 0),
   created_at  timestamptz default now() not null
@@ -42,3 +42,10 @@ create policy "course instructor posts announcements"
 create policy "author deletes announcements"
   on public.course_announcements for delete to authenticated
   using (author_id = auth.uid());
+
+create policy "Active accounts only"
+on public.course_announcements as restrictive
+for all to authenticated
+using ((select private.is_active_account()))
+with check ((select private.is_active_account()));
+
