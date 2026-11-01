@@ -49,6 +49,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
 
     // Modal state
     const [activeCase, setActiveCase] = useState(null);
+    const templateRequestId = useRef(0);
 
     // Generic encounter notes for students whose discipline-specific
     // documentation has not been implemented yet.
@@ -125,24 +126,69 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     }
 
     async function loadCaseNoteTemplates(caseId) {
+        const requestId = ++templateRequestId.current;
         setTemplatesLoading(true);
         setClinicalRole(null);
         setNoteTemplates([]);
         setSelectedNoteTemplateId("");
         setDynamicNoteData({});
+        setTemplatesError("");
 
         try {
-            const result = await getClinicalNoteTemplatesForCase(caseId);
+            const { clinicalRole, templates } = await getClinicalNoteTemplatesForCase(assignedCase.id);
 
-            setClinicalRole(result.clinicalRole);
-            setNoteTemplates(result.templates);
+            // Ignore results from an outdated request.
+            if (requestId !== templateRequestId.current) return;
+
+            if (!clinicalRole) {
+                throw new Error("This course needs a clinical discipline.");
+            }
+
+            let saved = null;
+
+            try {
+                saved = JSON.parse(assignedCase.encounter_notes);
+            } catch {
+                // Existing plain-text notes are not structured notes.
+            }
+
+            const isStructured =
+            saved?.format === "clinical-note-v1";
+
+            const available = [...templates];
+
+            // Preserve the exact template used by an existing note.
+            if (isStructured && saved.template) {
+                const index = available.findIndex((template) => template.id === saved.template.id);
+
+                if (index >= 0) {
+                    available[index] = saved.template;
+                } else {
+                    available.push(saved.template);
+                }
+            }
+
+            if (!available.length) {
+                throw new Error("No clinical note form is configured for this discipline.");
+            }
+
+            const selected = isStructured && saved.template ? saved.template : available.find((template) => template.name === "PT SOAP Note") ?? available[0];
+
+            setClinicalRole(clinicalRole);
+            setNoteTemplates(available);
+            setSelectedNoteTemplateId(selected.id);
+            setDynamicNoteData(isStructured ? saved.data ?? {} : {});
+
         } catch (error) {
+            if (requestId !== templateRequestId.current) return;
+
             console.error("Error loading clinical note templates:", error);
-            setClinicalRole(null);
-            setNoteTemplates([]);
-            setModalError("Unable to load clinical note templates.");
+
+            setTemplatesError(error.message || "Unable to load clinical note templates.");
         } finally {
-            setTemplatesLoading(false);
+            if (requestId === templateRequestId.current) {
+                setTemplatesLoading(false);
+            }
         }
     }
 
@@ -199,6 +245,7 @@ export default function StudentCases({ onNavigate, openCaseId = null }) {
     }
 
     function closeModal() {
+        templateRequestId.current += 1;
         setActiveCase(null);
         setCaseRoleName(null);
         setNotes("");
