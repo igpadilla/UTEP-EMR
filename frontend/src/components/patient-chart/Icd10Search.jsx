@@ -50,11 +50,19 @@ export default function Icd10Search({ id, value, onChange, "aria-label": ariaLab
 
     return (
         <div className="chart-icd10-search">
+            {value?.code && (
+                <div className="chart-icd10-selected">
+                    <span><strong>{value.code}</strong>{value.description ? ` — ${value.description}` : ""}</span>
+                    <button type="button" className="secondary-action-button" onClick={() => onChange({ code: "", description: "" })}>
+                        Clear
+                    </button>
+                </div>
+            )}
             <input
                 id={id}
                 aria-label={ariaLabel}
                 type="text"
-                placeholder={value ? (value.description ? `${value.code} — ${value.description}` : value.code) : "Search diagnosis code or description…"}
+                placeholder={value?.code ? "Search to change the diagnosis…" : "Search diagnosis code or description…"}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (matches[0]) select(matches[0]); } }}
