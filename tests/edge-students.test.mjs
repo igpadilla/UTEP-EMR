@@ -116,7 +116,7 @@ test("deleting a student with historical records is refused", async () => {
     assert.ok(calls.some((call) => call.table === "clinical_notes"));
 });
 
-for (const table of ["referrals", "vital_sign_sets"]) {
+for (const table of ["referrals", "vital_sign_sets", "diagnostic_orders", "diagnostic_results"]) {
     test(`a student with only ${table} history cannot be deleted`, async () => {
         const { ctx, target, calls } = context({ recordsByTable: { [table]: 1 } });
         target.active = false;

@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import TagSelector from "../components/TagSelector.jsx";
+import PatientPortalManagement from "../components/PatientPortalManagement.jsx";
 
 
-export default function PatientDetail({ id, onNavigate }) {
+export default function PatientDetail({ id, onNavigate, canManagePortal = false }) {
     const [patient, setPatient] = useState(null);
     const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -311,6 +312,8 @@ export default function PatientDetail({ id, onNavigate }) {
                                 ))
                             )}
                         </div>
+
+                        <PatientPortalManagement key={patient.id} patient={patient} visits={visits} canManageAccounts={canManagePortal} />
 
                         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.5rem" }}>
                             <button onClick={() => { setEditing(true); setEditMeds(Array.isArray(patient.current_medications) ? patient.current_medications : []); }}>Edit Patient</button>
