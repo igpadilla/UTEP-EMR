@@ -55,10 +55,6 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     const [submitting, setSubmitting] = useState(false);
     const [modalError, setModalError] = useState("");
 
-    // The open case's course decides the discipline (e.g. a PT course gets the PT SOAP note).
-    // Cases without a course discipline fall back to the student's own clinical roles.
-    const [caseRoleName, setCaseRoleName] = useState(null);
-
     const [clinicalRole, setClinicalRole] = useState(null);
     const [noteTemplates, setNoteTemplates] = useState([]);
     const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -235,9 +231,9 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
             return;
         }
 
-        // Reset the previous case's legacy note state.
-        setNotes("");
-        setPtSoap(EMPTY_PT_SOAP);
+        // Load this case's legacy note before waiting on templates.
+        setPtSoap(loadPTSoap(openedCase.encounter_notes));
+        setNotes(openedCase.encounter_notes ?? "");
 
         // Display the selected case.
         setActiveCase(openedCase);
@@ -245,15 +241,11 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
 
         // Load the clinical discipline and its matching templates.
         await loadCaseNoteTemplates(openedCase);
-
-        setPtSoap(loadPTSoap(openedCase.encounter_notes));
-        setNotes(openedCase.encounter_notes ?? "");
     }
 
     function closeModal() {
         templateRequestId.current += 1;
         setActiveCase(null);
-        setCaseRoleName(null);
         setNotes("");
         setPtSoap(EMPTY_PT_SOAP);
         setModalError("");
@@ -694,6 +686,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                                                     <textarea
                                                         className="instructor-textarea"
                                                         rows={6}
+                                                        placeholder="Document your clinical reasoning, findings, assessment, and plan…"
                                                         value={notes}
                                                         onChange={(event) =>
                                                             setNotes(event.target.value)
@@ -737,7 +730,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
 
                                                         if (nextTemplateId === selectedNoteTemplateId) return;
 
-                                                        const hasEnteredData = Object.keys(dynamicNoteData).some((value) => {
+                                                        const hasEnteredData = Object.values(dynamicNoteData).some((value) => {
                                                             if (value && typeof value === "object") {
                                                                 return JSON.stringify(value) !== "{}";
                                                             }

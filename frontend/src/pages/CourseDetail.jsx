@@ -125,8 +125,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
     }
 
     async function handleSave() {
-        if (!editForm.course_number.trim() || !editForm.crn.trim()) {
-            setEditError("Course number and CRN are required.");
+        if (!editForm.course_number.trim() || !editForm.crn.trim() || !editForm.discipline) {
+            setEditError("Course number, CRN, and discipline are required.");
             return;
         }
         setSaving(true);
@@ -636,7 +636,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                     disabled={saving}
                                                     className="instructor-search-input"
                                                 >
-                                                    <option value="">— None —</option>
+                                                    <option value="">Choose a discipline</option>
                                                     {roles.map((r) => (
                                                         <option key={r.role_name} value={r.role_name}>{r.display_name}</option>
                                                     ))}
