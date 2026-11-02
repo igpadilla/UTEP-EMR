@@ -50,3 +50,38 @@ export async function submitCase(caseId, notes) {
     if (error) throw error;
     return data;
 }
+
+// Retrieve the clinical role for an assigned case from its course's discipline
+export async function getAssignedCaseClinicalRole(caseId) {
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .select(`
+            id,
+            course_id,
+            courses (
+                discipline,
+                roles (
+                    role_id,
+                    role_name,
+                    display_name
+                )
+            )
+        `)
+        .eq("id", caseId)
+        .single();
+
+    if (error) throw error;
+
+    // Cases without a course, or courses without a discipline, have no clinical role.
+    const role = data.courses?.roles;
+    if (!role) {
+        return null;
+    }
+
+    return {
+        courseId: data.course_id,
+        roleId: role.role_id,
+        roleName: role.role_name,
+        roleDisplayName: role.display_name,
+    };
+}

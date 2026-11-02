@@ -33,5 +33,11 @@
   ],
   "[typescript]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
-  }
+  },
+  "python.analysis.extraPaths": [
+    "./backend"
+  ],
+  "python.autoComplete.extraPaths": [
+    "./backend"
+  ]
 }

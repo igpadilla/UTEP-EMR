@@ -1,0 +1,118 @@
+.referral-container {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.referral-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.referral-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.referral-form label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9rem;
+    font-weight: 500;
+    gap: 0.25rem;
+}
+
+.referral-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.85rem;
+    margin: 0.5rem 0;
+    background: #ffffff;
+}
+
+.referral-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.referral-status {
+    text-transform: capitalize;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.referral-meta {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0.2rem 0 0.4rem;
+}
+
+.referral-error {
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+}
+
+.referral-reason {
+    margin: 0.35rem 0;
+    color: #1f2937;
+}
+
+.referral-notes {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.referral-actions {
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.referral-actions .btn-cancel {
+    color: #dc2626;
+}
+
+.referral-empty {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.referral-response {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    background: #f8fafc;
+    border-left: 3px solid #2563eb;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #1e293b;
+}
+
+.referral-action-box {
+    margin-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.referral-action-box textarea {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 0.4rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}

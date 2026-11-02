@@ -18,7 +18,7 @@ insert into auth.users (
 values
 (
     '11111111-1111-1111-1111-111111111111',
-    'student@test.com',
+    'student.pgtap@test.invalid',
     'authenticated',
     'authenticated',
     now(),
@@ -26,7 +26,7 @@ values
 ),
 (
     '22222222-2222-2222-2222-222222222222',
-    'admin@test.com',
+    'admin.pgtap@test.invalid',
     'authenticated',
     'authenticated',
     now(),
@@ -34,7 +34,7 @@ values
 ),
 (
     '33333333-3333-3333-3333-333333333333',
-    'secondadmin@test.com',
+    'secondadmin.pgtap@test.invalid',
     'authenticated',
     'authenticated',
     now(),
@@ -114,13 +114,27 @@ select lives_ok(
 -- TEST 4: Last admin cannot be removed
 -- --------------------------------------------------
 
+-- Any other admin in this database would hide the "last admin" rule, so stand
+-- them down for the length of this transaction, which rolls back at the end.
+reset role;
+
+update public.profiles
+set account_type = 'student'
+where account_type = 'admin'
+  and user_id not in (
+    '22222222-2222-2222-2222-222222222222',
+    '33333333-3333-3333-3333-333333333333'
+  );
+
+set local role authenticated;
+
 -- Remove second admin first
 select public.remove_admin(
     '33333333-3333-3333-3333-333333333333',
     'student'
 );
 
--- Only admin@test.com remains as admin
+-- Only admin.pgtap@test.invalid remains as admin
 select throws_ok(
     $$
         select public.remove_admin(
@@ -145,7 +159,14 @@ select set_config(
 );
 
 select is(
-    (select count(*) from public.profiles),
+    (
+        select count(*) from public.profiles
+        where user_id in (
+            '11111111-1111-1111-1111-111111111111',
+            '22222222-2222-2222-2222-222222222222',
+            '33333333-3333-3333-3333-333333333333'
+        )
+    ),
     1::bigint,
     'Student can only read their own profile'
 );
@@ -162,7 +183,14 @@ select set_config(
 );
 
 select is(
-    (select count(*) from public.profiles),
+    (
+        select count(*) from public.profiles
+        where user_id in (
+            '11111111-1111-1111-1111-111111111111',
+            '22222222-2222-2222-2222-222222222222',
+            '33333333-3333-3333-3333-333333333333'
+        )
+    ),
     3::bigint,
     'Admin can read all profiles'
 );

@@ -1,6 +1,9 @@
 fastapi
 uvicorn[standard]
 pydantic
+pydantic-settings
 supabase
 python-dotenv
+PyJWT
 pytest
+httpx

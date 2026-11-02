@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import {
     getTemplateById,
-    getStudents,
     getMyCourses,
     getCourseStudents,
     assignCase,
 } from "../services/instructorService.js";
 
-export default function CaseAssign({ templateId, onNavigate }) {
+export default function CaseAssign({ templateId, fromCourseId = null, fromCourseName = null, onNavigate, embedded = false, onClose = null }) {
+    function goBack() {
+        if (onClose) {
+            onClose();
+        } else if (fromCourseId) {
+            onNavigate("courseDetail", fromCourseId);
+        } else {
+            onNavigate("instructorCases");
+        }
+    }
     const [template, setTemplate] = useState(null);
     const [students, setStudents] = useState([]);
     const [selected, setSelected] = useState([]);
@@ -15,6 +23,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
     const [dueDate, setDueDate] = useState("");
     const [assignmentNotes, setAssignmentNotes] = useState("");
     const [courses, setCourses] = useState([]);
+    const [selectedCourseId, setSelectedCourseId] = useState(null);
     const [courseLoadingId, setCourseLoadingId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -23,14 +32,16 @@ export default function CaseAssign({ templateId, onNavigate }) {
     useEffect(() => {
         async function load() {
             try {
-                const [tmpl, studs, crs] = await Promise.all([
+                const [tmpl, crs] = await Promise.all([
                     getTemplateById(templateId),
-                    getStudents(),
                     getMyCourses(),
                 ]);
                 setTemplate(tmpl);
-                setStudents(studs);
                 setCourses(crs);
+                // Pre-select: prefer the course the instructor is currently in,
+                // fall back to the template's own course_id.
+                const preselect = fromCourseId ?? tmpl.course_id;
+                if (preselect && crs.some((c) => c.id === preselect)) handleCourseSelect(preselect);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load data.");
@@ -50,11 +61,13 @@ export default function CaseAssign({ templateId, onNavigate }) {
 
     async function handleCourseSelect(courseId) {
         if (!courseId) return;
+        setSelectedCourseId(courseId);
         setCourseLoadingId(courseId);
         try {
+            // Only students enrolled in the course can receive its cases
             const enrolled = await getCourseStudents(courseId);
-            const ids = enrolled.map((s) => s.user_id);
-            setSelected(ids);
+            setStudents(enrolled);
+            setSelected(enrolled.map((s) => s.user_id));
         } catch (err) {
             console.error(err);
             setError("Failed to load course students.");
@@ -71,6 +84,10 @@ export default function CaseAssign({ templateId, onNavigate }) {
     });
 
     async function handleAssign() {
+        if (!selectedCourseId) {
+            setError("Choose the course this case is for.");
+            return;
+        }
         if (selected.length === 0) {
             setError("Select at least one student.");
             return;
@@ -96,16 +113,15 @@ export default function CaseAssign({ templateId, onNavigate }) {
             current_medications: template.current_medications,
             chief_complaint: template.chief_complaint,
             clinical_baseline: template.clinical_baseline,
-            traps: template.traps || [],
-            rubric_criteria: template.rubric_criteria || [],
             student_instructions: template.student_instructions,
             expectations_rubric: template.expectations_rubric,
-            // hidden_diagnosis is intentionally excluded from this snapshot
+            // A case built from a patient gets the chart's referrals copied by the database on assignment.
+            initial_referral: template.patient_id ? null : template.initial_referral || null,
         };
 
         const results = await Promise.allSettled(
             selected.map((studentId) =>
-                assignCase(templateId, studentId, patientSnapshot, dueDate, assignmentNotes)
+                assignCase(templateId, studentId, patientSnapshot, dueDate, assignmentNotes, selectedCourseId)
             )
         );
 
@@ -113,39 +129,45 @@ export default function CaseAssign({ templateId, onNavigate }) {
         if (failures.length > 0) {
             console.error("Some assignments failed:", failures);
             setError(
-                `${failures.length} assignment(s) failed. Some students may already have this case.`
+                `${failures.length} assignment(s) failed. Some students may already have this case open.`
             );
             setSubmitting(false);
             return;
         }
 
-        onNavigate("instructorCases");
+        goBack();
     }
 
     if (loading) {
-        return (
-            <main className="instructor-main">
-                <p className="instructor-loading">Loading…</p>
-            </main>
-        );
+        return embedded
+            ? <div><p className="instructor-loading">Loading…</p></div>
+            : <main className="instructor-main"><p className="instructor-loading">Loading…</p></main>;
     }
 
-    return (
-        <main className="instructor-main">
-            <div className="instructor-page-header">
-                <div>
-                    <p className="section-title">Instructor</p>
-                    <h2>Assign Case</h2>
-                    <p>Choose the students who will receive this training case.</p>
+    const inner = (
+        <>
+            {embedded ? (
+                <div className="course-tab-header">
+                    <div>
+                        <h3 className="course-tab-title">Assign Case</h3>
+                        <p className="course-tab-subtitle">Choose the students who will receive this training case.</p>
+                    </div>
+                    <button className="secondary-action-button" type="button" onClick={goBack}>
+                        ← Back to Cases
+                    </button>
                 </div>
-                <button
-                    className="secondary-action-button"
-                    type="button"
-                    onClick={() => onNavigate("instructorCases")}
-                >
-                    ← Back
-                </button>
-            </div>
+            ) : (
+                <div className="instructor-page-header">
+                    <div>
+                        <p className="section-title">Instructor</p>
+                        <h2>Assign Case</h2>
+                        <p>Choose the students who will receive this training case.</p>
+                    </div>
+                    <button className="secondary-action-button" type="button" onClick={goBack}>
+                        ← Back
+                    </button>
+                </div>
+            )}
 
             {/* ── Template Summary ───────────────────────────── */}
             {template && (
@@ -167,17 +189,17 @@ export default function CaseAssign({ templateId, onNavigate }) {
                 </div>
             )}
 
-            {/* ── Assign by Course ──────────────────────────── */}
-            <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
+            {/* ── Assign by Course — hidden when already inside a course ── */}
+            {!embedded && <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
                 <div className="instructor-form-section">
                     <h3 className="instructor-form-section-title">Assign by Course</h3>
                     <p className="instructor-baseline-hint">
-                        Select a course to automatically select all enrolled students.
+                        Choose the course this case is for. Its enrolled students are selected for you.
                     </p>
                     <div className="student-form-field">
                         <select
                             className="instructor-search-input"
-                            defaultValue=""
+                            value={selectedCourseId ?? ""}
                             onChange={(e) => handleCourseSelect(e.target.value)}
                             disabled={submitting || courseLoadingId !== null}
                         >
@@ -201,7 +223,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                         </p>
                     )}
                 </div>
-            </div>
+            </div>}
 
             {/* ── Assignment Details ────────────────────────── */}
             <div className="instructor-form-panel" style={{ marginBottom: "1rem" }}>
@@ -266,8 +288,8 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     {students.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">👤</div>
-                            <strong>No active students found</strong>
-                            <p>Create student accounts first via Student Management.</p>
+                            <strong>No students to show</strong>
+                            <p>{selectedCourseId ? "No students are enrolled in this course yet." : "Choose a course above to list its students."}</p>
                         </div>
                     ) : filteredStudents.length === 0 ? (
                         <p className="instructor-loading">No students match your search.</p>
@@ -299,7 +321,7 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     <button
                         className="secondary-action-button"
                         type="button"
-                        onClick={() => onNavigate("instructorCases")}
+                        onClick={() => goBack()}
                         disabled={submitting}
                         style={{ marginRight: "0.75rem" }}
                     >
@@ -317,6 +339,9 @@ export default function CaseAssign({ templateId, onNavigate }) {
                     </button>
                 </div>
             </div>
-        </main>
+        </>
     );
+
+    if (embedded) return <div>{inner}</div>;
+    return <main className="instructor-main">{inner}</main>;
 }

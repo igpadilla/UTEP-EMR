@@ -27,45 +27,51 @@ export default function Login() {
     }
 
     return (
-        <main>
-            <div className="scaffold-card">
-                <h1>UTEP-EMR</h1>
-                <p>Sign in to continue</p>
+        <main className="login-page">
+            <h1 className="login-title">UTEP EMR</h1>
+            <div className="scaffold-card login-card">
+                <h2 className="login-subtitle">Sign In</h2>
 
                 <form onSubmit={handleSubmit}>
-                    <div>
-                        <label htmlFor="email">Email</label>
+                    <div className="form-fields">
+                        <div className="form-group">
+                            <label htmlFor="email" className="form-label">Email</label>
 
-                        <input
-                            id="email"
-                            type="email"
-                            value={email}
-                            onChange={(event) => setEmail(event.target.value)}
-                            autoComplete="email"
-                            required
-                        />
-                    </div>
+                            <input
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(event) => setEmail(event.target.value)}
+                                autoComplete="email"
+                                required
+                                placeholder="Enter your email address"
+                                className="form-input"
+                            />
+                        </div>
 
-                    <div>
-                        <label htmlFor="password">Password</label>
+                        <div className="form-group">
+                            <label htmlFor="password" className="form-label">Password</label>
 
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(event) => setPassword(event.target.value)}
-                            autoComplete="current-password"
-                            required
-                        />
+                            <input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                autoComplete="current-password"
+                                required
+                                placeholder="Enter your password"
+                                className="form-input"
+                            />
+                        </div>
                     </div>
 
                     {error && (
-                        <p role="alert">
+                        <p role="alert" className="login-error">
                             {error}
                         </p>
                     )}
 
-                    <button type="submit" disabled={loading}>
+                    <button type="submit" disabled={loading} className="signin-button">
                         {loading ? "Signing in..." : "Sign In"}
                     </button>
                 </form>

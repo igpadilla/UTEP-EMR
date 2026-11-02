@@ -10,7 +10,8 @@ const STATUS_COLORS = {
     cancelled:  { background: "#fdecea", color: "#c0392b" },
 };
 
-export default function Appointments({ onNavigate }) {
+// access says what this role may do with live patients; a biller only reads.
+export default function Appointments({ onNavigate, access = { schedule: true, checkIn: true } }) {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("scheduled");
@@ -162,7 +163,7 @@ export default function Appointments({ onNavigate }) {
                                     {a.status}
                                 </span>
 
-                                {a.status === "scheduled" && (
+                                {a.status === "scheduled" && access.checkIn && (
                                     <>
                                         <button style={primaryBtnStyle} onClick={() => openStartModal(a)}>
                                             ▶ Start

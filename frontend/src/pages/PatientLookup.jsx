@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { supabase } from "../supabase.js";
+import PatientRegistrationForm from "../components/PatientRegistrationForm.jsx";
 
-export default function PatientLookup({ onNavigate }) {
+// access says what this role may do with live patients; front desk may register.
+export default function PatientLookup({ onNavigate, access = { register: true } }) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
     const [searched, setSearched] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [registering, setRegistering] = useState(false);
 
     async function handleSearch(e) {
         e.preventDefault();
@@ -41,10 +44,21 @@ export default function PatientLookup({ onNavigate }) {
             <div className="scaffold-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                     <h1>Patient Lookup</h1>
-                    <button onClick={() => onNavigate("dashboard")}>← Back</button>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                        {access.register && (
+                            <button onClick={() => setRegistering(!registering)}>
+                                {registering ? "← Back to Lookup" : "+ Register Patient"}
+                            </button>
+                        )}
+                        <button onClick={() => onNavigate("dashboard")}>← Back</button>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSearch} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
+                {access.register && registering && (
+                    <PatientRegistrationForm onPatientCreated={() => setRegistering(false)} />
+                )}
+
+                {!registering && <form onSubmit={handleSearch} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
                     <input
                         type="text"
                         placeholder="Search by name or patient ID..."
@@ -55,13 +69,13 @@ export default function PatientLookup({ onNavigate }) {
                     <button type="submit" disabled={loading}>
                         {loading ? "Searching..." : "Search"}
                     </button>
-                </form>
+                </form>}
 
-                {searched && results.length === 0 && (
+                {!registering && searched && results.length === 0 && (
                     <p>No patients found for "<strong>{query}</strong>".</p>
                 )}
 
-                {results.length > 0 && (
+                {!registering && results.length > 0 && (
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                             <tr>

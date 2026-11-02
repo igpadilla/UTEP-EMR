@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Dashboard({ user, onNavigate }) {
+export default function Dashboard({ user, onNavigate, canUseLivePatients = false }) {
     const profile = user?.profile ?? {};
 
     const firstName =
@@ -111,14 +111,24 @@ export default function Dashboard({ user, onNavigate }) {
                                     </span>
                                     <span className="quick-arrow" aria-hidden="true">→</span>
                                 </button>
-                                <button className="quick-access-card" type="button" onClick={() => onNavigate("patientLookup")}>
-                                    <span className="quick-icon" aria-hidden="true">🔍</span>
+                                <button className="quick-access-card" type="button" onClick={() => onNavigate("studentCourses")}>
+                                    <span className="quick-icon" aria-hidden="true">🎓</span>
                                     <span className="quick-content">
-                                        <strong>Patient Lookup</strong>
-                                        <small>Find and open a patient record</small>
+                                        <strong>My Courses</strong>
+                                        <small>See your courses and their cases</small>
                                     </span>
                                     <span className="quick-arrow" aria-hidden="true">→</span>
                                 </button>
+                                {canUseLivePatients && (
+                                    <button className="quick-access-card" type="button" onClick={() => onNavigate("patientLookup")}>
+                                        <span className="quick-icon" aria-hidden="true">🔍</span>
+                                        <span className="quick-content">
+                                            <strong>Patient Lookup</strong>
+                                            <small>Find and open a patient record</small>
+                                        </span>
+                                        <span className="quick-arrow" aria-hidden="true">→</span>
+                                    </button>
+                                )}
                             </>
                         ) : (
                             <>

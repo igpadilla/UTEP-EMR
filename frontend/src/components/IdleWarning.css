@@ -1,0 +1,59 @@
+.idle-warning-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 9999;
+}
+
+.idle-warning-box {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.idle-warning-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text, #0f172a);
+}
+
+.idle-warning-text {
+  margin: 0 0 1.5rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary, #334155);
+  line-height: 1.5;
+}
+
+.idle-warning-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.idle-warning-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--primary, #0284c7);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.idle-warning-button:hover {
+  background-color: var(--primary-hover, #0369a1);
+}
+

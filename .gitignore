@@ -20,6 +20,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Frontend source helpers are application code, not Python build output.
+!/frontend/src/lib/
 parts/
 sdist/
 var/
