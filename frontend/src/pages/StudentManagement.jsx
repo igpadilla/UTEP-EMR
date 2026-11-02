@@ -7,6 +7,7 @@ import StudentDirectory from "./StudentDirectory.jsx";
 // after a student is created successfully
 
 const EMPTY_FORM = {
+
     firstName: "",
     lastName: "",
     email: "",
@@ -14,7 +15,8 @@ const EMPTY_FORM = {
     confirmPassword: "",
 };
 
-export default function StudentManagement({ onNavigate, canManageAccounts }) {
+export default function StudentManagement({ onNavigate, canManageAccounts = false }) {
+
     const [form, setForm] = useState(EMPTY_FORM);
     const [directoryVersion, setDirectoryVersion] = useState(0);
     const [submitting, setSubmitting] = useState(false);
@@ -37,6 +39,7 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
 
     async function handleSubmit(event) {
         event.preventDefault();
+        if (!canManageAccounts) return;
         setError("");
         setSuccess("");
 
@@ -58,7 +61,9 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
             // Clear all fields after a successful submission.
           setForm(EMPTY_FORM);
           setDirectoryVersion((value) => value + 1);
-        } catch (submissionError) {
+          
+        } 
+        catch (submissionError) {
             setError(
                 submissionError instanceof Error
                     ? submissionError.message
@@ -70,14 +75,20 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
         }
     }
 
+    if (!canManageAccounts) return <main className="student-management-main">
+        <p role="alert">Only admins can manage student accounts</p>
+        <button type="button" onClick={() => onNavigate("dashboard")}>Back to Dashboard</button>
+    </main>;
+
     return (
+    
   <main className="student-management-main">
     {/* Page heading and navigation back to the dashboard. */}
     <header className="student-management-header">
       <div>
         <p className="eyebrow">Administration</p>
         <h2>Student Management</h2>
-        <p>{canManageAccounts ? "View and manage student accounts." : "Create a student account and provide their initial login details."}</p>
+        <p>View and manage student accounts.</p>
       </div>
 
       <button
@@ -207,5 +218,6 @@ export default function StudentManagement({ onNavigate, canManageAccounts }) {
     </section>
     <BulkStudentImport onImported={() => setDirectoryVersion((value) => value + 1)}/>
   </main>
+  
 );
 }

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from '../frontend/node_modules/vite/dist/node/index.js';
 
+
+//
 const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const output = fileURLToPath(new URL('../.cache/patient-portal/', import.meta.url));
 await mkdir(output, { recursive: true });
@@ -62,6 +64,7 @@ try {
             assert.deepEqual(req.postDataJSON(), {});
             if (fail) return reply({ message:'Temporary outage' }, 503);
             return reply(empty ? { patient:records.patient, medications:[], labs:[], last_visit:null } : records);
+            
         }
         unexpected.push(`${req.method()} ${path}`);
         return reply({ message:'Unexpected API call' }, 500);
@@ -116,7 +119,7 @@ try {
         await page.getByLabel('Password', { exact:true }).fill('Temporary123');
         await page.getByRole('button', { name:'Sign In', exact:true }).click();
         await page.getByRole('button', { name:'Patients', exact:true }).click();
-        await page.getByRole('cell', { name:'Avery', exact:true }).click();
+        await page.getByRole('cell', { name:'Avery Demo', exact:true }).click();
     }
     await page.setViewportSize({ width:1366, height:1000 });
     await signInAndOpenPatient();
@@ -141,7 +144,9 @@ try {
     accountType = 'instructor';
     await signInAndOpenPatient();
     assert.equal(await page.getByRole('button', { name:'Create patient portal access', exact:true }).count(), 0);
+    
     assert.equal(await page.getByRole('button', { name:'Deactivate portal access', exact:true }).count(), 0);
+    
     await page.getByText('Share a visit summary', { exact:true }).waitFor();
     assert.deepEqual(unexpected, []);
     assert.deepEqual(errors, []);

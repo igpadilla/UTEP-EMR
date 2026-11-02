@@ -2,10 +2,14 @@ import { useState } from "react";
 import { createStudent, enrollStudent } from "../services/students.js";
 import { parseStudentImport, importStudentRows } from "../lib/studentImport.js";
 
-export default function BulkStudentImport({ onImported }) {
+export default function BulkStudentImport({ onImported, course = null }) {
+
     const [bulkData, setBulkData] = useState("");
-    const [busy, setBusy] = useState(false);
+
+        const [busy, setBusy] = useState(false);
+    
     const [errors, setErrors] = useState([]);
+    
     const [results, setResults] = useState(null);
 
     async function run(rows) {
@@ -14,7 +18,8 @@ export default function BulkStudentImport({ onImported }) {
         let latest = rows;
         try {
             const next = await importStudentRows(rows, {
-                createStudent, enrollStudent,
+                createStudent,
+                enrollStudent: (studentId, courseNumber, crn) => enrollStudent(studentId, courseNumber, crn, course?.id),
                 onProgress: (progress) => { latest = progress; setResults(progress); },
             });
             setResults(next);
@@ -22,7 +27,7 @@ export default function BulkStudentImport({ onImported }) {
             setErrors(["Import stopped unexpectedly. Review the results before retrying unfinished rows."]);
         } finally {
             setBusy(false);
-            // Accounts can exist even if enrollment failed; refresh the directory.
+            // Accounts can exist even if enrollment failed, then refresh the directory.
             if (latest.some((row) => row.studentId)) onImported?.();
         }
     }
@@ -30,8 +35,16 @@ export default function BulkStudentImport({ onImported }) {
     function handleSubmit(event) {
         event.preventDefault();
         const parsed = parseStudentImport(bulkData);
+        //     Keep this roster in the course the admin opened
+        if (course) {
+            for (const row of parsed.rows) {
+                if (row.courseNumber !== course.course_number || row.crn !== course.crn) {
+                    parsed.errors.push(`Row ${row.rowNumber}: Use course ${course.course_number}, CRN ${course.crn} for this roster.`);
+                }
+            }
+        }
         setErrors(parsed.errors);
-        // Validate the entire roster before creating the first account.
+        // ------------------- Validate the entire roster before creating the first account.
         if (parsed.errors.length) return;
         setResults(parsed.rows);
         run(parsed.rows);
@@ -42,11 +55,15 @@ export default function BulkStudentImport({ onImported }) {
     const unfinished = results?.filter((row) => row.status !== "completed").length ?? 0;
 
     return (
+    
+    
         <section className="student-form-panel student-bulk-import" aria-labelledby="bulk-import-heading" aria-busy={busy}>
             <div className="student-form-heading">
+            
                 <h3 id="bulk-import-heading">Bulk Import Students</h3>
                 <p>Paste CSV in this order: <code>Full Name, Email, Course Number, CRN</code>.</p>
                 <p>Use First Last order for names. The header is optional. All rows are checked before accounts are created.</p>
+                <p>{course ? `Importing into ${course.course_number}, CRN ${course.crn}` : "Courses must already exist before students can be enrolled"}</p>
             </div>
 
             {errors.length > 0 && <div className="form-message form-message-error" role="alert">
@@ -87,6 +104,7 @@ export default function BulkStudentImport({ onImported }) {
                         </tr>)}</tbody>
                     </table>
                 </div>
+                
 
                 {created.length > 0 && <div className="form-message form-message-success">
                     <p>Copy these temporary passwords before leaving this page or starting a new import.
@@ -101,10 +119,13 @@ export default function BulkStudentImport({ onImported }) {
                     {unfinished > 0 && <button className="primary-action-button" type="button" disabled={busy}
                         onClick={() => run(results)}>Retry unfinished rows</button>}
                     <button className="secondary-action-button" type="button" disabled={busy} onClick={() => {
+                    
                         setResults(null); setErrors([]); setBulkData("");
                     }}>Start a new import</button>
                 </div>
+                
             </>}
         </section>
+    
     );
 }

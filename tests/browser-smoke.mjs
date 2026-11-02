@@ -4,6 +4,8 @@ import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
 import { createServer } from "../frontend/node_modules/vite/dist/node/index.js";
 
+
+
 // Run the real React app against an intercepted API; never touch a live project.
 const root = fileURLToPath(new URL("../frontend", import.meta.url));
 const artifacts = fileURLToPath(new URL("../.cache/verification/", import.meta.url));
@@ -15,7 +17,11 @@ const server = await createServer({ root, configFile: `${root}/vite.config.js`,
     },
     server: { host: "127.0.0.1", port: 5189, strictPort: true },
 });
+
+
+
 let browser, page;
+
 try {
     await server.listen();
     browser = await chromium.launch({ headless: true,
@@ -41,6 +47,10 @@ try {
         first_name: "Student", last_name: String(i + 1).padStart(2, "0"),
         email: `student${i + 1}@example.edu`, active: i % 2 === 0,
     }));
+    const course = { id:"22222222-2222-4222-8222-222222222222", course_number:"P", crn:"1", discipline:null,
+        instructor_id:"11111111-1111-4111-8111-111111111111", profiles:{first_name:"Course",last_name:"Instructor"} };
+    let roster = [students[0]];
+    const enrollmentRequests = [];
     const criteria = [{ key: "complaint", label: "Chief complaint", maxPoints: 2 }, { key: "history", label: "History", maxPoints: 8 }];
     const assigned = { id: "case-1", encounter_status: "pending review", assigned_at: "2026-10-01",
         encounter_notes: "Student clinical findings", patient_snapshot: {}, rubric_scores: {},
@@ -61,12 +71,22 @@ try {
         }
         if (url.pathname.endsWith("/logout")) return reply({});
         if (url.pathname.endsWith("/profiles")) {
+            if (url.searchParams.get("account_type") === "eq.student") return reply(students.filter((student) => student.active));
             profileChecks++;
             if (profileUnavailable === "network") return route.abort("internetdisconnected");
             if (profileUnavailable) return reply({ message: "Temporary profile service failure" }, 503);
             return reply({ user_id: user.id, first_name: "Test", last_name: "User", account_type: accountType, active: accountActive });
         }
-        if (["courses", "roles", "profile_roles"].some((table) => url.pathname.endsWith(`/${table}`))) return reply([]);
+        if (url.pathname.endsWith("/courses")) return reply(url.searchParams.has("id") ? course : [course]);
+        if (url.pathname.endsWith("/course_enrollments")) {
+            if (request.method() === "DELETE") {
+                const studentId = url.searchParams.get("student_id")?.replace("eq.", "");
+                roster = roster.filter((student) => student.user_id !== studentId);
+                return reply([{id:"removed-enrollment"}]);
+            }
+            return reply(roster.map((student) => ({ student_id:student.user_id,profiles:student })));
+        }
+        if (["roles", "profile_roles"].some((table) => url.pathname.endsWith(`/${table}`))) return reply([]);
         if (url.pathname.endsWith("/manage-students")) {
             if (request.method() === "PATCH") {
                 const body = request.postDataJSON();
@@ -89,7 +109,11 @@ try {
             return reply({ student: { id: "created-student", ...request.postDataJSON() } }, 201);
         }
         if (url.pathname.endsWith("/enroll-in-course")) {
+            const body = request.postDataJSON();
+            enrollmentRequests.push(body);
             if (!enrolled) { enrolled = true; return reply({ error: "Test enrollment unavailable" }, 500); }
+            const student = students.find((student) => student.user_id === body.studentId);
+            if (student && !roster.some((row) => row.user_id === student.user_id)) roster.push(student);
             return reply({ enrolled: true });
         }
         if (url.pathname.endsWith("/rpc/my_live_patient_access")) return reply({ read: false, register: false, schedule: false, checkIn: false });
@@ -156,12 +180,22 @@ try {
     await page.setViewportSize({ width: 1366, height: 1000 });
     console.log("PASS: validation, CSV errors, retained credentials, and enrollment-only retry");
 
-    await page.getByRole("button", { name: "Courses", exact: true }).hover();
-    await page.getByRole("menuitem", { name: "Course Management", exact: true }).click();
-    await page.getByRole("button", { name: "+ Add Course", exact: true }).click();
+    await page.getByRole("button", { name: "Courses", exact: true }).click();
+    await page.getByText("P", { exact: true }).click();
+    await page.getByRole("button", { name:/^Roster\b/ }).click();
+    await page.getByLabel("Student to enroll",{exact:true}).selectOption(students[2].user_id);
+    await page.getByRole("button",{name:"Enroll student",exact:true}).click();
+    await page.getByText("03, Student",{exact:true}).waitFor();
+    assert.equal(enrollmentRequests.at(-1).courseId, course.id);
+    await page.getByRole("button",{name:"Remove",exact:true}).last().click();
+    await page.getByText("03, Student",{exact:true}).waitFor({state:"hidden"});
     await page.getByRole("button", { name: "Import Roster as CSV", exact: true }).click();
     enrolled = false;
     const beforeCourseImport = creationCalls;
+    await page.getByLabel("CSV Data").fill("Wrong Course,wrong@example.edu,OTHER,2");
+    await page.getByRole("button",{name:"Run Bulk Import",exact:true}).click();
+    await page.getByRole("alert").filter({hasText:"Use course P, CRN 1"}).waitFor();
+    assert.equal(creationCalls,beforeCourseImport);
     await page.getByLabel("CSV Data").fill("Ana Jones,ana.jones@example.edu,P,1");
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
@@ -170,14 +204,35 @@ try {
     await page.getByText("Account created and enrolled", { exact: true }).waitFor();
     assert.equal(creationCalls, beforeCourseImport + 1);
     assert.equal(await page.locator(".student-import-credentials code").textContent(), coursePassword);
+    assert.equal(enrollmentRequests.at(-1).courseId, course.id);
     assert.ok(await page.getByRole("button", { name: "Start a new import", exact: true }).isVisible());
-    console.log("PASS: course roster import stays open after failure and success, retaining credentials and retry");
+    await page.screenshot({path:`${artifacts}/admin-roster.png`,fullPage:true});
+    console.log("PASS: admin enrolls/removes students and course roster import stays open with the correct course and retained passwords");
 
     // Cases belong to instructors; admins manage accounts and courses.
-    assert.equal(await page.getByRole("button", { name: "Cases", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name:/^Case Management/ }).count(), 0);
     accountType = "instructor";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.getByRole("button", { name: "Cases", exact: true }).click();
+    await page.getByRole("button",{name:"Students",exact:true}).waitFor({state:"hidden"});
+    assert.equal(await page.getByRole("button",{name:"Students",exact:true}).count(),0);
+    assert.equal(await page.getByRole("button",{name:"Remove",exact:true}).count(),0);
+    assert.equal(await page.getByRole("button",{name:"Enroll student",exact:true}).count(),0);
+    await page.getByText("01, Student",{exact:true}).waitFor();
+    await page.screenshot({path:`${artifacts}/instructor-roster.png`,fullPage:true});
+    await page.getByRole("button",{name:"Dashboard",exact:true}).click();
+    assert.equal(await page.getByRole("button",{name:/^Student Accounts/}).count(),0);
+
+    // An old open admin page also stops showing the account forms after a role change
+    accountType = "admin";
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByRole("button",{name:"Students",exact:true}).click();
+    await page.getByRole("button",{name:"Create Student",exact:true}).waitFor();
+    accountType = "instructor";
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByRole("button",{name:"Create Student",exact:true}).waitFor({state:"hidden"});
+    assert.equal(await page.getByLabel("CSV Data").count(),0);
+    await page.getByRole("button",{name:/^Case Management/}).click();
+    console.log("PASS: instructors keep rosters and case management but cannot open student forms, import or change enrollment");
     await page.getByRole("button", { name: "Grade", exact: true }).click();
     await page.getByText("Reference guide for the existing review workflow").waitFor();
     await page.getByLabel("Chief complaint", { exact: true }).fill("3");
@@ -207,7 +262,7 @@ try {
     await page.getByLabel("Email", { exact: true }).fill("student@example.edu");
     await page.getByLabel("Password", { exact: true }).fill("test-password");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await page.getByRole("button", { name: "My Cases", exact: true }).click();
+    await page.getByRole("button", { name: /^My Cases/ }).click();
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     const draft = page.getByPlaceholder("Document your clinical reasoning, findings, assessment, and plan…");
     const note = "Unsaved student note that must survive a connection failure";
@@ -259,10 +314,10 @@ try {
     await page.getByLabel("Password", { exact: true }).fill("test-password");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "Unable to load your account" }).waitFor();
-    assert.equal(await page.getByRole("button", { name: "My Cases", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: /^My Cases/ }).count(), 0);
     profileUnavailable = false;
     await page.getByRole("button", { name: "Retry", exact: true }).click();
-    await page.getByRole("button", { name: "My Cases", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Continue", exact:true }).waitFor();
     assert.deepEqual(pageErrors, []);
     console.log("PASS: initial account-load errors still block protected pages until a successful retry");
 } catch (error) {

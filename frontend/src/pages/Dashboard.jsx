@@ -2,8 +2,9 @@ import React from "react";
 
 export default function Dashboard({ user, onNavigate, canUseLivePatients = false }) {
     const profile = user?.profile ?? {};
-
+// object created
     const firstName =
+    
         profile.first_name ||
         profile.firstName ||
         profile.full_name?.split(" ")[0] ||
@@ -11,15 +12,16 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
 
     const isAdmin = profile.account_type === "admin";
     const isInstructor = profile.account_type === "instructor";
-    // Admins and instructors can create student accounts.
-    const canManageStudents = ["admin", "instructor"].includes(
-        profile.account_type,
-    );
+    //     Only the admin gets the student account tools
+    const canManageStudents = isAdmin;
     function handleComingSoon(feature) {
         alert(`${feature} will be implemented next.`);
     }
 
     return (
+    
+    
+    
         <div className="emr-app">
             <main className="dashboard-main">
                 <section className="welcome-section">
@@ -77,6 +79,8 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
                                 <li>Medication management</li>
                             </ul>
                             <button className="primary-button" type="button" onClick={() => handleComingSoon("Outpatient Ambulatory Care")}>
+                            
+                            
                                 Enter Outpatient <span aria-hidden="true">→</span>
                             </button>
                         </article>
@@ -93,6 +97,7 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
 
                     <div className="quick-access-grid">
                         {isAdmin || isInstructor? (
+                        
                             <button className="quick-access-card" type="button" onClick={() => onNavigate("patientManager")}>
                                 <span className="quick-icon" aria-hidden="true">🗂️</span>
                                 <span className="quick-content">
@@ -142,6 +147,7 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
                                 </button>
 
                                 <button className="quick-access-card" type="button" onClick={() => onNavigate("appointments")}>
+                                
                                     <span className="quick-icon" aria-hidden="true">📅</span>
                                     <span className="quick-content">
                                         <strong>Appointments</strong>
@@ -205,5 +211,7 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
                 </section>
             </main>
         </div>
-    );
-}
+        
+        
+        
+    );}
