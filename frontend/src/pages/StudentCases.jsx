@@ -3,10 +3,8 @@ import {
     getMyAssignedCases,
     startCase,
     saveCaseNotes,
-    submitCase,
-    getAssignedCaseClinicalRole,
+    submitCase
 } from "../services/studentCaseService.js";
-import { getMyClinicalRoles } from "../services/clinicalRoleService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
@@ -43,12 +41,9 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    // Clinical roles for the logged-in student
-    const [clinicalRoles, setClinicalRoles] = useState([]);
-    const [rolesLoading, setRolesLoading] = useState(true);
-
     // Modal state
     const [activeCase, setActiveCase] = useState(null);
+    const templateRequestId = useRef(0);
 
     // Generic encounter notes for students whose discipline-specific
     // documentation has not been implemented yet.
@@ -60,15 +55,6 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     const [submitting, setSubmitting] = useState(false);
     const [modalError, setModalError] = useState("");
 
-    // The open case's course decides the discipline (e.g. a PT course gets the PT SOAP note).
-    // Cases without a course discipline fall back to the student's own clinical roles.
-    const [caseRoleName, setCaseRoleName] = useState(null);
-    const isPTStudent = isPTCase(caseRoleName);
-
-    function isPTCase(roleName) {
-        return roleName ? roleName === "physical_therapy" : clinicalRoles.includes("physical_therapy");
-    }
-
     const [clinicalRole, setClinicalRole] = useState(null);
     const [noteTemplates, setNoteTemplates] = useState([]);
     const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -76,12 +62,28 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     const [selectedNoteTemplateId, setSelectedNoteTemplateId] = useState("");
     const [dynamicNoteData, setDynamicNoteData] = useState({});
 
-    // Temporarily disabled until dynamic notes can be saved/submitted.
-    const ENABLE_DYNAMIC_CLINICAL_NOTES = false;
+    const isPTStudent = clinicalRole?.roleName === "physical_therapy";
+
+    const [templatesError, setTemplatesError] = useState("");
+    const selectedTemplate = noteTemplates.find((template) => template.id === selectedNoteTemplateId);
+    const noteFormReady = !templatesLoading && !templatesError && Boolean(selectedTemplate);
+
+    // Identify the saved note format.
+    let savedNote = null;
+
+    try {
+        savedNote = JSON.parse(activeCase?.encounter_notes ?? "null");
+    } catch {
+        // Legacy plain-text notes are not JSON.
+    }
+
+    const isStructuredNote =
+        savedNote?.format === "clinical-note-v1";
+
+    const hasLegacyNote = Boolean(activeCase?.encounter_notes) &&  !isStructuredNote;
 
     useEffect(() => {
         fetchCases();
-        fetchClinicalRoles();
     }, []);
 
     // Open a specific case when arriving from another page (e.g. a course's case list).
@@ -106,39 +108,71 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         }
         setLoading(false);
     }
-    
-    async function fetchClinicalRoles() {
-        setRolesLoading(true);
-        try {
-            const roles = await getMyClinicalRoles();
-            setClinicalRoles(roles);
-        } catch (err) {
-            console.error("Failed to load clinical roles:", err);
-            setClinicalRoles([]);
-        }
 
-        setRolesLoading(false);
-    }
-
-    async function loadCaseNoteTemplates(caseId) {
+    async function loadCaseNoteTemplates(assignedCase) {
+        const requestId = ++templateRequestId.current;
         setTemplatesLoading(true);
         setClinicalRole(null);
         setNoteTemplates([]);
         setSelectedNoteTemplateId("");
         setDynamicNoteData({});
+        setTemplatesError("");
 
         try {
-            const result = await getClinicalNoteTemplatesForCase(caseId);
+            const { clinicalRole, templates } = await getClinicalNoteTemplatesForCase(assignedCase.id);
 
-            setClinicalRole(result.clinicalRole);
-            setNoteTemplates(result.templates);
+            // Ignore results from an outdated request.
+            if (requestId !== templateRequestId.current) return;
+
+            if (!clinicalRole) {
+                throw new Error("This course needs a clinical discipline.");
+            }
+
+            let saved = null;
+
+            try {
+                saved = JSON.parse(assignedCase.encounter_notes);
+            } catch {
+                // Existing plain-text notes are not structured notes.
+            }
+
+            const isStructured =
+            saved?.format === "clinical-note-v1";
+
+            const available = [...templates];
+
+            // Preserve the exact template used by an existing note.
+            if (isStructured && saved.template) {
+                const index = available.findIndex((template) => template.id === saved.template.id);
+
+                if (index >= 0) {
+                    available[index] = saved.template;
+                } else {
+                    available.push(saved.template);
+                }
+            }
+
+            if (!available.length) {
+                throw new Error("No clinical note form is configured for this discipline.");
+            }
+
+            const selected = isStructured && saved.template ? saved.template : available.find((template) => template.name === "PT SOAP Note") ?? available[0];
+
+            setClinicalRole(clinicalRole);
+            setNoteTemplates(available);
+            setSelectedNoteTemplateId(selected.id);
+            setDynamicNoteData(isStructured ? saved.data ?? {} : {});
+
         } catch (error) {
+            if (requestId !== templateRequestId.current) return;
+
             console.error("Error loading clinical note templates:", error);
-            setClinicalRole(null);
-            setNoteTemplates([]);
-            setModalError("Unable to load clinical note templates.");
+
+            setTemplatesError(error.message || "Unable to load clinical note templates.");
         } finally {
-            setTemplatesLoading(false);
+            if (requestId === templateRequestId.current) {
+                setTemplatesLoading(false);
+            }
         }
     }
 
@@ -166,49 +200,88 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
 
 
     async function openCase(c) {
+        // Invalidate any previous template request immediately.
+        const openingRequestId = ++templateRequestId.current;
         let openedCase = c;
 
         // Auto-start if not yet started
         if (c.encounter_status === "not started") {
             try {
                 const updated = await startCase(c.id);
+
+                // Ignore results if another case was opened or this one closed.
+                if (openingRequestId !== templateRequestId.current) {
+                    return;
+                }
+
                 setCases((prev) => prev.map((x) => x.id === c.id ? updated : x));
                 openedCase = updated;
             } catch (err) {
-                console.error(err);
+                if (openingRequestId !== templateRequestId.current) {
+                    return;
+                }
+
+                console.error("Failed to start case:", err);
+                setModalError("Unable to start this case. Please try again.");
+                return;
             }
         }
-        // Know the case's discipline before showing it, so the right note form opens
-        const role = await getAssignedCaseClinicalRole(openedCase.id).catch(() => null);
-        setCaseRoleName(role?.roleName ?? null);
-        setActiveCase(openedCase);
+        // Ignore results if another case was opened or this one closed.
+        if (openingRequestId !== templateRequestId.current) {
+            return;
+        }
 
-        if (isPTCase(role?.roleName)) {
-            setPtSoap(loadPTSoap(openedCase.encounter_notes));
-        } else {
-            setNotes(openedCase.encounter_notes ?? "");
-        }
+        // Load this case's legacy note before waiting on templates.
+        setPtSoap(loadPTSoap(openedCase.encounter_notes));
+        setNotes(openedCase.encounter_notes ?? "");
+
+        // Display the selected case.
+        setActiveCase(openedCase);
         setModalError("");
-        if (ENABLE_DYNAMIC_CLINICAL_NOTES) {
-            loadCaseNoteTemplates(openedCase.id);
-        }
+
+        // Load the clinical discipline and its matching templates.
+        await loadCaseNoteTemplates(openedCase);
     }
 
     function closeModal() {
+        templateRequestId.current += 1;
         setActiveCase(null);
-        setCaseRoleName(null);
         setNotes("");
         setPtSoap(EMPTY_PT_SOAP);
         setModalError("");
+        setClinicalRole(null);
+        setNoteTemplates([]);
+        setSelectedNoteTemplateId("");
+        setDynamicNoteData({});
+        setTemplatesError("");
+        setTemplatesLoading(false);
+    }
+
+
+    function serializeClinicalNote() {
+        if (!selectedTemplate) {
+            throw new Error("No clinical note template selected.");
+        }
+
+        return JSON.stringify({
+            format: "clinical-note-v1",
+            template: {
+                id: selectedTemplate.id,
+                name: selectedTemplate.name,
+                description: selectedTemplate.description,
+                fields: selectedTemplate.fields,
+            },
+            data: dynamicNoteData,
+        });
     }
 
     async function handleSaveDraft() {
+        if (submitting) return;
+        if (!hasLegacyNote && !noteFormReady) return;
         setModalError("");
         setSubmitting(true);
         try {
-            const encounterNotes = isPTStudent
-                ? JSON.stringify(ptSoap)
-                : notes;
+            const encounterNotes = hasLegacyNote ? isPTStudent ? JSON.stringify(ptSoap) : notes : serializeClinicalNote();
 
             const updated = await saveCaseNotes(activeCase.id, encounterNotes);
 
@@ -226,26 +299,47 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     }
 
     async function handleSubmit() {
-        if (isPTStudent) {
-            const hasRequiredSOAP =
-                ptSoap.subjective.trim() &&
-                ptSoap.objective.trim() &&
-                ptSoap.assessment.icd10_code.trim() &&
-                ptSoap.assessment.clinical_rationale.trim() &&
-                ptSoap.plan.trim();
+        if (submitting) return;
+        if (!hasLegacyNote && !noteFormReady) return;
 
-            if (!hasRequiredSOAP) {
-                setModalError("Please complete all PT SOAP sections before submitting for signature.");
+        if (hasLegacyNote) {
+            if (isPTStudent) {
+                const hasRequiredSOAP =
+                    ptSoap.subjective.trim() &&
+                    ptSoap.objective.trim() &&
+                    ptSoap.assessment.icd10_code.trim() &&
+                    ptSoap.assessment.clinical_rationale.trim() &&
+                    ptSoap.plan.trim();
+
+                if (!hasRequiredSOAP) {
+                    setModalError("Please complete all PT SOAP sections before submitting for signature.");
+                    return;
+                }
+            } else if (!notes.trim()) {
+                setModalError("Please add encounter notes before submitting.");
                 return;
             }
-        } else if (!notes.trim()) {
-            setModalError("Please add encounter notes before submitting.");
-            return;
         }
+        else {
+            // Validate required fields in the selected dynamic template.
+            const missingFields = (selectedTemplate.fields ?? []).filter((field) => {
+                if (!field.required) return false;
+
+                const value = field.key.split(".").reduce((current, key) => current?.[key], dynamicNoteData);
+
+                return !String(value ?? "").trim();
+            });
+
+            if (missingFields.length > 0) {
+                setModalError(`Please complete: ${ missingFields.map((field) => field.label).join(", ") }.`);
+                return;
+            }
+        }
+            
         setModalError("");
         setSubmitting(true);
         try {
-            const encounterNotes = isPTStudent ? JSON.stringify(ptSoap) : notes;
+            const encounterNotes = hasLegacyNote ? isPTStudent ? JSON.stringify(ptSoap) : notes : serializeClinicalNote();
             const updated = await submitCase(activeCase.id, encounterNotes);
             setCases((prev) => prev.map((x) => x.id === activeCase.id ? updated : x));
 
@@ -304,7 +398,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
             )}
 
             <div className="patient-results">
-                {loading || rolesLoading ? (
+                {loading ? (
                     <p className="instructor-loading">Loading your cases…</p>
                 ) : visibleCases.length === 0 ? (
                     <div className="patients-empty-state">
@@ -559,95 +653,137 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                                 </div>
                             )}
 
-                            {/* Clinical note template selection */}
-                            {ENABLE_DYNAMIC_CLINICAL_NOTES && (
-                                <div className="case-modal-section">
-                                    <p className="case-modal-section-label">Clinical Note Template</p>
+                            
+                            {/* Clinical documentation */}
+                            <div className="case-modal-section">
+                                <p className="case-modal-section-label">
+                                    Clinical Documentation
+                                </p>
 
-                                    {templatesLoading ? (
-                                        <p>Loading clinical note templates...</p>
-                                    ) : clinicalRole ? (
-                                        <>
-                                            <p><strong>Clinical Role:</strong>{" "}{clinicalRole.roleDisplayName}</p>
-
-                                            {noteTemplates.length > 0 ? (
-                                                <>
-                                                    <label
-                                                        htmlFor="clinical-note-template"
-                                                        className="case-info-label"
-                                                    >
-                                                        Select Note Template
-                                                    </label>
-
-                                                    <select
-                                                        id="clinical-note-template"
-                                                        className="instructor-input"
-                                                        value={selectedNoteTemplateId}
-                                                        onChange={(e) => {
-                                                            setSelectedNoteTemplateId(e.target.value);
-                                                            setDynamicNoteData({});
-                                                        }}
-                                                        disabled={!isEditable || submitting}
-                                                        style={{ width: "100%", marginTop: "0.5rem" }}
-                                                    >
-                                                        <option value="">-- Select a template -- </option>
-
-                                                        {noteTemplates.map((template) => (
-                                                            <option key={template.id} value={template.id}>{template.name}</option>
-                                                        ))}
-                                                    </select>
-
-                                                    {selectedNoteTemplateId && (
-                                                        <div style={{ marginTop: "1.5rem" }}>
-                                                            <DynamicClinicalNoteForm
-                                                                template={noteTemplates.find(
-                                                                    (template) =>
-                                                                        template.id === selectedNoteTemplateId
-                                                                )}
-                                                                value={dynamicNoteData}
-                                                                onChange={setDynamicNoteData}
-                                                                disabled={submitting}
-                                                                readOnly={!isEditable}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <p>No active note templates are available for this role.</p>
-                                            )}
-                                        </>
-                                    ) : (
+                                {templatesLoading ? (
+                                    <p>Loading clinical note form…</p>
+                                ) : hasLegacyNote ? (
+                                    <>
                                         <p>
-                                            This case does not have a course-specific clinical
-                                            role assigned yet.
+                                            This case contains a note saved using the
+                                            previous documentation format.
                                         </p>
-                                    )}
-                                </div>
-                            )}
 
-                            {/* Encounter notes */}
-                            {isPTStudent ? (
-                                <div className="case-modal-section"><PTSoapNote value={ptSoap} onChange={setPtSoap} disabled={submitting} readOnly={!isEditable}/></div>
-                            ) : (
-                                <div className="case-modal-section">
-                                    <p className="case-modal-section-label">Encounter Notes</p>
-                                    {isEditable ? (
-                                        <textarea
-                                            className="instructor-textarea"
-                                            rows={6}
-                                            placeholder="Document your clinical reasoning, findings, assessment, and plan…"
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            disabled={submitting}
-                                            style={{ width: "100%" }}
-                                        />
-                                    ) : (
-                                        <div className="case-notes-readonly">
-                                            {activeCase.encounter_notes || <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>}
+                                        {isPTStudent ? (
+                                            <PTSoapNote
+                                                value={ptSoap}
+                                                onChange={setPtSoap}
+                                                disabled={submitting}
+                                                readOnly={!isEditable}
+                                            />
+                                        ) : (
+                                            <>
+                                                <p className="case-modal-section-label">
+                                                    Encounter Notes
+                                                </p>
+
+                                                {isEditable ? (
+                                                    <textarea
+                                                        className="instructor-textarea"
+                                                        rows={6}
+                                                        placeholder="Document your clinical reasoning, findings, assessment, and plan…"
+                                                        value={notes}
+                                                        onChange={(event) =>
+                                                            setNotes(event.target.value)
+                                                        }
+                                                        disabled={submitting}
+                                                        style={{ width: "100%" }}
+                                                    />
+                                                ) : (
+                                                    <div className="case-notes-readonly">
+                                                        {notes || "No notes recorded."}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </>
+                                ) : templatesError ? (
+                                    <p role="alert" className="form-message form-message-error">
+                                        {templatesError} Please contact your instructor.
+                                    </p>
+                                ) : selectedTemplate ? (
+                                    <>
+                                        <p>
+                                            <strong>Discipline:</strong>{" "}
+                                            {clinicalRole?.roleDisplayName}
+                                        </p>
+
+                                        {noteTemplates.length > 1 && (
+                                            <label
+                                                htmlFor="clinical-note-template"
+                                                className="case-info-label"
+                                            >
+                                                Clinical Note Form
+
+                                                <select
+                                                    id="clinical-note-template"
+                                                    className="instructor-input"
+                                                    value={selectedNoteTemplateId}
+                                                    disabled={!isEditable || submitting}
+                                                    onChange={(event) => {
+                                                        const nextTemplateId = event.target.value;
+
+                                                        if (nextTemplateId === selectedNoteTemplateId) return;
+
+                                                        const hasEnteredData = Object.values(dynamicNoteData).some((value) => {
+                                                            if (value && typeof value === "object") {
+                                                                return JSON.stringify(value) !== "{}";
+                                                            }
+                                                            return String(value ?? "").trim() !== "";
+                                                        });
+
+                                                        if (hasEnteredData) {
+                                                            const confirmChange = window.confirm(
+                                                                "Changing the clinical note form will clear any data you have entered. Are you sure you want to continue?"
+                                                            );
+                                                            
+                                                            if (!confirmChange) {
+                                                                return;
+                                                            }
+                                                        }
+                                                        
+                                                        setSelectedNoteTemplateId(
+                                                            event.target.value
+                                                        );
+                                                        setDynamicNoteData({});
+                                                    }}
+                                                    style={{
+                                                        width: "100%",
+                                                        marginTop: "0.5rem"
+                                                    }}
+                                                >
+                                                    {noteTemplates.map((template) => (
+                                                        <option
+                                                            key={template.id}
+                                                            value={template.id}
+                                                        >
+                                                            {template.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        )}
+
+                                        <div style={{ marginTop: "1rem" }}>
+                                            <DynamicClinicalNoteForm
+                                                template={selectedTemplate}
+                                                value={dynamicNoteData}
+                                                onChange={setDynamicNoteData}
+                                                disabled={submitting}
+                                                readOnly={!isEditable}
+                                            />
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                    </>
+                                ) : (
+                                    <p>No clinical note form is available.</p>
+                                )}
+                            </div>
+
 
                             {modalError && (
                                 <p className="form-message form-message-error" role="alert">{modalError}</p>
@@ -661,7 +797,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                                     className="secondary-action-button"
                                     type="button"
                                     onClick={handleSaveDraft}
-                                    disabled={submitting}
+                                    disabled={submitting || (!hasLegacyNote && !noteFormReady)}
                                 >
                                     {submitting ? "Saving…" : "Save Draft"}
                                 </button>
@@ -669,7 +805,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                                     className="primary-action-button"
                                     type="button"
                                     onClick={handleSubmit}
-                                    disabled={submitting}
+                                    disabled={submitting || (!hasLegacyNote && !noteFormReady)}
                                 >
                                     {submitting
                                         ? "Submitting…"

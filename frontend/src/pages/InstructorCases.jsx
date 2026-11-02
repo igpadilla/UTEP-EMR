@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase, archiveCase, unarchiveCase } from "../services/instructorService.js";
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
+import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 
 const STATUS_STYLES = {
@@ -587,8 +588,40 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                 <div className="case-notes-readonly">
                                     {(() => {
                                         const parsed = parseEncounterNotes(reviewCase.encounter_notes);
-                                        if (parsed) return <PTSoapNote value={parsed} readOnly={true} />;
-                                        return reviewCase.encounter_notes || (
+                                        if (parsed?.format === "clinical-note-v1"){
+                                            if (!parsed.template || !Array.isArray(parsed.template.fields) || !parsed.data || typeof parsed.data !== "object") {
+                                                return(
+                                                    <p className="form-message form-message-error">Saved data is incomplete or invalid.</p>
+                                                );
+                                            }
+
+                                            return(
+                                                <DynamicClinicalNoteForm
+                                                    template={parsed.template}
+                                                    value={parsed.data}
+                                                    readOnly={true}
+                                                />
+                                            );
+                                        }
+
+                                        // Existing PT SOAP notes
+                                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (
+                                            "subjective" in parsed ||
+                                            "objective" in parsed ||
+                                            "assessment" in parsed ||
+                                            "plan" in parsed
+                                        )) {
+                                            return (<PTSoapNote value={parsed} readOnly={true} />);
+                                        }
+
+                                        // Existing plain text notes
+                                        if (typeof reviewCase.encounter_notes === "string") {
+                                            return reviewCase.encounter_notes || (
+                                                    <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>
+                                                );
+                                        }
+
+                                        return (
                                             <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>
                                         );
                                     })()}
