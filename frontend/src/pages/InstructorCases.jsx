@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, signOffCase, gradeCase, archiveCase, unarchiveCase } from "../services/instructorService.js";
+import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, gradeCase, archiveCase, unarchiveCase } from "../services/instructorService.js";
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
@@ -21,6 +21,32 @@ const STATUS_LABELS = {
     "completed":          "Completed",
 };
 
+function groupAndSort(cases) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const map = {};
+    for (const c of cases) {
+        const key = c.template_id ?? c.id;
+        if (!map[key]) {
+            map[key] = { key, template: c.patient_templates, due_date: c.due_date, cases: [] };
+        }
+        map[key].cases.push(c);
+    }
+
+    return Object.values(map).sort((a, b) => {
+        const aDue = a.due_date ? new Date(a.due_date) : null;
+        const bDue = b.due_date ? new Date(b.due_date) : null;
+        const aOver = aDue && aDue < today;
+        const bOver = bDue && bDue < today;
+        if (aOver !== bOver) return aOver ? 1 : -1;
+        if (!aDue && !bDue) return 0;
+        if (!aDue) return 1;
+        if (!bDue) return -1;
+        return aDue - bDue;
+    });
+}
+
 export default function InstructorCases({ onNavigate, fromCourseId = null, fromCourseName = null, embedded = false, onOpenBuilder = null, onOpenAssign = null }) {
     const [templates, setTemplates] = useState([]);
     const [cases, setCases] = useState([]);
@@ -32,6 +58,9 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
     const [pickerQuery, setPickerQuery] = useState("");
     const [pickerPatients, setPickerPatients] = useState([]);
     const [pickerLoading, setPickerLoading] = useState(false);
+
+    // Roster modal
+    const [selectedGroupKey, setSelectedGroupKey] = useState(null);
 
     // Review / grading modal
     const [reviewCase, setReviewCase] = useState(null);
@@ -64,17 +93,11 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
             getMyAssignedCases(showArchived),
         ]);
 
-        if (tmplResult.status === "fulfilled") {
-            setTemplates(tmplResult.value);
-        } else {
-            console.error("Failed to load templates:", tmplResult.reason);
-        }
+        if (tmplResult.status === "fulfilled") setTemplates(tmplResult.value);
+        else console.error("Failed to load templates:", tmplResult.reason);
 
-        if (casesResult.status === "fulfilled") {
-            setCases(casesResult.value);
-        } else {
-            console.error("Failed to load cases:", casesResult.reason);
-        }
+        if (casesResult.status === "fulfilled") setCases(casesResult.value);
+        else console.error("Failed to load cases:", casesResult.reason);
 
         if (tmplResult.status === "rejected" && casesResult.status === "rejected") {
             setError("Failed to load data. Please try again.");
@@ -151,9 +174,8 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
         setFeedback(c.instructor_feedback ?? "");
         setAnnotations(c.chart_annotations ?? []);
 
-        // Pre-fill rubric scores if the instructor already graded this before
         const saved = c.rubric_scores ?? {};
-        const criteria = getCriteria(c);
+        const criteria = getCaseCriteria(c);
         const initial = {};
         criteria.forEach((crit) => {
             initial[crit.key] = saved[crit.key] ?? "";
@@ -171,18 +193,13 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
         setAnnotations([]);
     }
 
-    function getCriteria(c) {
-        return getCaseCriteria(c);
-    }
-
-
     function totalScore() {
-        return reviewCase ? previewGrade(getCriteria(reviewCase), rubricScores) : 0;
+        return reviewCase ? previewGrade(getCaseCriteria(reviewCase), rubricScores) : 0;
     }
 
     function maxScore() {
         if (!reviewCase) return 100;
-        return getCriteria(reviewCase).reduce((sum, c) => sum + Number(c.maxPoints), 0);
+        return getCaseCriteria(reviewCase).reduce((sum, c) => sum + Number(c.maxPoints), 0);
     }
 
     function addAnnotation() {
@@ -202,7 +219,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
         setReviewSubmitting(true);
         setReviewError("");
 
-        const criteria = getCriteria(reviewCase);
+        const criteria = getCaseCriteria(reviewCase);
         try {
             const updated = await gradeCase(reviewCase.id, {
                 criteria,
@@ -241,16 +258,20 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
     function parseEncounterNotes(notes) {
         if (!notes) return null;
         if (typeof notes === "object") return notes;
-        try {
-            return JSON.parse(notes);
-        } catch {
-            return null;
-        }
+        try { return JSON.parse(notes); } catch { return null; }
     }
 
     const visibleCases = fromCourseId
         ? cases.filter((c) => c.course_id === fromCourseId)
         : cases;
+
+    const caseGroups = groupAndSort(visibleCases);
+    const selectedGroup = selectedGroupKey
+        ? caseGroups.find((g) => g.key === selectedGroupKey) ?? null
+        : null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const content = (
         <>
@@ -284,16 +305,10 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                 <div className="instructor-section-header">
                     <div>
                         <h3>My Templates</h3>
-                        <p className="section-description">
-                            Reusable patient scenarios you have created.
-                        </p>
+                        <p className="section-description">Reusable patient scenarios you have created.</p>
                     </div>
                     <div className="instructor-row-actions">
-                        <button
-                            className="secondary-action-button"
-                            type="button"
-                            onClick={openPicker}
-                        >
+                        <button className="secondary-action-button" type="button" onClick={openPicker}>
                             From Patient
                         </button>
                         <button
@@ -375,9 +390,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                 <div className="instructor-section-header">
                     <div>
                         <h3>Assigned Cases</h3>
-                        <p className="section-description">
-                            All cases assigned to students and their current status.
-                        </p>
+                        <p className="section-description">Click a case to see the student roster and grade submissions.</p>
                     </div>
                     <div className="instructor-row-actions">
                         <label className="instructor-student-label">
@@ -394,7 +407,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                 <div className="patient-results">
                     {loading ? (
                         <p className="instructor-loading">Loading cases…</p>
-                    ) : visibleCases.length === 0 ? (
+                    ) : caseGroups.length === 0 ? (
                         <div className="patients-empty-state">
                             <div className="patients-empty-icon" aria-hidden="true">📂</div>
                             <strong>No cases assigned yet</strong>
@@ -405,95 +418,58 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                             <table className="patient-table">
                                 <thead>
                                     <tr>
-                                        <th>Patient</th>
+                                        <th>Case</th>
                                         <th>Chief Complaint</th>
-                                        <th>Student</th>
-                                        <th>Status</th>
                                         <th>Due Date</th>
-                                        <th>Score</th>
-                                        <th>Assigned</th>
-                                        <th>Action</th>
+                                        <th>Progress</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {visibleCases.map((c) => {
-                                        const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
-                                        const patientName = c.patient_templates
-                                            ? `${c.patient_templates.first_name} ${c.patient_templates.last_name}`
-                                            : "—";
-                                        const studentName = c.profiles
-                                            ? `${c.profiles.first_name} ${c.profiles.last_name}`
-                                            : "—";
-                                        const canReview = c.encounter_status === "pending review" || c.encounter_status === "completed";
+                                    {caseGroups.map((group) => {
+                                        const tmpl = group.template;
+                                        const title = tmpl?.title || (tmpl ? `${tmpl.first_name} ${tmpl.last_name}` : "—");
+                                        const complaint = tmpl?.chief_complaint ?? "—";
+                                        const dueDate = group.due_date ? new Date(group.due_date) : null;
+                                        const isOverdue = dueDate && dueDate < today;
+                                        const submitted = group.cases.filter(
+                                            (c) => c.encounter_status === "pending review" || c.encounter_status === "completed"
+                                        ).length;
+                                        const total = group.cases.length;
+                                        const pendingReview = group.cases.some((c) => c.encounter_status === "pending review");
+
                                         return (
-                                            <tr key={c.id} className="instructor-table-row">
-                                                <td>{patientName}</td>
-                                                <td className="instructor-complaint-cell">
-                                                    {c.patient_templates?.chief_complaint ?? "—"}
-                                                </td>
-                                                <td>{studentName}</td>
+                                            <tr
+                                                key={group.key}
+                                                className="instructor-table-row"
+                                                style={{ cursor: "pointer" }}
+                                                onClick={() => setSelectedGroupKey(group.key)}
+                                            >
                                                 <td>
-                                                    <span className="instructor-status-badge" style={statusStyle}>
-                                                        {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
-                                                    </span>
-                                                    {c.is_archived && (
-                                                        <span
-                                                            className="instructor-status-badge"
-                                                            style={{
-                                                                background: "#f1f5f9",
-                                                                color: "#64748b",
-                                                                border: "1px solid #cbd5e1",
-                                                                marginLeft: "0.35rem",
-                                                            }}
-                                                        >
-                                                            Archived
-                                                        </span>
+                                                    <div style={{ fontWeight: 500 }}>{title}</div>
+                                                    {tmpl && (
+                                                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                                                            {[tmpl.target_year, tmpl.discipline].filter(Boolean).join(" · ")}
+                                                        </div>
                                                     )}
                                                 </td>
-                                                <td>{c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"}</td>
+                                                <td className="instructor-complaint-cell">{complaint}</td>
                                                 <td>
-                                                    {c.score != null
-                                                        ? <strong>{c.score} / {c.max_score ?? 100}</strong>
-                                                        : <span style={{ color: "var(--text-muted)" }}>—</span>
-                                                    }
+                                                    {dueDate ? (
+                                                        <span style={{ color: isOverdue ? "#dc2626" : "inherit", fontWeight: isOverdue ? 600 : "normal" }}>
+                                                            {dueDate.toLocaleDateString()}
+                                                            {isOverdue && <span style={{ marginLeft: "0.35rem", fontSize: "0.75rem" }}>Overdue</span>}
+                                                        </span>
+                                                    ) : "—"}
                                                 </td>
-                                                <td>{new Date(c.assigned_at).toLocaleDateString()}</td>
                                                 <td>
-                                                    <div className="instructor-row-actions">
-                                                        {canReview && (
-                                                            <button
-                                                                className="instructor-action-btn instructor-action-edit"
-                                                                type="button"
-                                                                onClick={() => openReview(c)}
-                                                            >
-                                                                {c.encounter_status === "pending review" ? "Grade" : "View"}
-                                                            </button>
-                                                        )}
-                                                        <button className="instructor-action-btn instructor-action-assign" type="button" onClick={() => onNavigate("patientChart", null, { caseId: c.id, backTo: "instructorCases" })}>Chart</button>
-                                                        <button
-                                                            className="instructor-action-btn instructor-action-assign"
-                                                            type="button"
-                                                            onClick={() => openAuditModal(c.id)}
-                                                        >
-                                                            Audit Log
-                                                        </button>
-                                                        {!c.is_archived && c.encounter_status === "completed" && (
-                                                            <button
-                                                                className="instructor-action-btn instructor-action-delete"
-                                                                type="button"
-                                                                onClick={() => handleArchive(c.id)}
-                                                            >
-                                                                Archive
-                                                            </button>
-                                                        )}
-                                                        {c.is_archived && (
-                                                            <button
-                                                                className="instructor-action-btn instructor-action-edit"
-                                                                type="button"
-                                                                onClick={() => handleUnarchive(c.id)}
-                                                            >
-                                                                Unarchive
-                                                            </button>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                                        <span style={{ fontSize: "0.875rem" }}>
+                                                            {submitted} / {total} submitted
+                                                        </span>
+                                                        {pendingReview && (
+                                                            <span className="instructor-status-badge" style={STATUS_STYLES["pending review"]}>
+                                                                Needs Grading
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </td>
@@ -507,9 +483,128 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                 </div>
             </section>
 
+            {/* ── Roster Modal ───────────────────────────────────── */}
+            {selectedGroup && (
+                <div style={overlayStyle} onClick={() => setSelectedGroupKey(null)}>
+                    <div style={{ ...modalStyle, maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+                        <div className="case-modal-header">
+                            <div>
+                                <p className="section-title" style={{ margin: 0 }}>Student Roster</p>
+                                <h3 style={{ margin: "0.2rem 0 0" }}>
+                                    {selectedGroup.template?.title ||
+                                        (selectedGroup.template
+                                            ? `${selectedGroup.template.first_name} ${selectedGroup.template.last_name}`
+                                            : "Case")}
+                                </h3>
+                            </div>
+                            <button
+                                className="instructor-baseline-remove"
+                                type="button"
+                                onClick={() => setSelectedGroupKey(null)}
+                                aria-label="Close"
+                                style={{ width: 32, height: 32, fontSize: "1.2rem" }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={{ overflowY: "auto", padding: "0.5rem 1.25rem 1.25rem" }}>
+                            {selectedGroup.cases.map((c) => {
+                                const canReview = c.encounter_status === "pending review" || c.encounter_status === "completed";
+                                const studentName = c.profiles
+                                    ? `${c.profiles.first_name} ${c.profiles.last_name}`
+                                    : "—";
+                                const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
+
+                                return (
+                                    <div
+                                        key={c.id}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "0.75rem",
+                                            padding: "0.85rem 0",
+                                            borderBottom: "1px solid #e2e8f0",
+                                        }}
+                                    >
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 500, marginBottom: "0.25rem" }}>{studentName}</div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                                                <span className="instructor-status-badge" style={statusStyle}>
+                                                    {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
+                                                </span>
+                                                {c.is_archived && (
+                                                    <span
+                                                        className="instructor-status-badge"
+                                                        style={{ background: "#f1f5f9", color: "#64748b", border: "1px solid #cbd5e1" }}
+                                                    >
+                                                        Archived
+                                                    </span>
+                                                )}
+                                                {c.score != null && (
+                                                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                                        {c.score} / {c.max_score ?? 100} pts
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="instructor-row-actions">
+                                            {canReview && (
+                                                <button
+                                                    className="instructor-action-btn instructor-action-edit"
+                                                    type="button"
+                                                    onClick={() => openReview(c)}
+                                                >
+                                                    {c.encounter_status === "pending review" ? "Grade" : "View"}
+                                                </button>
+                                            )}
+                                            <button
+                                                className="instructor-action-btn instructor-action-assign"
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedGroupKey(null);
+                                                    onNavigate("patientChart", null, { caseId: c.id, backTo: "courses" });
+                                                }}
+                                            >
+                                                Chart
+                                            </button>
+                                            <button
+                                                className="instructor-action-btn instructor-action-assign"
+                                                type="button"
+                                                onClick={() => openAuditModal(c.id)}
+                                            >
+                                                Audit
+                                            </button>
+                                            {!c.is_archived && c.encounter_status === "completed" && (
+                                                <button
+                                                    className="instructor-action-btn instructor-action-delete"
+                                                    type="button"
+                                                    onClick={() => handleArchive(c.id)}
+                                                >
+                                                    Archive
+                                                </button>
+                                            )}
+                                            {c.is_archived && (
+                                                <button
+                                                    className="instructor-action-btn instructor-action-edit"
+                                                    type="button"
+                                                    onClick={() => handleUnarchive(c.id)}
+                                                >
+                                                    Unarchive
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ── Grading / Review Modal ─────────────────────────── */}
             {reviewCase && (
-                <div style={overlayStyle} onClick={closeReview}>
+                <div style={{ ...overlayStyle, zIndex: 210 }} onClick={closeReview}>
                     <div style={gradingModalStyle} onClick={(e) => e.stopPropagation()}>
 
                         <div className="case-modal-header">
@@ -588,14 +683,11 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                 <div className="case-notes-readonly">
                                     {(() => {
                                         const parsed = parseEncounterNotes(reviewCase.encounter_notes);
-                                        if (parsed?.format === "clinical-note-v1"){
+                                        if (parsed?.format === "clinical-note-v1") {
                                             if (!parsed.template || !Array.isArray(parsed.template.fields) || !parsed.data || typeof parsed.data !== "object") {
-                                                return(
-                                                    <p className="form-message form-message-error">Saved data is incomplete or invalid.</p>
-                                                );
+                                                return <p className="form-message form-message-error">Saved data is incomplete or invalid.</p>;
                                             }
-
-                                            return(
+                                            return (
                                                 <DynamicClinicalNoteForm
                                                     template={parsed.template}
                                                     value={parsed.data}
@@ -603,31 +695,18 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                                 />
                                             );
                                         }
-
-                                        // Existing PT SOAP notes
                                         if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (
-                                            "subjective" in parsed ||
-                                            "objective" in parsed ||
-                                            "assessment" in parsed ||
-                                            "plan" in parsed
+                                            "subjective" in parsed || "objective" in parsed || "assessment" in parsed || "plan" in parsed
                                         )) {
-                                            return (<PTSoapNote value={parsed} readOnly={true} />);
+                                            return <PTSoapNote value={parsed} readOnly={true} />;
                                         }
-
-                                        // Existing plain text notes
                                         if (typeof reviewCase.encounter_notes === "string") {
-                                            return reviewCase.encounter_notes || (
-                                                    <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>
-                                                );
+                                            return reviewCase.encounter_notes || <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
                                         }
-
-                                        return (
-                                            <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>
-                                        );
+                                        return <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
                                     })()}
                                 </div>
 
-                                {/* Annotations that have been added */}
                                 {annotations.length > 0 && (
                                     <div style={{ marginTop: "1.25rem" }}>
                                         <p className="case-modal-section-label">Chart Annotations</p>
@@ -654,7 +733,6 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                     </div>
                                 )}
 
-                                {/* Add annotation form — only when grading */}
                                 {reviewCase.encounter_status === "pending review" && (
                                     <div style={{ marginTop: "1.25rem" }}>
                                         <p className="case-modal-section-label">Add Chart Annotation</p>
@@ -682,11 +760,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                                 onKeyDown={(e) => e.key === "Enter" && addAnnotation()}
                                                 style={{ flex: 1 }}
                                             />
-                                            <button
-                                                type="button"
-                                                className="secondary-action-button"
-                                                onClick={addAnnotation}
-                                            >
+                                            <button type="button" className="secondary-action-button" onClick={addAnnotation}>
                                                 Add
                                             </button>
                                         </div>
@@ -694,7 +768,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                 )}
                             </div>
 
-                            {/* Right — rubric scoring and deliberate traps */}
+                            {/* Right — rubric scoring */}
                             <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc" }}>
                                 {(() => {
                                     const traps = reviewCase.patient_templates?.traps || reviewCase.patient_snapshot?.traps || [];
@@ -744,10 +818,8 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                 )}
 
                                 <p className="case-modal-section-label">Rubric Scoring</p>
-
-
                                 <div style={{ marginBottom: "1rem" }}>
-                                    {getCriteria(reviewCase).map((crit) => (
+                                    {getCaseCriteria(reviewCase).map((crit) => (
                                         <div key={crit.key} style={{ marginBottom: "1rem" }}>
                                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
                                                 <label htmlFor={`rubric-score-${crit.key}`} style={{ fontWeight: 500, fontSize: "0.875rem" }}>{crit.label}</label>
@@ -769,12 +841,9 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                     ))}
                                 </div>
 
-                                {/* Live score total */}
                                 <div style={scoreTotalStyle}>
                                     <span>Total Score</span>
-                                    <strong style={{ fontSize: "1.25rem" }}>
-                                        {totalScore()} / {maxScore()}
-                                    </strong>
+                                    <strong style={{ fontSize: "1.25rem" }}>{totalScore()} / {maxScore()}</strong>
                                 </div>
 
                                 <div style={{ marginTop: "1.25rem" }}>
@@ -884,9 +953,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                             className="instructor-picker-row"
                                             onClick={() => handleSelectPatient(p)}
                                         >
-                                            <div className="instructor-picker-name">
-                                                {p.first_name} {p.last_name}
-                                            </div>
+                                            <div className="instructor-picker-name">{p.first_name} {p.last_name}</div>
                                             <div className="instructor-picker-meta">
                                                 Age {p.age}{p.sex ? ` · ${p.sex}` : ""}{p.occupation ? ` · ${p.occupation}` : ""}
                                             </div>
@@ -901,7 +968,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
 
             {/* ── Audit Log Modal ────────────────────────────────── */}
             {auditModalOpen && (
-                <div style={overlayStyle} onClick={closeAuditModal}>
+                <div style={{ ...overlayStyle, zIndex: 220 }} onClick={closeAuditModal}>
                     <div style={{ ...modalStyle, maxWidth: "640px", padding: 0 }} onClick={(e) => e.stopPropagation()}>
 
                         <div className="case-modal-header">

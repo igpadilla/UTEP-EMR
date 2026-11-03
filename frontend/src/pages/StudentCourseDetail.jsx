@@ -28,9 +28,26 @@ const DISCIPLINE_ABBR = {
 };
 
 
+const STATUS_STYLES = {
+    "not started":        { background: "#ede9fe", color: "#6d28d9" },
+    "in progress":        { background: "#e0f2fe", color: "#0284c7" },
+    "revision_requested": { background: "#fff7ed", color: "#c2410c" },
+    "pending review":     { background: "#fef3c7", color: "#b45309" },
+    "completed":          { background: "#ecfdf5", color: "#047857" },
+};
+
+const STATUS_LABELS = {
+    "not started":        "Assigned",
+    "in progress":        "In Progress",
+    "revision_requested": "Revision Requested",
+    "pending review":     "Submitted",
+    "completed":          "Completed",
+};
+
 const TABS = [
     { id: "home",          label: "Home"          },
     { id: "cases",         label: "Cases"         },
+    { id: "gradebook",     label: "Gradebook"     },
     { id: "announcements", label: "Announcements", disabled: true },
 ];
 
@@ -248,7 +265,121 @@ export default function StudentCourseDetail({ course, onNavigate }) {
 
                     {/* ── CASES ── */}
                     {activeTab === "cases" && (
-                        <StudentCases embedded fromCourse={course} onNavigate={onNavigate} />
+                        <StudentCases
+                            embedded
+                            fromCourse={course}
+                            onNavigate={onNavigate}
+                        />
+                    )}
+
+                    {/* ── GRADEBOOK ── */}
+                    {activeTab === "gradebook" && (
+                        <div>
+                            <div className="course-tab-header">
+                                <div>
+                                    <h3 className="course-tab-title">Gradebook</h3>
+                                    <p className="course-tab-subtitle">Your scores and instructor feedback</p>
+                                </div>
+                            </div>
+
+                            {cases.length === 0 ? (
+                                <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
+                                    <strong>No cases yet.</strong>
+                                    <p>Your instructor hasn't assigned any cases to this course.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0 1.25rem 1.25rem" }}>
+                                    {cases.map((c) => {
+                                        const snap = c.patient_snapshot ?? {};
+                                        const hasGrade = c.score != null;
+                                        const hasFeedback = c.instructor_feedback || c.chart_annotations?.length > 0;
+                                        const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
+
+                                        return (
+                                            <div key={c.id} className="course-detail-section">
+                                                {/* Case header row */}
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                                    <div>
+                                                        <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
+                                                            {snap.first_name} {snap.last_name}
+                                                        </div>
+                                                        {snap.chief_complaint && (
+                                                            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                                                                {snap.chief_complaint}
+                                                            </div>
+                                                        )}
+                                                        <div style={{ marginTop: "0.4rem" }}>
+                                                            <span className="instructor-status-badge" style={statusStyle}>
+                                                                {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ textAlign: "right" }}>
+                                                        {hasGrade ? (
+                                                            <>
+                                                                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
+                                                                    {c.score}
+                                                                    <span style={{ fontSize: "1rem", fontWeight: 400, color: "var(--text-muted)" }}>
+                                                                        /{c.max_score ?? 100}
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                                                                    {Math.round((c.score / (c.max_score ?? 100)) * 100)}%
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                                                {c.encounter_status === "completed" ? "No score recorded" : "Not graded yet"}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Feedback + annotations */}
+                                                {hasFeedback && (
+                                                    <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.875rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                                        {c.instructor_feedback && (
+                                                            <div>
+                                                                <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>
+                                                                    Instructor Feedback
+                                                                </div>
+                                                                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                                                    {c.instructor_feedback}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {c.chart_annotations?.length > 0 && (
+                                                            <div>
+                                                                <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.4rem" }}>
+                                                                    Chart Annotations
+                                                                </div>
+                                                                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                                                    {c.chart_annotations.map((a, i) => (
+                                                                        <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "0.5rem 0.75rem", fontSize: "0.875rem" }}>
+                                                                            <strong style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#64748b" }}>{a.section}: </strong>
+                                                                            {a.comment}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* No feedback yet placeholder */}
+                                                {!hasFeedback && ["pending review", "completed"].includes(c.encounter_status) && (
+                                                    <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1.25rem" }}>
+                                                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                                            {c.encounter_status === "pending review" ? "Awaiting instructor review." : "No feedback recorded."}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {/* ── ANNOUNCEMENTS ── */}
