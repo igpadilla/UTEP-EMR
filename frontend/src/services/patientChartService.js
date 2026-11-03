@@ -1,7 +1,7 @@
 import { supabase } from "../supabase.js";
 import { demographicsToUpdate, historyToUpdate } from "../components/patient-chart/patientChartForm.js";
 
-const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, updated_at";
+const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, current_medications, updated_at";
 
 
 export async function loadPatientChart({ patientId, caseId }) {
@@ -60,4 +60,9 @@ export function saveAllergiesAndHistory(patient, form) {
 
 export function saveDiagnoses(patient, diagnoses) {
     return saveSection(patient, { diagnoses });
+}
+
+
+export function saveMedications(patient, medications) {
+    return saveSection(patient, { current_medications: medications });
 }

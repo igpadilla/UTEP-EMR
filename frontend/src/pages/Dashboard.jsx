@@ -173,7 +173,7 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
                             <button
                                 className="quick-access-card"
                                 type="button"
-                                onClick={() => onNavigate("instructorCases")}
+                                onClick={() => onNavigate("courses")}
                             >
                                 <span className="quick-icon" aria-hidden="true">📋</span>
                                 <span className="quick-content">
