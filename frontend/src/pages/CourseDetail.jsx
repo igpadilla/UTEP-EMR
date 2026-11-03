@@ -9,7 +9,11 @@ import {
     unenrollStudent,
     createAnnouncement,
     deleteAnnouncement,
+    gradeCase,
 } from "../services/instructorService.js";
+import { getCaseCriteria, previewGrade } from "../lib/grading.js";
+import PTSoapNote from "../components/PTSoapNote.jsx";
+import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
 import InstructorCases from "./InstructorCases.jsx";
 import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
@@ -78,6 +82,20 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
     // Roster state
     const [unenrollingId, setUnenrollingId] = useState(null);
+
+    // Gradebook drill-down
+    const [gradebookStudent, setGradebookStudent] = useState(null);
+
+    // Grading modal (launched from gradebook)
+    const [reviewCase, setReviewCase] = useState(null);
+    const [reviewSubmitting, setReviewSubmitting] = useState(false);
+    const [reviewEditing, setReviewEditing] = useState(false);
+    const [reviewError, setReviewError] = useState("");
+    const [feedback, setFeedback] = useState("");
+    const [rubricScores, setRubricScores] = useState({});
+    const [annotations, setAnnotations] = useState([]);
+    const [annotationDraft, setAnnotationDraft] = useState("");
+    const [annotationTarget, setAnnotationTarget] = useState("General");
 
     // Patient modal
     const [patientModalId, setPatientModalId] = useState(null);
@@ -187,6 +205,70 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setDeletingAnnId(null);
     }
 
+    // ── Grading ──────────────────────────────────────────────────────────────
+    function openReview(c) {
+        setReviewCase(c);
+        setReviewError("");
+        setFeedback(c.instructor_feedback ?? "");
+        setAnnotations(c.chart_annotations ?? []);
+        const criteria = getCaseCriteria(c);
+        const saved = c.rubric_scores ?? {};
+        const initial = {};
+        criteria.forEach((crit) => { initial[crit.key] = saved[crit.key] ?? ""; });
+        setRubricScores(initial);
+        setAnnotationDraft("");
+        setAnnotationTarget("General");
+    }
+
+    function closeReview() {
+        setReviewCase(null);
+        setReviewError("");
+        setFeedback("");
+        setRubricScores({});
+        setAnnotations([]);
+        setReviewEditing(false);
+    }
+
+    function totalScore() {
+        return reviewCase ? previewGrade(getCaseCriteria(reviewCase), rubricScores) : 0;
+    }
+
+    function maxScore() {
+        if (!reviewCase) return 100;
+        return getCaseCriteria(reviewCase).reduce((sum, c) => sum + Number(c.maxPoints), 0);
+    }
+
+    function addAnnotation() {
+        if (!annotationDraft.trim()) return;
+        setAnnotations((prev) => [...prev, { section: annotationTarget, comment: annotationDraft.trim(), at: new Date().toISOString() }]);
+        setAnnotationDraft("");
+    }
+
+    function removeAnnotation(index) {
+        setAnnotations((prev) => prev.filter((_, i) => i !== index));
+    }
+
+    function parseEncounterNotes(notes) {
+        if (!notes) return null;
+        if (typeof notes === "object") return notes;
+        try { return JSON.parse(notes); } catch { return null; }
+    }
+
+    async function handleGradeSubmit(decision) {
+        setReviewSubmitting(true);
+        setReviewError("");
+        const criteria = getCaseCriteria(reviewCase);
+        try {
+            const updated = await gradeCase(reviewCase.id, { criteria, rubricScores, chartAnnotations: annotations, feedback, decision });
+            setCases((prev) => prev.map((c) => c.id === updated.id ? { ...c, ...updated } : c));
+            closeReview();
+        } catch (err) {
+            console.error(err);
+            setReviewError(err.message || "Failed to save grade. Please try again.");
+        }
+        setReviewSubmitting(false);
+    }
+
     // ── Render ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
@@ -215,6 +297,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
             : null;
         return { student: s, cases: sc, avg };
     });
+
+    const uniqueCaseGroups = new Set(cases.map((c) => c.template_id ?? c.id)).size;
 
     const banner = DISCIPLINE_BANNERS[course.discipline] ?? DEFAULT_BANNER;
     const disciplineLabel = roles.find((r) => r.role_name === course.discipline)?.display_name ?? course.discipline;
@@ -278,11 +362,14 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             onClick={() => { if (!tab.disabled) { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); } }}
                         >
                             {tab.label}
-                            {tab.id === "cases" && cases.length > 0 && (
-                                <span className="course-sidenav-badge">{cases.length}</span>
+                            {tab.id === "cases" && uniqueCaseGroups > 0 && (
+                                <span className="course-sidenav-badge">{uniqueCaseGroups}</span>
                             )}
                             {tab.id === "roster" && students.length > 0 && (
                                 <span className="course-sidenav-badge">{students.length}</span>
+                            )}
+                            {tab.id === "gradebook" && cases.some((c) => c.encounter_status === "pending review") && (
+                                <span className="course-sidenav-badge" style={{ background: "#b45309", color: "#fff" }}>!</span>
                             )}
                         </button>
                     ))}
@@ -453,8 +540,15 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                             const completed = sc.filter((c) => c.encounter_status === "completed").length;
                                             const pct = sc.length > 0 ? Math.round((completed / sc.length) * 100) : 0;
                                             return (
-                                                <div key={student.user_id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px", gap: "1rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center" }}>
-                                                    <span style={{ fontWeight: 500, color: "var(--text)" }}>
+                                                <div
+                                                    key={student.user_id}
+                                                    style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px", gap: "1rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center", cursor: "pointer" }}
+                                                    onClick={() => setGradebookStudent(student)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyDown={(e) => e.key === "Enter" && setGradebookStudent(student)}
+                                                >
+                                                    <span style={{ fontWeight: 500, color: "#0284c7", textDecoration: "underline" }}>
                                                         {student.last_name}, {student.first_name}
                                                     </span>
                                                     <span style={{ color: "var(--text-muted)" }}>{sc.length}</span>
@@ -701,6 +795,332 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                 </div>
             </div>
+
+            {/* ── GRADEBOOK STUDENT MODAL ── */}
+            {gradebookStudent && (() => {
+                const studentCases = cases.filter((c) => c.profiles?.user_id === gradebookStudent.user_id);
+                const scored = studentCases.filter((c) => c.score != null);
+                const avg = scored.length
+                    ? (scored.reduce((s, c) => s + Number(c.score), 0) / scored.length).toFixed(1)
+                    : null;
+
+                const STATUS_STYLES = {
+                    "not started":        { background: "#ede9fe", color: "#6d28d9" },
+                    "in progress":        { background: "#e0f2fe", color: "#0284c7" },
+                    "revision_requested": { background: "#fff7ed", color: "#c2410c" },
+                    "pending review":     { background: "#fef3c7", color: "#b45309" },
+                    "completed":          { background: "#ecfdf5", color: "#047857" },
+                };
+                const STATUS_LABELS = {
+                    "not started":        "Assigned",
+                    "in progress":        "In Progress",
+                    "revision_requested": "Revision Requested",
+                    "pending review":     "Submitted",
+                    "completed":          "Completed",
+                };
+
+                return (
+                    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setGradebookStudent(null)}>
+                        <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 20px 60px rgba(15,23,42,0.18)", width: "100%", maxWidth: 680, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+
+                            {/* Modal header */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
+                                <div>
+                                    <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Gradebook</p>
+                                    <h3 style={{ margin: "0.15rem 0 0", fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
+                                        {gradebookStudent.first_name} {gradebookStudent.last_name}
+                                    </h3>
+                                    <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                        {studentCases.length} case{studentCases.length !== 1 ? "s" : ""}
+                                        {avg !== null ? ` · Avg score: ${avg}` : ""}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="instructor-baseline-remove"
+                                    onClick={() => setGradebookStudent(null)}
+                                    aria-label="Close"
+                                    style={{ width: 32, height: 32, fontSize: "1.2rem", flexShrink: 0 }}
+                                >×</button>
+                            </div>
+
+                            {/* Modal body */}
+                            <div style={{ overflowY: "auto", padding: "1rem 1.5rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+                                {studentCases.length === 0 ? (
+                                    <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "2rem 0" }}>No cases assigned to this student.</p>
+                                ) : studentCases.map((c) => {
+                                    const snap = c.patient_snapshot ?? c.patient_templates ?? {};
+                                    const hasGrade = c.score != null;
+                                    const hasFeedback = c.instructor_feedback || c.chart_annotations?.length > 0;
+                                    const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
+
+                                    return (
+                                        <div key={c.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0.875rem 1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
+                                                        {snap.first_name} {snap.last_name}
+                                                    </div>
+                                                    {snap.chief_complaint && (
+                                                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                                                            {snap.chief_complaint}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ marginTop: "0.35rem" }}>
+                                                        <span className="instructor-status-badge" style={statusStyle}>
+                                                            {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+                                                    {hasGrade ? (
+                                                        <>
+                                                            <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
+                                                                {c.score}<span style={{ fontSize: "0.9rem", fontWeight: 400, color: "var(--text-muted)" }}>/{c.max_score ?? 100}</span>
+                                                            </div>
+                                                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                                                                {Math.round((c.score / (c.max_score ?? 100)) * 100)}%
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                                                            {c.encounter_status === "completed" ? "No score recorded" : "Not graded yet"}
+                                                        </span>
+                                                    )}
+                                                    {(c.encounter_status === "pending review" || c.encounter_status === "completed") && (
+                                                        <button
+                                                            type="button"
+                                                            className="instructor-action-btn instructor-action-edit"
+                                                            onClick={() => openReview(c)}
+                                                        >
+                                                            {c.encounter_status === "pending review" ? "Grade" : "View"}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {hasFeedback && (
+                                                <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1rem", background: "#f8fafc", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                                                    {c.instructor_feedback && (
+                                                        <div>
+                                                            <div style={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Instructor Feedback</div>
+                                                            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{c.instructor_feedback}</p>
+                                                        </div>
+                                                    )}
+                                                    {c.chart_annotations?.length > 0 && (
+                                                        <div>
+                                                            <div style={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>Chart Annotations</div>
+                                                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                                                                {c.chart_annotations.map((a, i) => (
+                                                                    <div key={i} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "0.4rem 0.7rem", fontSize: "0.84rem" }}>
+                                                                        <strong style={{ fontSize: "0.72rem", textTransform: "uppercase", color: "#64748b" }}>{a.section}: </strong>
+                                                                        {a.comment}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {!hasFeedback && ["pending review", "completed"].includes(c.encounter_status) && (
+                                                <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.6rem 1rem", background: "#f8fafc" }}>
+                                                    <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                                                        {c.encounter_status === "pending review" ? "Awaiting review." : "No feedback recorded."}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* ── GRADING MODAL (from gradebook) ── */}
+            {reviewCase && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 210 }} onClick={closeReview}>
+                    <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 20px 60px rgba(15,23,42,0.18)", width: "100%", maxWidth: 1080, height: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+
+                        <div className="case-modal-header">
+                            <div>
+                                <p className="section-title" style={{ margin: 0 }}>Case Review</p>
+                                <h3 style={{ margin: "0.2rem 0 0" }}>
+                                    {reviewCase.patient_snapshot?.first_name} {reviewCase.patient_snapshot?.last_name}
+                                </h3>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                                <span className="instructor-status-badge" style={{ "not started": { background: "#f1f5f9", color: "#64748b" }, "in progress": { background: "#e0f2fe", color: "#0284c7" }, "revision_requested": { background: "#fff7ed", color: "#c2410c" }, "pending review": { background: "#fef3c7", color: "#b45309" }, "completed": { background: "#ecfdf5", color: "#047857" } }[reviewCase.encounter_status] ?? { background: "#f1f5f9", color: "#64748b" }}>
+                                    {{ "not started": "Not Started", "in progress": "In Progress", "revision_requested": "Revision Requested", "pending review": "Pending Review", "completed": "Completed" }[reviewCase.encounter_status] ?? reviewCase.encounter_status}
+                                </span>
+                                <button className="instructor-baseline-remove" type="button" onClick={closeReview} aria-label="Close" style={{ width: 32, height: 32, fontSize: "1.2rem" }}>×</button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+                            {/* Left — student note */}
+                            <div style={{ flex: "0 0 58%", overflowY: "auto", padding: "1.25rem", borderRight: "1px solid #e2e8f0" }}>
+                                <p className="case-modal-section-label">Patient Info</p>
+                                <div className="case-info-grid" style={{ marginBottom: "1rem" }}>
+                                    {reviewCase.patient_snapshot?.age && <div className="case-info-item"><span className="case-info-label">Age</span><span>{reviewCase.patient_snapshot.age}</span></div>}
+                                    {reviewCase.patient_snapshot?.sex && <div className="case-info-item"><span className="case-info-label">Sex</span><span>{reviewCase.patient_snapshot.sex}</span></div>}
+                                    {reviewCase.patient_snapshot?.occupation && <div className="case-info-item"><span className="case-info-label">Occupation</span><span>{reviewCase.patient_snapshot.occupation}</span></div>}
+                                </div>
+                                {reviewCase.patient_snapshot?.chief_complaint && (
+                                    <div className="case-complaint-box" style={{ marginBottom: "1rem" }}>
+                                        <span className="case-info-label">Chief Complaint</span>
+                                        <p>{reviewCase.patient_snapshot.chief_complaint}</p>
+                                    </div>
+                                )}
+                                {reviewCase.patient_snapshot?.clinical_baseline && Object.keys(reviewCase.patient_snapshot.clinical_baseline).length > 0 && (
+                                    <div style={{ marginBottom: "1rem" }}>
+                                        <p className="case-modal-section-label">Clinical Baseline</p>
+                                        <div className="case-baseline-grid">
+                                            {Object.entries(reviewCase.patient_snapshot.clinical_baseline).map(([k, v]) => (
+                                                <div key={k} className="case-baseline-item"><span className="case-info-label">{k}</span><span>{v}</span></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <p className="case-modal-section-label">Student Encounter Notes</p>
+                                <div className="case-notes-readonly">
+                                    {(() => {
+                                        const parsed = parseEncounterNotes(reviewCase.encounter_notes);
+                                        if (parsed?.format === "clinical-note-v1") {
+                                            if (!parsed.template || !Array.isArray(parsed.template.fields) || !parsed.data) {
+                                                return <p className="form-message form-message-error">Saved data is incomplete or invalid.</p>;
+                                            }
+                                            return <DynamicClinicalNoteForm template={parsed.template} value={parsed.data} readOnly={true} />;
+                                        }
+                                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && ("subjective" in parsed || "objective" in parsed || "assessment" in parsed || "plan" in parsed)) {
+                                            return <PTSoapNote value={parsed} readOnly={true} />;
+                                        }
+                                        if (typeof reviewCase.encounter_notes === "string") {
+                                            return reviewCase.encounter_notes || <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
+                                        }
+                                        return <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
+                                    })()}
+                                </div>
+
+                                {annotations.length > 0 && (
+                                    <div style={{ marginTop: "1.25rem" }}>
+                                        <p className="case-modal-section-label">Chart Annotations</p>
+                                        {annotations.map((a, i) => (
+                                            <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "0.6rem 0.75rem", marginBottom: "0.5rem" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.05em" }}>{a.section}</span>
+                                                    {reviewCase.encounter_status === "pending review" && (
+                                                        <button type="button" onClick={() => removeAnnotation(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "1rem", lineHeight: 1 }} aria-label="Remove">×</button>
+                                                    )}
+                                                </div>
+                                                <p style={{ margin: "0.3rem 0 0", fontSize: "0.875rem" }}>{a.comment}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {reviewCase.encounter_status === "pending review" && (
+                                    <div style={{ marginTop: "1.25rem" }}>
+                                        <p className="case-modal-section-label">Add Chart Annotation</p>
+                                        <select value={annotationTarget} onChange={(e) => setAnnotationTarget(e.target.value)} className="instructor-search-input" style={{ marginBottom: "0.5rem" }}>
+                                            <option>General</option><option>Subjective</option><option>Objective</option><option>Assessment</option><option>Plan</option><option>Medications</option><option>Allergies</option>
+                                        </select>
+                                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                                            <input type="text" className="instructor-search-input" placeholder="e.g. Missing pain scale in subjective section" value={annotationDraft} onChange={(e) => setAnnotationDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addAnnotation()} style={{ flex: 1 }} />
+                                            <button type="button" className="secondary-action-button" onClick={addAnnotation}>Add</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right — rubric */}
+                            <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc" }}>
+                                {(reviewCase.patient_snapshot?.expectations_rubric) && (
+                                    <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
+                                        <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>Expectations & Milestones</p>
+                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_snapshot.expectations_rubric}</p>
+                                    </div>
+                                )}
+
+                                <p className="case-modal-section-label">Rubric Scoring</p>
+                                <div style={{ marginBottom: "1rem" }}>
+                                    {getCaseCriteria(reviewCase).map((crit) => (
+                                        <div key={crit.key} style={{ marginBottom: "1rem" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+                                                <label htmlFor={`gb-rubric-${crit.key}`} style={{ fontWeight: 500, fontSize: "0.875rem" }}>{crit.label}</label>
+                                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>/ {crit.maxPoints} pts</span>
+                                            </div>
+                                            <input
+                                                id={`gb-rubric-${crit.key}`}
+                                                type="number" step="0.01" min={0} max={crit.maxPoints}
+                                                value={rubricScores[crit.key] ?? ""}
+                                                onChange={(e) => setRubricScores((prev) => ({ ...prev, [crit.key]: e.target.value }))}
+                                                disabled={reviewSubmitting || (reviewCase.encounter_status !== "pending review" && !reviewEditing)}
+                                                className="instructor-search-input" style={{ width: "100%" }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "0.75rem 1rem", marginTop: "0.5rem" }}>
+                                    <span>Total Score</span>
+                                    <strong style={{ fontSize: "1.25rem" }}>{totalScore()} / {maxScore()}</strong>
+                                </div>
+
+                                <div style={{ marginTop: "1.25rem" }}>
+                                    <p className="case-modal-section-label">Overall Feedback</p>
+                                    {(reviewCase.encounter_status === "pending review" || reviewEditing) ? (
+                                        <textarea className="instructor-feedback-textarea" placeholder="Leave overall comments for the student…" value={feedback} onChange={(e) => setFeedback(e.target.value)} disabled={reviewSubmitting} rows={5} />
+                                    ) : (
+                                        <div className="case-notes-readonly">{reviewCase.instructor_feedback || <em style={{ color: "var(--text-muted)" }}>No feedback left.</em>}</div>
+                                    )}
+                                </div>
+
+                                {reviewCase.profiles && (
+                                    <div style={{ marginTop: "1rem" }}>
+                                        <p className="case-modal-section-label">Submitted By</p>
+                                        <p style={{ margin: 0 }}>{reviewCase.profiles.first_name} {reviewCase.profiles.last_name}</p>
+                                    </div>
+                                )}
+
+                                {reviewError && <p className="form-message form-message-error" role="alert" style={{ marginTop: "1rem" }}>{reviewError}</p>}
+
+                                {reviewCase.encounter_status === "pending review" && (
+                                    <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
+                                        <button className="secondary-action-button" type="button" onClick={() => handleGradeSubmit("return")} disabled={reviewSubmitting} style={{ flex: 1 }}>
+                                            {reviewSubmitting ? "Saving…" : "Return for Revision"}
+                                        </button>
+                                        <button className="primary-action-button" type="button" onClick={() => handleGradeSubmit("approve")} disabled={reviewSubmitting} style={{ flex: 1 }}>
+                                            {reviewSubmitting ? "Saving…" : "Approve & Sign Off"}
+                                        </button>
+                                    </div>
+                                )}
+                                {reviewCase.encounter_status === "completed" && !reviewEditing && (
+                                    <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+                                        <p style={{ margin: 0, color: "var(--success-text)", fontSize: "0.85rem", fontWeight: 600 }}>Signed off — this case is complete.</p>
+                                        <button className="secondary-action-button" type="button" onClick={() => setReviewEditing(true)}>
+                                            Edit Grade
+                                        </button>
+                                    </div>
+                                )}
+                                {reviewCase.encounter_status === "completed" && reviewEditing && (
+                                    <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
+                                        <button className="secondary-action-button" type="button" onClick={() => setReviewEditing(false)} disabled={reviewSubmitting} style={{ flex: 1 }}>
+                                            Cancel
+                                        </button>
+                                        <button className="primary-action-button" type="button" onClick={() => handleGradeSubmit("approve")} disabled={reviewSubmitting} style={{ flex: 1 }}>
+                                            {reviewSubmitting ? "Saving…" : "Save Grade"}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── PATIENT DETAIL MODAL ── */}
             {patientModalId && (

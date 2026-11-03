@@ -276,20 +276,25 @@ export default function CourseForm({ onNavigate }) {
                                         ? editingId ? "Saving…" : "Creating…"
                                         : editingId ? "Save Changes" : "Create Course"}
                                 </button>
-                                <button
-                                    className="secondary-action-button"
-                                    type="button"
-                                    onClick={() => setShowImport((v) => !v)}
-                                    disabled={submitting}
-                                    style={{ marginLeft: "auto" }}
-                                >
-                                    {showImport ? "Hide Roster Import" : "Import Roster as CSV"}
-                                </button>
+                                {editingId && (
+                                    <button
+                                        className="secondary-action-button"
+                                        type="button"
+                                        onClick={() => setShowImport((v) => !v)}
+                                        disabled={submitting}
+                                        style={{ marginLeft: "auto" }}
+                                    >
+                                        {showImport ? "Hide Roster Import" : "Import Roster as CSV"}
+                                    </button>
+                                )}
                             </div>
                         </form>
 
-                        {showImport && (
-                            <BulkStudentImport />
+                        {editingId && showImport && (
+                            <BulkStudentImport onImported={async () => {
+                                const updated = await getAllCourses().catch(() => null);
+                                if (updated) setCourses(updated);
+                            }} />
                         )}
                     </div>
                 </div>

@@ -103,7 +103,8 @@ export async function getCourseAssignedCases(courseId) {
     const { data, error } = await supabase
         .from("assigned_cases")
         .select(`
-            id, encounter_status, assigned_at, due_date, score,
+            id, encounter_status, assigned_at, due_date, score, max_score,
+            instructor_feedback, chart_annotations, template_id, patient_snapshot,
             patient_templates ( first_name, last_name, chief_complaint ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
@@ -193,8 +194,8 @@ export async function getMyCourseCases(courseId) {
     const { data, error } = await supabase
         .from("assigned_cases")
         .select(`
-            id, encounter_status, assigned_at, due_date, score, instructor_feedback,
-            patient_snapshot
+            id, encounter_status, assigned_at, due_date, score, max_score,
+            instructor_feedback, chart_annotations, patient_snapshot
         `)
         .eq("course_id", courseId)
         .order("due_date", { ascending: true, nullsFirst: false });

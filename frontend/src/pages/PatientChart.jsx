@@ -198,6 +198,7 @@ export default function PatientChart({
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
+
         </main>
     );
 }
