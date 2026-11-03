@@ -5,6 +5,7 @@ import DiagnosticsPanel from "../components/diagnostics/DiagnosticsPanel.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
 import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
+import PatientMedications from "../components/patient-chart/PatientMedications.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { loadPatientChart } from "../services/patientChartService.js";
 import "./PatientChart.css";
@@ -195,6 +196,8 @@ export default function PatientChart({
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
                     : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
+                        onEdit={() => setEditingSection("medications")} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
