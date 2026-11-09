@@ -245,7 +245,8 @@ export default function App() {
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "courses"
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
-        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" || nav.page === "studentCases" ? "myCourses"
+        : nav.page === "studentCases" ? "studentCases"
+        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -255,6 +256,8 @@ export default function App() {
             navigate("courses");
         } else if (page === "myCourses") {
             navigate("studentCourses");
+        } else if (page === "studentCases") {
+            navigate("studentCases");
         } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
@@ -338,19 +341,44 @@ export default function App() {
     // The template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
 
+    if (isTemplateBuilder) {
+        return (
+            <div className="emr-app emr-app-fullscreen">
+                {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
+                {pageContent}
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+            </div>
+        );
+    }
+
     return (
-        <div className={`emr-app ${isTemplateBuilder ? "emr-app-fullscreen" : ""}`}>
-            {!isTemplateBuilder && <Header user={user} />}
-            {!isTemplateBuilder && <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />}
-            {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
-            {pageContent}
-            {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
-            {!isTemplateBuilder && (
-                <footer className="emr-footer">
-                    <span>Educational EMR Prototype</span>
+        <div className="min-h-screen flex bg-white text-slate-900 font-sans">
+            <Navbar
+                user={user}
+                currentPage={navbarPage}
+                onNavigate={handleNavbarNavigate}
+                canUseLivePatients={liveAccess.read}
+            />
+            <div className="flex-1 flex flex-col min-w-0 bg-white">
+                <Header
+                    user={user}
+                    onNavigate={navigate}
+                    canUseLivePatients={liveAccess.read}
+                />
+                {accountWarning && (
+                    <div className="px-6 py-2 bg-amber-50/60 border-b border-amber-200 text-xs text-amber-900" role="status">
+                        {accountWarning}
+                    </div>
+                )}
+                <div className="flex-1">
+                    {pageContent}
+                </div>
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+                <footer className="border-t border-slate-100 px-8 py-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>UTEP Educational EMR</span>
                     <span>For educational use only</span>
                 </footer>
-            )}
+            </div>
         </div>
     );
 }
