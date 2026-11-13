@@ -42,6 +42,7 @@ export default function App() {
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
+    const signedInUserId = useRef(null);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -71,6 +72,12 @@ export default function App() {
         const { data: { subscription } } = onAuthStateChange((_event, newSession) => {
             signedIn = Boolean(newSession);
             accountRequest.current++;
+            //     A different account (or none) must not keep the last user's page open
+            if ((newSession?.user.id ?? null) !== signedInUserId.current) {
+                signedInUserId.current = newSession?.user.id ?? null;
+                setNav({ page: "dashboard", id: null });
+                setLiveAccess(NO_LIVE_PATIENT_ACCESS);
+            }
             setSession(newSession);
             clearTimeout(authTimer);
             if (newSession) {
