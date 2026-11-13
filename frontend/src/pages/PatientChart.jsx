@@ -5,6 +5,7 @@ import DiagnosticsPanel from "../components/diagnostics/DiagnosticsPanel.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
 import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
+import PatientImmunizations from "../components/patient-chart/PatientImmunizations.jsx";
 import PatientMedications from "../components/patient-chart/PatientMedications.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { loadPatientChart } from "../services/patientChartService.js";
@@ -190,8 +191,12 @@ export default function PatientChart({
 
                 {activeTab === "Summary" ? <PatientSummary {...sectionProps} editing={editingSection === "demographics"}
                     onEdit={() => setEditingSection("demographics")} />
-                    : activeTab === "Allergies & History" ? <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
-                        onEdit={() => setEditingSection("history")} />
+                    : activeTab === "Allergies & History" ? <>
+                        <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
+                            onEdit={() => setEditingSection("history")} />
+                        <PatientImmunizations {...sectionProps} editing={editingSection === "immunizations"}
+                            onEdit={() => setEditingSection("immunizations")} />
+                    </>
                     : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />

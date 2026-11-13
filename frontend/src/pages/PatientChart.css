@@ -306,7 +306,7 @@
 }
 
 .chart-diagnosis-row select,
-.chart-diagnosis-row input[type="date"] {
+.chart-diagnosis-row input {
   border: 1px solid var(--border-dark);
   border-radius: 0.4rem;
   padding: 0.4rem 0.6rem;
