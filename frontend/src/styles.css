@@ -1,3 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* Global Design Variables */
 :root {
   --primary: #0284c7;
