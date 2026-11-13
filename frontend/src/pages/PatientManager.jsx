@@ -27,6 +27,7 @@ export default function PatientManager({ onNavigate, embedded = false }) {
         const { data, error } = await supabase
             .from("patients")
             .select("*")
+            .is("archived_at", null)
             .order("created_at", { ascending: false });
         if (!error) setPatients(data);
         setLoading(false);

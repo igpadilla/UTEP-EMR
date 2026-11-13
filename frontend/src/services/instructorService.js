@@ -6,6 +6,7 @@ export async function searchPatients(query) {
     let q = supabase
         .from("patients")
         .select("id, first_name, last_name, age, sex, occupation, current_medications, last_visit_notes")
+        .is("archived_at", null)
         .order("last_name");
 
     if (query.trim()) {

@@ -319,10 +319,10 @@ test("a case built from a patient snapshots the whole chart into the student's c
         assert.equal((await db.query(`select 1 from vital_sign_sets where assigned_case_id in ('${NURSE_CASE}','${PT_CASE}')`)).rows.length, 0);
         assert.equal((await db.query(`select patient_snapshot->>'first_name' f from assigned_cases where id = '${PT_CASE}'`)).rows[0].f, "Maria");
 
-        // A patient that a template is built from cannot be deleted out from under it.
+        // Patients are never hard deleted (archived instead), so a template's patient stays in place.
         await db.exec(`insert into patients(id, first_name, last_name, age) values ('40000000-0000-4000-8000-000000000002','Ana','Ruiz',30);
             update patient_templates set patient_id = '40000000-0000-4000-8000-000000000002' where id = '${TEMPLATE}'`);
-        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /patient_templates_patient_id_fkey/);
+        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /cannot be deleted/);
     } finally {
         await db.close();
     }

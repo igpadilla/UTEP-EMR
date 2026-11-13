@@ -27,6 +27,7 @@ export default function PatientLookup({ onNavigate, access = { register: true } 
         const { data, error } = await supabase
             .from("patients")
             .select("id, first_name, last_name, age")
+            .is("archived_at", null)
             .or(filter);
 
         if (error) {

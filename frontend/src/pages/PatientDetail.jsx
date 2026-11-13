@@ -107,13 +107,13 @@ export default function PatientDetail({ id, onNavigate, canManagePortal = false 
     }
 
     async function handleDelete() {
-        if (!confirm(`Delete ${patient.first_name} ${patient.last_name}? This cannot be undone.`)) return;
+        if (!confirm(`Archive ${patient.first_name} ${patient.last_name}? They will be hidden from patient lists.`)) return;
 
-        const { error } = await supabase.from("patients").delete().eq("id", id);
+        const { error } = await supabase.from("patients").update({ archived_at: new Date().toISOString() }).eq("id", id);
 
         if (error) {
-            console.error("Failed to delete:", error);
-            setError("Failed to delete patient.");
+            console.error("Failed to archive:", error);
+            setError("Failed to archive patient.");
         } else {
             onNavigate("patientManager");
         }
@@ -317,7 +317,7 @@ export default function PatientDetail({ id, onNavigate, canManagePortal = false 
 
                         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.5rem" }}>
                             <button onClick={() => { setEditing(true); setEditMeds(Array.isArray(patient.current_medications) ? patient.current_medications : []); }}>Edit Patient</button>
-                            <button onClick={handleDelete} style={{ color: "red" }}>Delete Patient</button>
+                            <button onClick={handleDelete} style={{ color: "red" }}>Archive Patient</button>
                         </div>
                     </>
                 )}
