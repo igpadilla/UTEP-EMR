@@ -20,6 +20,7 @@ Checklist of what the EMR does to protect patient health information (PHI), what
 | Tamper-proof log | Nobody, including the service role, can edit or delete `phi_audit_log`. Only admins can read it. | `20261114000000_create_phi_audit_log.sql` |
 | Log review | Admin-only **Audit Log** page with search, action, and date filters. | `frontend/src/pages/AuditLog.jsx`, `20261114000500_get_phi_audit_log.sql` |
 | Private file storage | Lab/imaging attachments are in a private bucket; download links expire after 60 seconds. | `frontend/src/services/diagnosticsService.js` |
+| Hardened database functions | Signed-out users cannot call any app function; trigger-only functions are not exposed; functions use a fixed `search_path`. Remaining Security Advisor warnings are intentional app RPCs that check permissions inside. | `20261114000600_security_advisor_fixes.sql` |
 | Supabase sign-ins | Sign-ins, failed attempts, and sign-outs are recorded by Supabase in `auth.audit_log_entries`. | Supabase Auth |
 
 ## Postponed until development is done
@@ -27,6 +28,7 @@ Checklist of what the EMR does to protect patient health information (PHI), what
 These make testing harder, so they are turned on before launch.
 
 - **Stronger passwords** (8+ characters with a letter and a number, everywhere). Saved in a git stash: `git stash list`, then `git stash pop` the entry named "HIPAA: password policy (later)". Also set the same rule in the hosted dashboard: Authentication → Sign In / Providers → Password.
+- **Close the forced-password-change bypass**: `set_must_change_password_false()` lets a user clear their own flag without changing the password. Clear the flag only when the password actually changes (for example, a trigger on `auth.users`).
 - **Multi-factor authentication (MFA)**, at least for admins and instructors: an authenticator-app setup screen and a code step at login. Enable TOTP in `supabase/config.toml` (`[auth.mfa.totp]`) and in the hosted project.
 
 ## Team rules
@@ -40,6 +42,7 @@ These make testing harder, so they are turned on before launch.
       for each row execute function private.log_phi_change();
   ```
 - New screens that show a patient's record or files should call `logRecordView(...)` from `auditService.js`.
+- New `security definer` functions in `public` must `revoke execute ... from public, anon` (Supabase grants `anon` directly) and set `search_path = ''`. Re-run the Security Advisor after adding one.
 - Never put patient details in URLs, emails (invites, password resets), or edge function logs.
 
 ## Before storing real patient data
@@ -47,7 +50,7 @@ These make testing harder, so they are turned on before launch.
 - [ ] Supabase: Team or Enterprise plan, signed BAA, HIPAA add-on, project set to **High Compliance**, connection logging (`log_connections`) left on, and the Security Advisor clean. See [Supabase HIPAA projects](https://supabase.com/docs/guides/platform/hipaa-projects).
 - [ ] Confirm hosting (Vercel) HIPAA terms, or move hosting to a provider that signs a BAA.
 - [ ] Turn on the postponed items above (passwords, MFA).
-- [ ] Run the Supabase Security Advisor and fix anything flagged (check RLS on `clinical_notes`, `clinical_note_templates`, `permissions`, `role_permissions`).
+- [ ] Re-run the Supabase Security Advisor on the hosted project. Expected: only "Signed-In Users Can Execute SECURITY DEFINER Function" warnings for the app's own RPCs, and info notes for tables locked with no policies (`patient_portal_accounts`, `permissions`, `role_permissions`).
 - [ ] Retention plan: HIPAA documentation is kept for 6 years; the audit log cannot be trimmed, so plan storage and backups.
 - [ ] Assign who reviews the Audit Log and how often.
 - [ ] Administrative work: risk assessment, access and security policies, breach-notification plan, staff training, BAAs with every vendor that touches PHI.
