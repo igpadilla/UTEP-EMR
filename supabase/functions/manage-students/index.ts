@@ -8,6 +8,7 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 //Load the helper that checks who is calling the function
 
 import { withSupabase } from "@supabase/server";
+import { logAccountAction } from "../_shared/audit.mjs";
 import { isDuplicateEmailError, validateStudentEmail, validateStudentIdentity } from "../_shared/student-validation.mjs";
 
 
@@ -128,6 +129,7 @@ export default {
         }
         const { error } = await ctx.supabaseAdmin.auth.admin.deleteUser(userId);
         if (error) return errorResponse("Unable to delete the student account.", 500);
+        await logAccountAction(ctx.supabaseAdmin, user.id, "ACCOUNT_DELETED", userId);
         return Response.json({ deleted: userId });
       }
 
@@ -156,6 +158,7 @@ export default {
           );
         }
         if (!data.user) return errorResponse("Unable to change the email.", 500);
+        await logAccountAction(ctx.supabaseAdmin, user.id, "EMAIL_CHANGED", userId);
         return Response.json({ student: { user_id: userId, email: data.user.email } });
       }
 
@@ -187,6 +190,7 @@ export default {
         .maybeSingle();
       if (editError) return errorResponse("Unable to update the student.", 500);
       if (!updated) return errorResponse("Student not found.", 404);
+      await logAccountAction(ctx.supabaseAdmin, user.id, editingNames ? "ACCOUNT_RENAMED" : updated.active ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED", userId);
       return Response.json({ student: updated });
     }
     // Other request methods are not implemented yet.

@@ -1,6 +1,7 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 import { isDuplicateEmailError, validateStudentEmail } from "../_shared/student-validation.mjs";
+import { logAccountAction } from "../_shared/audit.mjs";
 
 const fail = (error: string, status: number) => Response.json({ error }, { status });
 
@@ -60,6 +61,7 @@ export default {
             }
             return fail("Portal setup did not finish. Check the patient's portal status before retrying.", 500);
         }
+        await logAccountAction(ctx.supabaseAdmin, user.id, "PORTAL_ACCOUNT_CREATED", data.user.id);
         return Response.json({ account: { id: data.user.id, email } }, { status: 201 });
     }),
 };

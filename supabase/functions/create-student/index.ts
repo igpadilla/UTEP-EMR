@@ -5,6 +5,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import { logAccountAction } from "../_shared/audit.mjs";
 import { isDuplicateEmailError, validateStudentAccount } from "../_shared/student-validation.mjs";
 
 /* Define the JSON data expected from the frontend
@@ -137,6 +138,8 @@ export default {
       500,
     );
     }
+
+    await logAccountAction(ctx.supabaseAdmin, user.id, "ACCOUNT_CREATED", createdUser.user.id);
 
     // Return only the information the frontend needs
 

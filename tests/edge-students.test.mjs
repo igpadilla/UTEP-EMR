@@ -36,6 +36,7 @@ function context({ role = "admin", active = true, createError = null, records = 
                 for (const method of ["select", "or"]) q[method] = () => q;
                 q.eq = (key, value) => { q.filters[key] = value; return q; };
                 q.update = (changes) => { q.op = "update"; q.changes = changes; return q; };
+                q.insert = (changes) => { q.op = "insert"; q.changes = changes; return q; };
                 q.single = q.maybeSingle = async () => resolve(q);
                 q.then = (ok, fail) => Promise.resolve(resolve(q)).then(ok, fail);
                 return q;
@@ -103,7 +104,10 @@ test("deactivation and reactivation only change the existing profile, preserving
         assert.equal(target.user_id, studentId);
     }
     assert.equal(calls.filter((call) => call.op === "update").length, 2);
-    assert.ok(calls.every((call) => call.table === "profiles"));
+    // Besides the profile, only the audit log is written, naming who did it.
+    assert.ok(calls.every((call) => call.table === "profiles" || call.table === "phi_audit_log"));
+    assert.deepEqual(calls.filter((call) => call.table === "phi_audit_log").map((call) => [call.changes.action, call.changes.actor_id]),
+        [["ACCOUNT_DEACTIVATED", "caller"], ["ACCOUNT_ACTIVATED", "caller"]]);
     assert.equal((await manage.fetch(request("PATCH", { userId: studentId, active: "false" }), ctx)).status, 400);
 });
 

@@ -21,7 +21,7 @@ function mock({ role = 'admin', active = true, existing = false, duplicate = fal
                 const result = () => ({ data: table === 'profiles' ? { account_type:role, active }
                     : table === 'patients' ? (missing ? null : { id:patientId })
                     : existing ? { user_id:'existing-patient-login' } : null });
-                const query = { select:() => query, eq:() => query, single:async () => result(), maybeSingle:async () => result() };
+                const query = { insert:async (row) => { calls.push({ audit:row }); return { error:null }; }, select:() => query, eq:() => query, single:async () => result(), maybeSingle:async () => result() };
                 return query;
             },
             auth: { admin: {
