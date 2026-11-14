@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
 import TagSelector from "../components/TagSelector.jsx";
 import PatientPortalManagement from "../components/PatientPortalManagement.jsx";
+import { logRecordView } from "../services/auditService.js";
 
 
 export default function PatientDetail({ id, onNavigate, canManagePortal = false }) {
@@ -32,6 +33,7 @@ export default function PatientDetail({ id, onNavigate, canManagePortal = false 
             setError("Patient not found.");
         } else {
             setPatient(patientRes.data);
+            logRecordView("patients", id);
             setForm(toForm(patientRes.data));
         }
 

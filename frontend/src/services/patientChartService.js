@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js";
 import { demographicsToUpdate, historyToUpdate } from "../components/patient-chart/patientChartForm.js";
+import { logRecordView } from "./auditService.js";
 
 const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, immunizations, current_medications, updated_at";
 
@@ -11,12 +12,14 @@ export async function loadPatientChart({ patientId, caseId }) {
         if (error || !data?.patient_snapshot || typeof data.patient_snapshot !== "object" || Array.isArray(data.patient_snapshot)) {
             throw new Error("Could not load this case chart. Try again or go back to the case list.");
         }
+        logRecordView("assigned_cases", caseId);
         return { patient: data.patient_snapshot, caseStatus: data.encounter_status };
     }
 
     if (!patientId) throw new Error("Choose a patient before opening the chart.");
     const { data, error } = await supabase.from("patients").select(PATIENT_FIELDS).eq("id", patientId).single();
     if (error || !data) throw new Error("Could not load this patient chart. Try again or go back to the patient list.");
+    logRecordView("patients", patientId);
     return { patient: data, caseStatus: null };
 }
 

@@ -54,6 +54,7 @@ test("allergies and history round-trip with commas intact and remove blank or re
 const calls = [];
 let response;
 globalThis.chartTestClient = {
+    rpc: async () => ({ error: null }),
     from(table) {
         const query = { table, filters: [], update: null };
         calls.push(query);
@@ -68,7 +69,7 @@ globalThis.chartTestClient = {
     },
 };
 registerHooks({ resolve(specifier, context, next) {
-    if (specifier === "../supabase.js" && context.parentURL.endsWith("/patientChartService.js")) {
+    if (specifier === "../supabase.js" && (context.parentURL.endsWith("/patientChartService.js") || context.parentURL.endsWith("/auditService.js"))) {
         return { url: "data:text/javascript,export const supabase=globalThis.chartTestClient", shortCircuit: true };
     }
     return next(specifier, context);

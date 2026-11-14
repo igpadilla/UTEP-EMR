@@ -43,3 +43,11 @@ export async function getCaseAuditLogs(caseId) {
     if (error) throw error;
     return data;
 }
+
+// HIPAA: record that the signed-in user opened a patient record or case chart.
+// Runs in the background so a logging hiccup never blocks the chart.
+export function logRecordView(table, id) {
+    if (!id) return;
+    supabase.rpc("log_record_view", { record_table: table, record_id: id })
+        .then(({ error }) => { if (error) console.error("Could not log record view"); });
+}

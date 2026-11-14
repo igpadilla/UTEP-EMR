@@ -405,3 +405,36 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
         await db.close();
     }
 });
+
+test("patient changes are written to the PHI audit log, which only admins read and nobody edits", async () => {
+    const db = await setup();
+    try {
+        await as(db, TEACHER, `update patients set allergies = array['Penicillin'], age = 46 where id = '${PATIENT}'`);
+        const [entry] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`);
+        assert.equal(entry.actor_id, TEACHER);
+        assert.equal(entry.patient_id, PATIENT);
+        assert.deepEqual([...entry.changed_fields].sort(), ["age", "allergies"]);
+
+        // A save that changes nothing is not logged.
+        await as(db, TEACHER, `update patients set age = 46, updated_at = now() where id = '${PATIENT}'`);
+        assert.equal((await as(db, ADMIN, `select 1 from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`)).length, 1);
+
+        // Opening a chart is logged under the viewer's account.
+        await as(db, TEACHER, `select log_record_view('patients', '${PATIENT}')`);
+        const [view] = await as(db, ADMIN, `select * from phi_audit_log where action = 'VIEW'`);
+        assert.equal(view.actor_id, TEACHER);
+        assert.equal(view.patient_id, PATIENT);
+        await assert.rejects(as(db, TEACHER, `select log_record_view('profiles', '${PATIENT}')`), /Cannot log/);
+
+        // Account changes (made through the account edge functions) are logged with the affected account as the record.
+        await db.exec(`update profiles set active = false where user_id = '${OTHER_TEACHER}'`);
+        const [account] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'profiles' and record_id = '${OTHER_TEACHER}' and action = 'UPDATE' order by id desc limit 1`);
+        assert.deepEqual(account.changed_fields, ["active"]);
+
+        assert.equal((await as(db, TEACHER, `select 1 from phi_audit_log`)).length, 0);
+        await assert.rejects(as(db, ADMIN, `delete from phi_audit_log`), /permission denied/);
+        await assert.rejects(as(db, ADMIN, `update phi_audit_log set actor_id = null`), /permission denied/);
+    } finally {
+        await db.close();
+    }
+});

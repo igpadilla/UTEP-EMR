@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import MedicationSelector from "../components/MedicationSelector.jsx";
+import { logRecordView } from "../services/auditService.js";
 
 const VISIT_TYPES = ["Initial", "Follow-up", "Emergency", "Routine", "Specialist", "Other"];
 const APPT_TYPES  = ["Follow-up", "Initial Consultation", "Specialist Referral", "Routine Check-up", "Emergency", "Other"];
@@ -35,7 +36,7 @@ export default function StudentPatientDetail({ id, onNavigate, access = { schedu
             supabase.from("visits").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
         ]);
 
-        if (!patientRes.error) setPatient(patientRes.data);
+        if (!patientRes.error) { setPatient(patientRes.data); logRecordView("patients", id); }
         if (!visitsRes.error) setVisits(visitsRes.data);
 
         setLoading(false);
