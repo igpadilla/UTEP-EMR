@@ -51,3 +51,13 @@ export function logRecordView(table, id) {
     supabase.rpc("log_record_view", { record_table: table, record_id: id })
         .then(({ error }) => { if (error) console.error("Could not log record view"); });
 }
+
+// Admin screen: one page (50 rows) of the HIPAA audit log, with names filled in.
+export async function getPhiAuditLog({ search = "", action = "", from = "", to = "", page = 1 }) {
+    const { data, error } = await supabase.rpc("get_phi_audit_log", {
+        p_search: search.trim() || null, p_action: action || null,
+        p_from: from || null, p_to: to || null, p_page: page,
+    });
+    if (error) throw new Error("Could not load the audit log.");
+    return { rows: data ?? [], total: data?.[0]?.total_count ?? 0 };
+}

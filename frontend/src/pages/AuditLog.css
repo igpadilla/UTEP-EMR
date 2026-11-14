@@ -1,0 +1,80 @@
+.audit-log {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.audit-log h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.audit-muted {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 0.25rem 0 1rem;
+}
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.audit-filters input,
+.audit-filters select {
+  border: 1px solid var(--border-dark);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.875rem;
+  background: var(--surface);
+}
+
+.audit-filters input[type="search"] {
+  flex: 1 1 16rem;
+}
+
+.audit-filters label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.audit-table-wrap {
+  overflow-x: auto;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.audit-table th,
+.audit-table td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.audit-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.audit-paging {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}

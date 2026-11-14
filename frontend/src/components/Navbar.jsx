@@ -45,6 +45,12 @@ function NavIcon({ name }) {
                     <path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18" />
                 </svg>
             );
+        case "auditLog":
+            return (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h2M6 3h9l3 3v15H6z" />
+                </svg>
+            );
         default:
             return null;
     }
@@ -100,6 +106,7 @@ export default function Navbar({
               : []),
         ...(showPatients ? [{ id: "patients", label: "Patients" }] : []),
         ...(canManageStudents ? [{ id: "students", label: "Students" }] : []),
+        ...(isAdmin ? [{ id: "auditLog", label: "Audit Log" }] : []),
         ...(isStudent && canUseLivePatients ? [{ id: "appointments", label: "Appointments" }] : []),
     ];
 

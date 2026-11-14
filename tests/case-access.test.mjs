@@ -435,6 +435,10 @@ test("patient changes are written to the PHI audit log, which only admins read a
         assert.deepEqual(account.changed_fields, ["active"]);
 
         assert.equal((await as(db, TEACHER, `select 1 from phi_audit_log`)).length, 0);
+        // The admin screen reads names, filters by person or patient, and refuses non-admins.
+        const rows = await as(db, ADMIN, `select * from get_phi_audit_log(p_search => 'Doe', p_action => 'UPDATE')`);
+        assert.ok(rows.length > 0 && rows.every((row) => row.patient === "John Doe" && row.action === "UPDATE"));
+        await assert.rejects(as(db, TEACHER, `select * from get_phi_audit_log()`), /Only admins/);
         await assert.rejects(as(db, ADMIN, `delete from phi_audit_log`), /permission denied/);
         await assert.rejects(as(db, ADMIN, `update phi_audit_log set actor_id = null`), /permission denied/);
     } finally {

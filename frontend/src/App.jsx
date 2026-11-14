@@ -21,6 +21,7 @@ import PatientChart from "./pages/PatientChart.jsx";
 import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
+import AuditLog from "./pages/AuditLog.jsx";
 
 import {
     getSession,
@@ -254,6 +255,7 @@ export default function App() {
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCases" ? "studentCases"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
+        : nav.page === "auditLog" ? "auditLog"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -270,6 +272,8 @@ export default function App() {
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
         } else if (page === "appointments") {
             navigate("appointments");
+        } else if (page === "auditLog" && isAdmin) {
+            navigate("auditLog");
         } else {
             navigate("dashboard");
         }
@@ -339,6 +343,9 @@ export default function App() {
             break;
         case "courseDetail":
             pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
+            break;
+        case "auditLog":
+            pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "dashboard":
         default:
