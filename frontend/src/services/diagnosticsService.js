@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { logCaseAction, ACTION_TYPES } from "./auditService.js";
+import { logCaseAction, logRecordView, ACTION_TYPES } from "./auditService.js";
 import localCatalog from "../data/diagnosticsCatalog.json";
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || "http://127.0.0.1:8000";
@@ -234,10 +234,12 @@ export async function cancelDiagnosticOrder(order, reason = null) {
     }
 }
 
-export async function getAttachmentUrl(filePath) {
+export async function getAttachmentUrl(filePath, resultId) {
     if (!filePath) return null;
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 3600);
+    // Short-lived link: it is opened right away, and anyone holding it could open the file
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 60);
     if (error) throw error;
+    logRecordView("diagnostic_results", resultId);
     return data?.signedUrl || null;
 }
 

@@ -165,9 +165,9 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
         }
     }
 
-    async function handleOpenAttachment(filePath) {
+    async function handleOpenAttachment(filePath, resultId) {
         try {
-            const url = await getAttachmentUrl(filePath);
+            const url = await getAttachmentUrl(filePath, resultId);
             if (url) window.open(url, "_blank", "noopener,noreferrer");
         } catch (err) {
             setError(err.message || "Could not open attachment.");
@@ -530,7 +530,7 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                                     <button
                                                         type="button"
                                                         className="secondary-action-button"
-                                                        onClick={() => handleOpenAttachment(latestResult.file_path)}
+                                                        onClick={() => handleOpenAttachment(latestResult.file_path, latestResult.id)}
                                                     >
                                                         📎 View Attachment ({latestResult.file_name || "File"})
                                                     </button>

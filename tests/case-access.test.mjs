@@ -376,6 +376,8 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
         await as(db, TEACHER, `insert into diagnostic_results(
             order_id, structured_values, report_impression, overall_flag
         ) values ('${labOrder.id}', '[{"code":"hgb","name":"Hemoglobin","value":9.8,"unit":"g/dL","flag":"low"}]'::jsonb, 'Mild anemia', 'abnormal')`);
+        // The audit log finds a result's patient through its order.
+        assert.equal((await db.query(`select patient_id from phi_audit_log where table_name = 'diagnostic_results' and action = 'INSERT'`)).rows[0].patient_id, PATIENT);
 
         await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
             values ('${DIAG_TEMPLATE}','${TEACHER}','John','Doe',45,'fatigue','${PATIENT}')`);
@@ -425,6 +427,7 @@ test("patient changes are written to the PHI audit log, which only admins read a
         assert.equal(view.actor_id, TEACHER);
         assert.equal(view.patient_id, PATIENT);
         await assert.rejects(as(db, TEACHER, `select log_record_view('profiles', '${PATIENT}')`), /Cannot log/);
+        await as(db, TEACHER, `select log_record_view('diagnostic_results', '${PATIENT}')`);
 
         // Account changes (made through the account edge functions) are logged with the affected account as the record.
         await db.exec(`update profiles set active = false where user_id = '${OTHER_TEACHER}'`);
