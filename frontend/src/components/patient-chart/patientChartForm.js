@@ -18,6 +18,8 @@ export function demographicsToForm(patient) {
         address: text(patient.address),
         contact_name: text(contact.name),
         contact_phone: text(contact.phone),
+        last_visit: text(patient.last_visit),
+        last_visit_notes: text(patient.last_visit_notes),
     };
 }
 
@@ -72,6 +74,8 @@ export function demographicsToUpdate(form, patient, today = localToday()) {
         email: email || null,
         address: text(form.address).trim() || null,
         emergency_contacts: hasPrimary ? [primary, ...contacts.slice(1)] : contacts.slice(1),
+        last_visit: text(form.last_visit).trim() || null,
+        last_visit_notes: text(form.last_visit_notes).trim() || null,
     };
 }
 

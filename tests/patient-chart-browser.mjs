@@ -21,7 +21,7 @@ const caseId = params.get('case') ? 'case-one' : null;
 createRoot(document.getElementById('root')).render(React.createElement(PatientChart, {
  id: caseId ? null : 'patient-one', caseId,
  canEditPatient: ['admin','instructor'].includes(params.get('role')),
- backTo: caseId ? 'studentCases' : 'patientDetail',
+ backTo: caseId ? 'studentCases' : 'patientManager',
  onNavigate: (...args) => { window.lastNavigation = args; }
 }));
 `;
@@ -178,7 +178,7 @@ try {
     await page.getByRole("tab", { name: "Referrals", exact: true }).click();
     await page.getByRole("heading", { name: "Specialty Referrals", exact: true }).waitFor();
     await page.getByRole("button", { name: "← Back", exact: true }).click();
-    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientDetail", "patient-one"]);
+    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientManager", "patient-one"]);
     console.log("PASS: keyboard tab navigation, Vitals, Referrals, and back navigation still work");
 
     await visit("role=instructor");

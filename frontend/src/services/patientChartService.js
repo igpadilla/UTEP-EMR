@@ -2,7 +2,7 @@ import { supabase } from "../supabase.js";
 import { demographicsToUpdate, historyToUpdate } from "../components/patient-chart/patientChartForm.js";
 import { logRecordView } from "./auditService.js";
 
-const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, immunizations, current_medications, updated_at";
+const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, immunizations, current_medications, last_visit, last_visit_notes, updated_at";
 
 
 export async function loadPatientChart({ patientId, caseId }) {
@@ -65,6 +65,11 @@ export function saveDiagnoses(patient, diagnoses) {
     return saveSection(patient, { diagnoses });
 }
 
+// Patients are never deleted; archiving hides them from patient lists and searches.
+export function archivePatient(patient) {
+    return saveSection(patient, { archived_at: new Date().toISOString() });
+}
+
 export function saveImmunizations(patient, immunizations) {
     return saveSection(patient, { immunizations });
 }
@@ -72,4 +77,11 @@ export function saveImmunizations(patient, immunizations) {
 
 export function saveMedications(patient, medications) {
     return saveSection(patient, { current_medications: medications });
+}
+
+
+export async function getPatientVisits(patientId) {
+    const { data, error } = await supabase.from("visits").select("*").eq("patient_id", patientId).order("created_at", { ascending: false });
+    if (error) throw new Error("Could not load visits.");
+    return data ?? [];
 }

@@ -130,7 +130,7 @@ export default function PatientManager({ onNavigate, embedded = false }) {
                                         <tr
                                             key={p.id}
                                             className="instructor-table-row"
-                                            onClick={() => onNavigate("patientDetail", p.id)}
+                                            onClick={() => onNavigate("patientChart", p.id, { backTo: "patientManager" })}
                                             style={{ cursor: "pointer" }}
                                         >
                                             <td style={{ fontWeight: 500 }}>{p.first_name} {p.last_name}</td>

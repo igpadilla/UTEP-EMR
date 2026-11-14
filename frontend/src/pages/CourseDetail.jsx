@@ -17,7 +17,7 @@ import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
 import InstructorCases from "./InstructorCases.jsx";
 import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
-import PatientDetail from "./PatientDetail.jsx";
+import PatientChart from "./PatientChart.jsx";
 import CaseAssign from "./CaseAssign.jsx";
 
 const DISCIPLINE_BANNERS = {
@@ -448,7 +448,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         <PatientManager
                             embedded
                             onNavigate={(page, id) => {
-                                if (page === "patientDetail") {
+                                if (page === "patientChart") {
                                     setPatientModalId(id);
                                 } else {
                                     onNavigate(page, id);
@@ -1126,16 +1126,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
             {patientModalId && (
                 <div className="patient-modal-overlay" onClick={() => setPatientModalId(null)}>
                     <div className="patient-modal-panel" onClick={(e) => e.stopPropagation()}>
-                        <PatientDetail
-                            id={patientModalId}
-                            onNavigate={(page) => {
-                                if (page === "patientManager") {
-                                    setPatientModalId(null);
-                                } else {
-                                    onNavigate(page);
-                                }
-                            }}
-                        />
+                        <PatientChart id={patientModalId} embedded canEditPatient onNavigate={onNavigate}
+                            onArchived={() => setPatientModalId(null)} />
                     </div>
                 </div>
             )}

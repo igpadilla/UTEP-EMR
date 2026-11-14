@@ -4,7 +4,6 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Header from "./components/Header.jsx";
 import Navbar from "./components/Navbar.jsx";
 import PatientManager from "./pages/PatientManager.jsx";
-import PatientDetail from "./pages/PatientDetail.jsx";
 import PatientLookup from "./pages/PatientLookup.jsx";
 import StudentPatientDetail from "./pages/StudentPatientDetail.jsx";
 import Appointments from "./pages/Appointments.jsx";
@@ -248,7 +247,7 @@ export default function App() {
 
     const navbarPage =
         nav.page === "studentManagement" ? "students"
-        : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
+        : nav.page === "patientManager" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "courses"
@@ -289,9 +288,6 @@ export default function App() {
         case "patientManager":
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
-        case "patientDetail":
-            pageContent = <PatientDetail key={nav.id} id={nav.id} onNavigate={navigate} canManagePortal={isAdmin} />;
-            break;
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
@@ -302,6 +298,8 @@ export default function App() {
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
+                canManagePortal={isAdmin}
+                onArchived={() => navigate("patientManager")}
                 fromCourse={nav.fromCourse ?? null} />;
             break;
         case "studentManagement":
