@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Rooms from "./pages/Rooms.jsx";
 import Header from "./components/Header.jsx";
 import Navbar from "./components/Navbar.jsx";
 import PatientManager from "./pages/PatientManager.jsx";
@@ -29,6 +30,7 @@ import {
 } from "./services/auth.js";
 
 import { getCurrentUserWithProfile } from "./services/profile.js";
+import { hasPermission } from "./services/permissionService.js";
 import { getLivePatientAccess, NO_LIVE_PATIENT_ACCESS, FULL_LIVE_PATIENT_ACCESS } from "./services/clinicalRoleService.js";
 
 export default function App() {
@@ -39,6 +41,7 @@ export default function App() {
     const [accountWarning, setAccountWarning] = useState("");
     const [showIdleWarning, setShowIdleWarning] = useState(false);
     const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
+    const [canReadRooms, setCanReadRooms] = useState(false);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
@@ -77,6 +80,7 @@ export default function App() {
                 signedInUserId.current = newSession?.user.id ?? null;
                 setNav({ page: "dashboard", id: null });
                 setLiveAccess(NO_LIVE_PATIENT_ACCESS);
+                setCanReadRooms(false);
             }
             setSession(newSession);
             clearTimeout(authTimer);
@@ -190,8 +194,15 @@ export default function App() {
             const livePatients = currentUser.profile.account_type === "patient" ? NO_LIVE_PATIENT_ACCESS : currentUser.profile.account_type === "student"
                 ? await getLivePatientAccess().catch(() => NO_LIVE_PATIENT_ACCESS)
                 : FULL_LIVE_PATIENT_ACCESS;
+            const roomsAllowed = await hasPermission("room.read").catch((error) => {
+                console.error("Unable to check Rooms permission:", error);
+                return false;
+            });
+
             if (request !== accountRequest.current) return;
+
             setLiveAccess(livePatients);
+            setCanReadRooms(roomsAllowed);
             setUser(currentUser);
             setError("");
             setAccountWarning("");
@@ -255,6 +266,7 @@ export default function App() {
         : nav.page === "studentCases" ? "studentCases"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
         : nav.page === "auditLog" ? "auditLog"
+        : nav.page === "rooms" ? "rooms"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -273,6 +285,8 @@ export default function App() {
             navigate("appointments");
         } else if (page === "auditLog" && isAdmin) {
             navigate("auditLog");
+        } else if (page === "rooms" && canReadRooms) {
+            navigate("rooms");
         } else {
             navigate("dashboard");
         }
@@ -345,6 +359,11 @@ export default function App() {
         case "auditLog":
             pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
+        case "rooms":
+            pageContent = canReadRooms
+                ? <Rooms />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
         case "dashboard":
         default:
             pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
@@ -370,6 +389,7 @@ export default function App() {
                 currentPage={navbarPage}
                 onNavigate={handleNavbarNavigate}
                 canUseLivePatients={liveAccess.read}
+                canReadRooms={canReadRooms}
             />
             <div className="flex-1 flex flex-col min-w-0 bg-white">
                 <Header
