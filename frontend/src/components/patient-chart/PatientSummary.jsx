@@ -103,6 +103,14 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
                         <label htmlFor="chart-address">Address</label>
                         <textarea id="chart-address" name="address" rows={2} value={form.address ?? ""} onChange={changeField} />
                     </div>
+                    <div className="chart-field">
+                        <label htmlFor="chart-last_visit">Last visit</label>
+                        <input id="chart-last_visit" name="last_visit" type="date" value={form.last_visit ?? ""} onChange={changeField} />
+                    </div>
+                    <div className="chart-field chart-field-wide">
+                        <label htmlFor="chart-last_visit_notes">Last visit notes</label>
+                        <textarea id="chart-last_visit_notes" name="last_visit_notes" rows={3} value={form.last_visit_notes ?? ""} onChange={changeField} />
+                    </div>
                 </fieldset>
                 {error && <p className="form-message form-message-error" role="alert">{error}</p>}
                 <div className="chart-actions" style={{ marginTop: "0.75rem" }}>
@@ -147,6 +155,13 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
                     <Detail label={index === 0 ? "Primary contact" : `Contact ${index + 1}`} value={contact.name} />
                     <Detail label="Phone" value={contact.phone} />
                 </dl>) : <p className="chart-muted">No emergency contacts recorded.</p>}
+            </article>
+            <article className="chart-card">
+                <h3>Last visit</h3>
+                <dl className="chart-details">
+                    <Detail label="Date" value={patient.last_visit} />
+                    <Detail label="Notes" value={patient.last_visit_notes} />
+                </dl>
             </article>
         </div>
     </section>;

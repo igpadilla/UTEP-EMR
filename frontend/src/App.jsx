@@ -4,7 +4,6 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Header from "./components/Header.jsx";
 import Navbar from "./components/Navbar.jsx";
 import PatientManager from "./pages/PatientManager.jsx";
-import PatientDetail from "./pages/PatientDetail.jsx";
 import PatientLookup from "./pages/PatientLookup.jsx";
 import StudentPatientDetail from "./pages/StudentPatientDetail.jsx";
 import Appointments from "./pages/Appointments.jsx";
@@ -28,6 +27,8 @@ import SimulationLobby from "./pages/SimulationLobby.jsx";
 import FrontDeskSimBoard from "./pages/FrontDeskSimBoard.jsx";
 import MedSimBoard from "./pages/MedSimBoard.jsx";
 import SimulationPatientView from "./pages/SimulationPatientView.jsx";
+import AuditLog from "./pages/AuditLog.jsx";
+import { stopSimulation } from "./services/simulationService.js";
 
 import {
     getSession,
@@ -49,6 +50,7 @@ export default function App() {
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
+    const signedInUserId = useRef(null);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -78,6 +80,12 @@ export default function App() {
         const { data: { subscription } } = onAuthStateChange((_event, newSession) => {
             signedIn = Boolean(newSession);
             accountRequest.current++;
+            //     A different account (or none) must not keep the last user's page open
+            if ((newSession?.user.id ?? null) !== signedInUserId.current) {
+                signedInUserId.current = newSession?.user.id ?? null;
+                setNav({ page: "dashboard", id: null });
+                setLiveAccess(NO_LIVE_PATIENT_ACCESS);
+            }
             setSession(newSession);
             clearTimeout(authTimer);
             if (newSession) {
@@ -250,14 +258,16 @@ export default function App() {
 
     const navbarPage =
         nav.page === "studentManagement" ? "students"
-        : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
+        : nav.page === "patientManager" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "courses"
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
-        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" || nav.page === "studentCases" ? "myCourses"
+        : nav.page === "studentCases" ? "studentCases"
+        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
         : nav.page === "simulationList" || nav.page === "simulationBuilder" || nav.page === "simulationMonitor" ? "courses"
         : nav.page === "simulationLobby" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
+        : nav.page === "auditLog" ? "auditLog"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -267,11 +277,15 @@ export default function App() {
             navigate("courses");
         } else if (page === "myCourses") {
             navigate("studentCourses");
+        } else if (page === "studentCases") {
+            navigate("studentCases");
         } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
         } else if (page === "appointments") {
             navigate("appointments");
+        } else if (page === "auditLog" && isAdmin) {
+            navigate("auditLog");
         } else {
             navigate("dashboard");
         }
@@ -287,9 +301,6 @@ export default function App() {
         case "patientManager":
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
-        case "patientDetail":
-            pageContent = <PatientDetail key={nav.id} id={nav.id} onNavigate={navigate} canManagePortal={isAdmin} />;
-            break;
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
@@ -300,6 +311,8 @@ export default function App() {
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
+                canManagePortal={isAdmin}
+                onArchived={() => navigate("patientManager")}
                 fromCourse={nav.fromCourse ?? null}
                 simMode={nav.backTo === "medSim"} />;
             break;
@@ -381,11 +394,32 @@ export default function App() {
                             <h3 style={{ marginTop: 0 }}>You are the patient actor</h3>
                             <p style={{ color: "var(--text-muted)" }}>The full actor script view is coming in the next update. Walk up to the front desk when instructed.</p>
                         </div>
-                        <button type="button" className="secondary-button" style={{ marginTop: "1rem" }}
-                            onClick={() => navigate("simulationLobby", nav.id)}>← Back to lobby</button>
+                        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", flexWrap: "wrap" }}>
+                            <button type="button" className="secondary-button"
+                                onClick={() => navigate("simulationLobby", nav.id)}>← Back to lobby</button>
+                            {(isAdmin || isInstructor) && (
+                                <button type="button"
+                                    style={{
+                                        background: "#dc2626", color: "#fff", border: "none",
+                                        borderRadius: "6px", padding: "0.5rem 1rem", fontWeight: 600,
+                                        cursor: "pointer", fontSize: "0.875rem"
+                                    }}
+                                    onClick={() => {
+                                        if (!confirm("End the simulation for all participants? This cannot be undone.")) return;
+                                        stopSimulation(nav.id)
+                                            .then(() => navigate("simulationList", null, { courseId: nav.courseId, courseName: nav.courseName }))
+                                            .catch((e) => alert(e.message));
+                                    }}>
+                                    End Simulation
+                                </button>
+                            )}
+                        </div>
                     </main>
                 </div>
             );
+            break;
+        case "auditLog":
+            pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "dashboard":
         default:
@@ -395,19 +429,44 @@ export default function App() {
     // The template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
 
+    if (isTemplateBuilder) {
+        return (
+            <div className="emr-app emr-app-fullscreen">
+                {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
+                {pageContent}
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+            </div>
+        );
+    }
+
     return (
-        <div className={`emr-app ${isTemplateBuilder ? "emr-app-fullscreen" : ""}`}>
-            {!isTemplateBuilder && <Header user={user} />}
-            {!isTemplateBuilder && <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />}
-            {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
-            {pageContent}
-            {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
-            {!isTemplateBuilder && (
-                <footer className="emr-footer">
-                    <span>Educational EMR Prototype</span>
+        <div className="min-h-screen flex bg-white text-slate-900 font-sans">
+            <Navbar
+                user={user}
+                currentPage={navbarPage}
+                onNavigate={handleNavbarNavigate}
+                canUseLivePatients={liveAccess.read}
+            />
+            <div className="flex-1 flex flex-col min-w-0 bg-white">
+                <Header
+                    user={user}
+                    onNavigate={navigate}
+                    canUseLivePatients={liveAccess.read}
+                />
+                {accountWarning && (
+                    <div className="px-6 py-2 bg-amber-50/60 border-b border-amber-200 text-xs text-amber-900" role="status">
+                        {accountWarning}
+                    </div>
+                )}
+                <div className="flex-1">
+                    {pageContent}
+                </div>
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+                <footer className="border-t border-slate-100 px-8 py-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>UTEP Educational EMR</span>
                     <span>For educational use only</span>
                 </footer>
-            )}
+            </div>
         </div>
     );
 }
