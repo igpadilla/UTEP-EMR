@@ -1,53 +1,54 @@
 import { useEffect, useState } from "react";
 import { getMyCourseCases } from "../services/instructorService.js";
+import { getMyActiveSimulations } from "../services/simulationService.js";
 import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
-    pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
-    nursing:                   "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
-    physical_therapy:          "linear-gradient(135deg, #047857 0%, #10b981 100%)",
-    occupational_therapy:      "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-    psychology:                "linear-gradient(135deg, #0f172a 0%, #334155 100%)",
-    psychiatry:                "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
+    pharmacy: "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
+    nursing: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+    physical_therapy: "linear-gradient(135deg, #047857 0%, #10b981 100%)",
+    occupational_therapy: "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
+    psychology: "linear-gradient(135deg, #0f172a 0%, #334155 100%)",
+    psychiatry: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
     speech_language_pathology: "linear-gradient(135deg, #be185d 0%, #ec4899 100%)",
-    social_work:               "linear-gradient(135deg, #065f46 0%, #059669 100%)",
-    inpatient_physician:       "linear-gradient(135deg, #991b1b 0%, #ef4444 100%)",
+    social_work: "linear-gradient(135deg, #065f46 0%, #059669 100%)",
+    inpatient_physician: "linear-gradient(135deg, #991b1b 0%, #ef4444 100%)",
 };
 const DEFAULT_BANNER = "linear-gradient(135deg, #475569 0%, #94a3b8 100%)";
 
 const DISCIPLINE_ABBR = {
-    pharmacy:                  "PHARM",
-    nursing:                   "NURS",
-    physical_therapy:          "PT",
-    occupational_therapy:      "OT",
-    psychology:                "PSYC",
-    psychiatry:                "PSYC",
+    pharmacy: "PHARM",
+    nursing: "NURS",
+    physical_therapy: "PT",
+    occupational_therapy: "OT",
+    psychology: "PSYC",
+    psychiatry: "PSYC",
     speech_language_pathology: "SLP",
-    social_work:               "SW",
-    inpatient_physician:       "MD",
+    social_work: "SW",
+    inpatient_physician: "MD",
 };
 
 
 const STATUS_STYLES = {
-    "not started":        { background: "#ede9fe", color: "#6d28d9" },
-    "in progress":        { background: "#e0f2fe", color: "#0284c7" },
+    "not started": { background: "#ede9fe", color: "#6d28d9" },
+    "in progress": { background: "#e0f2fe", color: "#0284c7" },
     "revision_requested": { background: "#fff7ed", color: "#c2410c" },
-    "pending review":     { background: "#fef3c7", color: "#b45309" },
-    "completed":          { background: "#ecfdf5", color: "#047857" },
+    "pending review": { background: "#fef3c7", color: "#b45309" },
+    "completed": { background: "#ecfdf5", color: "#047857" },
 };
 
 const STATUS_LABELS = {
-    "not started":        "Assigned",
-    "in progress":        "In Progress",
+    "not started": "Assigned",
+    "in progress": "In Progress",
     "revision_requested": "Revision Requested",
-    "pending review":     "Submitted",
-    "completed":          "Completed",
+    "pending review": "Submitted",
+    "completed": "Completed",
 };
 
 const TABS = [
-    { id: "home",          label: "Home"          },
-    { id: "cases",         label: "Cases"         },
-    { id: "gradebook",     label: "Gradebook"     },
+    { id: "home", label: "Home" },
+    { id: "cases", label: "Cases" },
+    { id: "gradebook", label: "Gradebook" },
     { id: "announcements", label: "Announcements", disabled: true },
 ];
 
@@ -67,12 +68,20 @@ function isOverdue(iso, status) {
     return new Date(iso) < new Date();
 }
 
+
 export default function StudentCourseDetail({ course, onNavigate }) {
     const [cases, setCases] = useState([]);
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState("home");
+    const [activeSims, setActiveSims] = useState([]);
+
+    useEffect(() => {
+        getMyActiveSimulations()
+            .then(sims => setActiveSims(sims.filter(s => s.simulations?.course_id === course.id)))
+            .catch(() => {});
+    }, [course.id]);
 
     useEffect(() => {
         getMyCourseCases(course.id)
@@ -88,13 +97,13 @@ export default function StudentCourseDetail({ course, onNavigate }) {
         ? `${instructor.first_name?.[0] ?? ""}${instructor.last_name?.[0] ?? ""}`.toUpperCase()
         : "?";
 
-    const completed    = cases.filter((c) => c.encounter_status === "completed").length;
+    const completed = cases.filter((c) => c.encounter_status === "completed").length;
     const needsRevision = cases.filter((c) => c.encounter_status === "revision_requested").length;
-    const scored       = cases.filter((c) => c.score != null);
-    const avgScore     = scored.length
+    const scored = cases.filter((c) => c.score != null);
+    const avgScore = scored.length
         ? (scored.reduce((s, c) => s + Number(c.score), 0) / scored.length).toFixed(1)
         : null;
-    const upcoming     = cases
+    const upcoming = cases
         .filter((c) => c.encounter_status !== "completed" && c.due_date)
         .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
 
@@ -128,6 +137,22 @@ export default function StudentCourseDetail({ course, onNavigate }) {
             </div>
 
             {error && <p className="form-message form-message-error" style={{ margin: "1rem 2rem" }}>{error}</p>}
+
+            {activeSims.map(p => (
+                <div key={p.simulation_id}
+                    style={{ background: "#dcfce7", border: "1px solid #86efac", borderRadius: "8px",
+                        padding: "0.75rem 1.25rem", margin: "1rem 2rem",
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                    <span style={{ fontWeight: 600, color: "#15803d" }}>
+                        🏥 Active simulation: {p.simulations?.title}
+                    </span>
+                    <button type="button" className="primary-button"
+                        style={{ padding: "0.35rem 0.9rem", fontSize: "0.875rem" }}
+                        onClick={() => onNavigate("simulationLobby", p.simulation_id)}>
+                        Join →
+                    </button>
+                </div>
+            ))}
 
             {/* ── Layout: side nav + content ───────────────────── */}
             <div className="course-layout">

@@ -21,6 +21,13 @@ import PatientChart from "./pages/PatientChart.jsx";
 import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
+import SimulationList from "./pages/SimulationList.jsx";
+import SimulationBuilder from "./pages/SimulationBuilder.jsx";
+import SimulationMonitor from "./pages/SimulationMonitor.jsx";
+import SimulationLobby from "./pages/SimulationLobby.jsx";
+import FrontDeskSimBoard from "./pages/FrontDeskSimBoard.jsx";
+import MedSimBoard from "./pages/MedSimBoard.jsx";
+import SimulationPatientView from "./pages/SimulationPatientView.jsx";
 
 import {
     getSession,
@@ -191,10 +198,13 @@ export default function App() {
         } catch (error) {
             if (request !== accountRequest.current) return;
             console.error(error);
-            //     Keep the open page and its edits when a background check cannot connect
-            if (background) setAccountWarning("Unable to check your account right now. We'll try again shortly.");
-            else setUser(null);
-            setError("Unable to load your account.");
+            if (background) {
+                // Keep the open page — just show a dismissible warning
+                setAccountWarning("Unable to check your account right now. We'll try again shortly.");
+            } else {
+                setUser(null);
+                setError("Unable to load your account.");
+            }
         }
     }
 
@@ -246,6 +256,8 @@ export default function App() {
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "courses"
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" || nav.page === "studentCases" ? "myCourses"
+        : nav.page === "simulationList" || nav.page === "simulationBuilder" || nav.page === "simulationMonitor" ? "courses"
+        : nav.page === "simulationLobby" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -288,7 +300,8 @@ export default function App() {
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
-                fromCourse={nav.fromCourse ?? null} />;
+                fromCourse={nav.fromCourse ?? null}
+                simMode={nav.backTo === "medSim"} />;
             break;
         case "studentManagement":
             pageContent = canManageStudents
@@ -329,6 +342,50 @@ export default function App() {
             break;
         case "courseDetail":
             pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
+            break;
+        case "simulationList":
+            pageContent = canManageCourses
+                ? <SimulationList courseId={nav.courseId ?? nav.id} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationBuilder":
+            pageContent = canManageCourses
+                ? <SimulationBuilder simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationMonitor":
+            pageContent = <SimulationMonitor simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />;
+            break;
+        case "simulationLobby":
+            pageContent = <SimulationLobby simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "frontDeskSim":
+            pageContent = <FrontDeskSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "medSim":
+            pageContent = <MedSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "simulationPatient":
+            pageContent = <SimulationPatientView encounterId={nav.id} simId={nav.simId} onNavigate={navigate} />;
+            break;
+        case "patientActorSim":
+            pageContent = (
+                <div className="emr-app">
+                    <main className="dashboard-main" style={{ maxWidth: "520px" }}>
+                        <section className="welcome-section">
+                            <p className="section-title">Active Simulation</p>
+                            <h2>Patient Actor</h2>
+                        </section>
+                        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
+                            <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🎭</div>
+                            <h3 style={{ marginTop: 0 }}>You are the patient actor</h3>
+                            <p style={{ color: "var(--text-muted)" }}>The full actor script view is coming in the next update. Walk up to the front desk when instructed.</p>
+                        </div>
+                        <button type="button" className="secondary-button" style={{ marginTop: "1rem" }}
+                            onClick={() => navigate("simulationLobby", nav.id)}>← Back to lobby</button>
+                    </main>
+                </div>
+            );
             break;
         case "dashboard":
         default:

@@ -1,4 +1,5 @@
-import React from "react";
+import { useEffect, useState } from "react";
+import { getMyActiveSimulations } from "../services/simulationService.js";
 
 export default function Dashboard({ user, onNavigate, canUseLivePatients = false }) {
     const profile = user?.profile ?? {};
@@ -8,6 +9,11 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
         profile.firstName ||
         profile.full_name?.split(" ")[0] ||
         "User";
+
+    const [activeSims, setActiveSims] = useState([]);
+    useEffect(() => {
+        getMyActiveSimulations().then(setActiveSims).catch(() => {});
+    }, []);
 
     const isAdmin = profile.account_type === "admin";
     const isInstructor = profile.account_type === "instructor";
@@ -26,6 +32,22 @@ export default function Dashboard({ user, onNavigate, canUseLivePatients = false
                     <p className="section-title">Dashboard</p>
                     <h2>Welcome, {firstName}</h2>
                 </section>
+
+                {activeSims.map(p => (
+                    <div key={p.simulation_id}
+                        style={{ background: "#dcfce7", border: "1px solid #86efac", borderRadius: "8px",
+                            padding: "0.75rem 1.25rem", marginBottom: "1rem",
+                            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                        <span style={{ fontWeight: 600, color: "#15803d" }}>
+                            🏥 Active simulation: {p.simulations?.title}
+                        </span>
+                        <button type="button" className="primary-button"
+                            style={{ padding: "0.35rem 0.9rem", fontSize: "0.875rem" }}
+                            onClick={() => onNavigate("simulationLobby", p.simulation_id)}>
+                            Join →
+                        </button>
+                    </div>
+                ))}
 
                 <section className="dashboard-section">
                     <div className="section-heading">

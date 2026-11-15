@@ -19,6 +19,7 @@ import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
 import PatientDetail from "./PatientDetail.jsx";
 import CaseAssign from "./CaseAssign.jsx";
+import SimulationList from "./SimulationList.jsx";
 
 const DISCIPLINE_BANNERS = {
     pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
@@ -53,6 +54,7 @@ const TABS = [
     { id: "roster",        label: "Roster"        },
     { id: "gradebook",     label: "Gradebook"     },
     { id: "announcements", label: "Announcements", disabled: true },
+    { id: "simulations",   label: "Simulations"   },
     { id: "settings",      label: "Settings"      },
 ];
 
@@ -359,7 +361,12 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             type="button"
                             disabled={tab.disabled}
                             title={tab.disabled ? "Coming soon" : undefined}
-                            onClick={() => { if (!tab.disabled) { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); } }}
+                            onClick={() => {
+                                if (tab.disabled) return;
+                                setActiveTab(tab.id);
+                                setBuilderState(null);
+                                setAssignState(null);
+                            }}
                         >
                             {tab.label}
                             {tab.id === "cases" && uniqueCaseGroups > 0 && (
@@ -672,6 +679,15 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* ── SIMULATIONS ── */}
+                    {activeTab === "simulations" && (
+                        <SimulationList
+                            courseId={courseId}
+                            courseName={course?.course_number}
+                            onNavigate={onNavigate}
+                        />
                     )}
 
                     {/* ── SETTINGS ── */}

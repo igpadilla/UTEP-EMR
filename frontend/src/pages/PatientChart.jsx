@@ -8,6 +8,7 @@ import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
 import PatientMedications from "../components/patient-chart/PatientMedications.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { loadPatientChart } from "../services/patientChartService.js";
+import NotesPanel from "../components/NotesPanel.jsx";
 import "./PatientChart.css";
 
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
@@ -16,7 +17,7 @@ const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Al
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated, fromCourse = null,
+    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated, fromCourse = null, simMode = false,
 }) {
     // With no patient yet, the chart opens on an empty demographics form that creates one.
     // The other sections stay locked until the patient exists.
@@ -154,7 +155,7 @@ export default function PatientChart({
                             <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={() => {
                                 dismissNotice(); setReload((value) => value + 1);
                             }}>Refresh chart</button>
-                            {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>← Back</button>}
+                            {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>{simMode ? "← Back to Patients" : "← Back"}</button>}
                         </div>
                     </div>
                 </div>
@@ -199,6 +200,7 @@ export default function PatientChart({
                     : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
                         onEdit={() => setEditingSection("medications")} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
+                    : activeTab === "Notes" ? <NotesPanel caseId={caseId} simMode={simMode} locked={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
 

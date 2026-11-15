@@ -29,11 +29,13 @@ export async function getPatientById(id) {
     return data;
 }
 
-export async function getMyTemplates() {
-    const { data, error } = await supabase
+export async function getMyTemplates(courseId = null) {
+    let query = supabase
         .from("patient_templates")
         .select("*")
         .order("created_at", { ascending: false });
+    if (courseId) query = query.eq("course_id", courseId);
+    const { data, error } = await query;
     if (error) throw error;
     return data;
 }
