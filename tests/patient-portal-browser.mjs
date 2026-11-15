@@ -41,6 +41,8 @@ try {
         if (path.endsWith('/token')) return reply({ access_token: jwt, refresh_token: 'test-refresh', token_type: 'bearer', expires_in:3600, user });
         if (path.endsWith('/user')) return reply(user);
         if (path.endsWith('/logout')) return reply({});
+        if (path.endsWith('/rpc/log_record_view')) return reply(null);
+        if (['assigned_cases', 'courses'].some((table) => path.endsWith(`/${table}`))) return reply([]);
         if (path.endsWith('/profiles')) return reply({ user_id:user.id, first_name:'Avery', last_name:'Demo', account_type:accountType, active:true, must_change_password:mustChange });
         if (path.endsWith('/patients')) {
             const patient = { id:patientId, ...records.patient, age:36, current_medications:[], allergies:[], medical_history:[] };
@@ -120,6 +122,7 @@ try {
         await page.getByRole('button', { name:'Sign In', exact:true }).click();
         await page.getByRole('button', { name:'Patients', exact:true }).click();
         await page.getByRole('cell', { name:'Avery Demo', exact:true }).click();
+        await page.getByRole('tab', { name:'Visits', exact:true }).click();
     }
     await page.setViewportSize({ width:1366, height:1000 });
     await signInAndOpenPatient();

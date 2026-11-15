@@ -52,7 +52,7 @@ try {
     let roster = [students[0]];
     const enrollmentRequests = [];
     const criteria = [{ key: "complaint", label: "Chief complaint", maxPoints: 2 }, { key: "history", label: "History", maxPoints: 8 }];
-    const assigned = { id: "case-1", encounter_status: "pending review", assigned_at: "2026-10-01",
+    const assigned = { id: "case-1", course_id: course.id, encounter_status: "pending review", assigned_at: "2026-10-01",
         encounter_notes: "Student clinical findings", patient_snapshot: {}, rubric_scores: {},
         patient_templates: { first_name: "Test", last_name: "Patient", chief_complaint: "Follow-up",
             rubric_criteria: criteria, expectations_rubric: "Reference guide for the existing review workflow" },
@@ -231,7 +231,10 @@ try {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByRole("button",{name:"Create Student",exact:true}).waitFor({state:"hidden"});
     assert.equal(await page.getByLabel("CSV Data").count(),0);
-    await page.getByRole("button",{name:/^Case Management/}).click();
+    await page.getByRole("button", { name: "Courses", exact: true }).click();
+    await page.getByText("P", { exact: true }).click();
+    await page.getByRole("button", { name: /^Cases\b/ }).click();
+    await page.getByRole("row").filter({ hasText: "Follow-up" }).click();
     console.log("PASS: instructors keep rosters and case management but cannot open student forms, import or change enrollment");
     await page.getByRole("button", { name: "Grade", exact: true }).click();
     await page.getByText("Reference guide for the existing review workflow").waitFor();
@@ -262,7 +265,7 @@ try {
     await page.getByLabel("Email", { exact: true }).fill("student@example.edu");
     await page.getByLabel("Password", { exact: true }).fill("test-password");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await page.getByRole("button", { name: /^My Cases/ }).click();
+    await page.getByRole("button", { name: "Assigned Cases", exact: true }).click();
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     const draft = page.getByPlaceholder("Document your clinical reasoning, findings, assessment, and plan…");
     const note = "Unsaved student note that must survive a connection failure";
@@ -314,7 +317,7 @@ try {
     await page.getByLabel("Password", { exact: true }).fill("test-password");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "Unable to load your account" }).waitFor();
-    assert.equal(await page.getByRole("button", { name: /^My Cases/ }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Assigned Cases", exact: true }).count(), 0);
     profileUnavailable = false;
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await page.getByRole("button", { name: "Continue", exact:true }).waitFor();

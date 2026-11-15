@@ -58,7 +58,7 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
         } else if (fromCourseId) {
             onNavigate("courseDetail", fromCourseId);
         } else {
-            onNavigate("instructorCases");
+            onNavigate("courses");
         }
     }
 

@@ -1,4 +1,6 @@
 
+import Icd10Search from "./patient-chart/Icd10Search.jsx";
+
 function getFieldValue(data, key) {
     return key.split(".").reduce(
         (value, part) => value?.[part],
@@ -58,6 +60,10 @@ export default function DynamicClinicalNoteForm({
                     field.key
                 );
 
+                // ICD-10 fields also keep the code's description next to it
+                const descKey = field.key.replace(/_code$/, "") + "_description";
+                const descValue = getFieldValue(value, descKey);
+
                 return (
                     <div
                         key={field.key}
@@ -71,7 +77,21 @@ export default function DynamicClinicalNoteForm({
                             {field.required && " *"}
                         </label>
 
-                        {field.type === "textarea" ? (
+                        {field.type === "icd10" ? (
+                            readOnly || disabled ? (
+                                <div className="case-notes-readonly">
+                                    {fieldValue ? `${fieldValue}${descValue ? ` — ${descValue}` : ""}` : <em>Not documented.</em>}
+                                </div>
+                            ) : (
+                                <Icd10Search
+                                    id={`note-${field.key}`}
+                                    value={fieldValue ? { code: fieldValue, description: descValue } : null}
+                                    onChange={({ code, description }) =>
+                                        onChange(setFieldValue(setFieldValue(value, field.key, code), descKey, description))
+                                    }
+                                />
+                            )
+                        ) : field.type === "textarea" ? (
                             <textarea
                                 id={`note-${field.key}`}
                                 className="instructor-textarea"
@@ -90,6 +110,7 @@ export default function DynamicClinicalNoteForm({
                                     )
                                 }
                                 style={{ width: "100%" }}
+                                required={Boolean(field.required)}
                             />
                         ) : (
                             <input
@@ -110,6 +131,7 @@ export default function DynamicClinicalNoteForm({
                                     )
                                 }
                                 style={{ width: "100%" }}
+                                required={Boolean(field.required)}
                             />
                         )}
                     </div>

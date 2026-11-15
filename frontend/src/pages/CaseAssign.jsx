@@ -13,7 +13,7 @@ export default function CaseAssign({ templateId, fromCourseId = null, fromCourse
         } else if (fromCourseId) {
             onNavigate("courseDetail", fromCourseId);
         } else {
-            onNavigate("instructorCases");
+            onNavigate("courses");
         }
     }
     const [template, setTemplate] = useState(null);

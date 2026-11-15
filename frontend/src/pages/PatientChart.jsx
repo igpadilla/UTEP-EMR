@@ -5,8 +5,11 @@ import DiagnosticsPanel from "../components/diagnostics/DiagnosticsPanel.jsx";
 import PatientSummary from "../components/patient-chart/PatientSummary.jsx";
 import PatientAllergiesHistory from "../components/patient-chart/PatientAllergiesHistory.jsx";
 import PatientDiagnoses from "../components/patient-chart/PatientDiagnoses.jsx";
+import PatientImmunizations from "../components/patient-chart/PatientImmunizations.jsx";
+import PatientMedications from "../components/patient-chart/PatientMedications.jsx";
+import PatientVisits from "../components/patient-chart/PatientVisits.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
-import { loadPatientChart } from "../services/patientChartService.js";
+import { archivePatient, loadPatientChart } from "../services/patientChartService.js";
 import "./PatientChart.css";
 
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
@@ -15,7 +18,7 @@ const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Al
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, embedded = false, onPatientSaved, onPatientCreated, fromCourse = null,
+    id, caseId, backTo, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null,
 }) {
     // With no patient yet, the chart opens on an empty demographics form that creates one.
     // The other sections stay locked until the patient exists.
@@ -106,6 +109,16 @@ export default function PatientChart({
         tabButtons.current[next]?.focus();
     }
 
+    async function archive() {
+        if (!confirm(`Archive ${patient.first_name} ${patient.last_name}? They will be hidden from patient lists.`)) return;
+        try {
+            await archivePatient(patient);
+            onArchived();
+        } catch (archiveError) {
+            triggerNotice(archiveError.message);
+        }
+    }
+
     function savedPatient(saved, message) {
         if (creating) {
             onPatientCreated(saved);
@@ -153,6 +166,8 @@ export default function PatientChart({
                             <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={() => {
                                 dismissNotice(); setReload((value) => value + 1);
                             }}>Refresh chart</button>
+                            {onArchived && canEdit && !creating && <button type="button" className="secondary-action-button chart-archive-button"
+                                disabled={Boolean(editingSection)} onClick={archive}>Archive patient</button>}
                             {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>← Back</button>}
                         </div>
                     </div>
@@ -189,15 +204,23 @@ export default function PatientChart({
 
                 {activeTab === "Summary" ? <PatientSummary {...sectionProps} editing={editingSection === "demographics"}
                     onEdit={() => setEditingSection("demographics")} />
-                    : activeTab === "Allergies & History" ? <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
-                        onEdit={() => setEditingSection("history")} />
+                    : activeTab === "Allergies & History" ? <>
+                        <PatientAllergiesHistory {...sectionProps} editing={editingSection === "history"}
+                            onEdit={() => setEditingSection("history")} />
+                        <PatientImmunizations {...sectionProps} editing={editingSection === "immunizations"}
+                            onEdit={() => setEditingSection("immunizations")} />
+                    </>
                     : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
                     : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
+                        onEdit={() => setEditingSection("medications")} />
+                    : activeTab === "Visits" ? <PatientVisits {...sectionProps} caseId={caseId} canManagePortal={canManagePortal} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
+
         </main>
     );
 }

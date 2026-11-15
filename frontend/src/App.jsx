@@ -4,7 +4,6 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Header from "./components/Header.jsx";
 import Navbar from "./components/Navbar.jsx";
 import PatientManager from "./pages/PatientManager.jsx";
-import PatientDetail from "./pages/PatientDetail.jsx";
 import PatientLookup from "./pages/PatientLookup.jsx";
 import StudentPatientDetail from "./pages/StudentPatientDetail.jsx";
 import Appointments from "./pages/Appointments.jsx";
@@ -21,6 +20,7 @@ import PatientChart from "./pages/PatientChart.jsx";
 import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
+import AuditLog from "./pages/AuditLog.jsx";
 
 import {
     getSession,
@@ -46,6 +46,7 @@ export default function App() {
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
+    const signedInUserId = useRef(null);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -75,6 +76,12 @@ export default function App() {
         const { data: { subscription } } = onAuthStateChange((_event, newSession) => {
             signedIn = Boolean(newSession);
             accountRequest.current++;
+            //     A different account (or none) must not keep the last user's page open
+            if ((newSession?.user.id ?? null) !== signedInUserId.current) {
+                signedInUserId.current = newSession?.user.id ?? null;
+                setNav({ page: "dashboard", id: null });
+                setLiveAccess(NO_LIVE_PATIENT_ACCESS);
+            }
             setSession(newSession);
             clearTimeout(authTimer);
             if (newSession) {
@@ -246,12 +253,14 @@ export default function App() {
 
     const navbarPage =
         nav.page === "studentManagement" ? "students"
-        : nav.page === "patientManager" || nav.page === "patientDetail" ? "patients"
+        : nav.page === "patientManager" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
         : nav.page === "instructorCases" || nav.page === "templateBuilder" || nav.page === "caseAssign" ? "courses"
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
-        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" || nav.page === "studentCases" ? "myCourses"
+        : nav.page === "studentCases" ? "studentCases"
+        : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
+        : nav.page === "auditLog" ? "auditLog"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
@@ -265,16 +274,17 @@ export default function App() {
         } 
         else if (page === "myCourses") {
             navigate("studentCourses");
-        } 
-        else if (page === "patients") {
+        } else if (page === "studentCases") {
+            navigate("studentCases");
+        } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
         } 
         else if (page === "appointments") {
             navigate("appointments");
-        } 
-        
-        else {
+        } else if (page === "auditLog" && isAdmin) {
+            navigate("auditLog");
+        } else {
             navigate("dashboard");
         }
     }
@@ -289,10 +299,6 @@ export default function App() {
         case "patientManager":
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
-            
-        case "patientDetail":
-            pageContent = <PatientDetail key={nav.id} id={nav.id} onNavigate={navigate} canManagePortal={isAdmin} />;
-            break;
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
@@ -305,6 +311,8 @@ export default function App() {
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
+                canManagePortal={isAdmin}
+                onArchived={() => navigate("patientManager")}
                 fromCourse={nav.fromCourse ?? null} />;
             break;
             
@@ -350,6 +358,9 @@ export default function App() {
                 ? <CourseDetail key={nav.id} courseId={nav.id} onNavigate={navigate} canManageStudents={canManageStudents} />
                 : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
+        case "auditLog":
+            pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
         case "dashboard":
         default:
             pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
@@ -358,21 +369,44 @@ export default function App() {
     // Now, the template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
 
+    if (isTemplateBuilder) {
+        return (
+            <div className="emr-app emr-app-fullscreen">
+                {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
+                {pageContent}
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+            </div>
+        );
+    }
+
     return (
-    // start of the div for template
-        <div className={`emr-app ${isTemplateBuilder ? "emr-app-fullscreen" : ""}`}>
-        
-            {!isTemplateBuilder && <Header user={user} />}
-            {!isTemplateBuilder && <Navbar user={user} currentPage={navbarPage} onNavigate={handleNavbarNavigate} />}
-            {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
-            {pageContent}
-            {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
-            {!isTemplateBuilder && (
-                <footer className="emr-footer">
-                    <span>Educational EMR Prototype</span>
+        <div className="min-h-screen flex bg-white text-slate-900 font-sans">
+            <Navbar
+                user={user}
+                currentPage={navbarPage}
+                onNavigate={handleNavbarNavigate}
+                canUseLivePatients={liveAccess.read}
+            />
+            <div className="flex-1 flex flex-col min-w-0 bg-white">
+                <Header
+                    user={user}
+                    onNavigate={navigate}
+                    canUseLivePatients={liveAccess.read}
+                />
+                {accountWarning && (
+                    <div className="px-6 py-2 bg-amber-50/60 border-b border-amber-200 text-xs text-amber-900" role="status">
+                        {accountWarning}
+                    </div>
+                )}
+                <div className="flex-1">
+                    {pageContent}
+                </div>
+                {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
+                <footer className="border-t border-slate-100 px-8 py-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>UTEP Educational EMR</span>
                     <span>For educational use only</span>
                 </footer>
-            )}
+            </div>
         </div>
         
     );

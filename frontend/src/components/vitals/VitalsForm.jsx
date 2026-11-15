@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { recordVitals, correctVitals } from "../../services/vitalsService.js";
 import { getFlag } from "./vitalRanges.js";
 
@@ -39,14 +39,25 @@ export default function VitalsForm({ owner, correcting, onSaved, onCancel }) {
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    // Values the checks run on; a field is only checked after a pause in typing or on leaving it
+    const [checked, setChecked] = useState(form);
+    const typingTimer = useRef();
 
     function handleChange(e) {
-        setForm({ ...form, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setForm({ ...form, [name]: value });
+        setChecked((current) => ({ ...current, [name]: "" }));
+        clearTimeout(typingTimer.current);
+        typingTimer.current = setTimeout(() => showCheck(name, value), 1200);
+    }
+
+    function showCheck(name, value) {
+        setChecked((current) => ({ ...current, [name]: value }));
     }
 
     // Check every number field once; used by the inputs and the "Check before saving" panel.
     const checks = FIELDS.map(([name, label, min, max]) => {
-        const value = form[name] ?? "";
+        const value = checked[name] ?? "";
         const impossible = value !== "" && (Number(value) < min || Number(value) > max);
         const flag = impossible ? "" : getFlag(name, value);
         let message = "";
@@ -106,7 +117,7 @@ export default function VitalsForm({ owner, correcting, onSaved, onCancel }) {
                         <p className="vitals-subtitle">
                             {correcting
                                 ? `Correcting the set from ${new Date(correcting.measured_at).toLocaleString()}`
-                                : "Checks update as you type."}
+                                : "Checks appear when you pause or move to the next field."}
                         </p>
                     </div>
                     <div className="vitals-field vitals-measured-at">
@@ -140,8 +151,9 @@ export default function VitalsForm({ owner, correcting, onSaved, onCancel }) {
                                         step="any"
                                         min={check.min}
                                         max={check.max}
-                                        value={check.value}
+                                        value={form[name] ?? ""}
                                         onChange={handleChange}
+                                        onBlur={(e) => showCheck(name, e.target.value)}
                                         disabled={saving}
                                         className={state ? `vitals-input-${state}` : ""}
                                         aria-describedby={`vitals-${name}-message`}

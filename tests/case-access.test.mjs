@@ -340,10 +340,10 @@ test("a case built from a patient snapshots the whole chart into the student's c
         assert.equal((await db.query(`select 1 from vital_sign_sets where assigned_case_id in ('${NURSE_CASE}','${PT_CASE}')`)).rows.length, 0);
         assert.equal((await db.query(`select patient_snapshot->>'first_name' f from assigned_cases where id = '${PT_CASE}'`)).rows[0].f, "Maria");
 
-        // A patient that a template is built from cannot be deleted out from under it.
+        // Patients are never hard deleted (archived instead), so a template's patient stays in place.
         await db.exec(`insert into patients(id, first_name, last_name, age) values ('40000000-0000-4000-8000-000000000002','Ana','Ruiz',30);
             update patient_templates set patient_id = '40000000-0000-4000-8000-000000000002' where id = '${TEMPLATE}'`);
-        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /patient_templates_patient_id_fkey/);
+        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /cannot be deleted/);
     } finally {
         await db.close();
     }
@@ -399,6 +399,8 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
         await as(db, TEACHER, `insert into diagnostic_results(
             order_id, structured_values, report_impression, overall_flag
         ) values ('${labOrder.id}', '[{"code":"hgb","name":"Hemoglobin","value":9.8,"unit":"g/dL","flag":"low"}]'::jsonb, 'Mild anemia', 'abnormal')`);
+        // The audit log finds a result's patient through its order.
+        assert.equal((await db.query(`select patient_id from phi_audit_log where table_name = 'diagnostic_results' and action = 'INSERT'`)).rows[0].patient_id, PATIENT);
 
         await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
             values ('${DIAG_TEMPLATE}','${TEACHER}','John','Doe',45,'fatigue','${PATIENT}')`);
@@ -426,6 +428,44 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
 
         await as(db, NURSE_STUDENT, `insert into audit_logs(case_id, actor_id, action_type, new_value)
             values ('${DIAG_CASE}', '${NURSE_STUDENT}', 'IMAGING_ORDERED', 'Chest X-Ray')`);
+    } finally {
+        await db.close();
+    }
+});
+
+test("patient changes are written to the PHI audit log, which only admins read and nobody edits", async () => {
+    const db = await setup();
+    try {
+        await as(db, TEACHER, `update patients set allergies = array['Penicillin'], age = 46 where id = '${PATIENT}'`);
+        const [entry] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`);
+        assert.equal(entry.actor_id, TEACHER);
+        assert.equal(entry.patient_id, PATIENT);
+        assert.deepEqual([...entry.changed_fields].sort(), ["age", "allergies"]);
+
+        // A save that changes nothing is not logged.
+        await as(db, TEACHER, `update patients set age = 46, updated_at = now() where id = '${PATIENT}'`);
+        assert.equal((await as(db, ADMIN, `select 1 from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`)).length, 1);
+
+        // Opening a chart is logged under the viewer's account.
+        await as(db, TEACHER, `select log_record_view('patients', '${PATIENT}')`);
+        const [view] = await as(db, ADMIN, `select * from phi_audit_log where action = 'VIEW'`);
+        assert.equal(view.actor_id, TEACHER);
+        assert.equal(view.patient_id, PATIENT);
+        await assert.rejects(as(db, TEACHER, `select log_record_view('profiles', '${PATIENT}')`), /Cannot log/);
+        await as(db, TEACHER, `select log_record_view('diagnostic_results', '${PATIENT}')`);
+
+        // Account changes (made through the account edge functions) are logged with the affected account as the record.
+        await db.exec(`update profiles set active = false where user_id = '${OTHER_TEACHER}'`);
+        const [account] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'profiles' and record_id = '${OTHER_TEACHER}' and action = 'UPDATE' order by id desc limit 1`);
+        assert.deepEqual(account.changed_fields, ["active"]);
+
+        assert.equal((await as(db, TEACHER, `select 1 from phi_audit_log`)).length, 0);
+        // The admin screen reads names, filters by person or patient, and refuses non-admins.
+        const rows = await as(db, ADMIN, `select * from get_phi_audit_log(p_search => 'Doe', p_action => 'UPDATE')`);
+        assert.ok(rows.length > 0 && rows.every((row) => row.patient === "John Doe" && row.action === "UPDATE"));
+        await assert.rejects(as(db, TEACHER, `select * from get_phi_audit_log()`), /Only admins/);
+        await assert.rejects(as(db, ADMIN, `delete from phi_audit_log`), /permission denied/);
+        await assert.rejects(as(db, ADMIN, `update phi_audit_log set actor_id = null`), /permission denied/);
     } finally {
         await db.close();
     }

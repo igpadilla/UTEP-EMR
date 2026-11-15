@@ -116,6 +116,7 @@ export default function CourseForm({ onNavigate, canManageStudents = false }) {
         e.preventDefault();
         if (!form.course_number.trim()) { setError("Course number is required."); return; }
         if (!form.crn.trim())           { setError("CRN is required."); return; }
+        if (!form.discipline)           { setError("Clinical discipline is required."); return; }
 
         setSubmitting(true);
         setError("");
@@ -248,7 +249,7 @@ export default function CourseForm({ onNavigate, canManageStudents = false }) {
                                         disabled={submitting}
                                         className="instructor-search-input"
                                     >
-                                        <option value="">— None —</option>
+                                        <option value="">Choose a discipline</option>
                                         {roles.map((r) => (
                                             <option key={r.role_name} value={r.role_name}>
                                                 {r.display_name}
@@ -284,7 +285,6 @@ export default function CourseForm({ onNavigate, canManageStudents = false }) {
                                 </button>
                             </div>
                         </form>
-
                     </div>
                 </div>
             )}
