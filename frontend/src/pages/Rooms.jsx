@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getRooms, getPatientsForRoomAssignment, assignPatientToRoom } from "../services/roomService.js";
+import { getRooms, getPatientsForRoomAssignment, assignPatientToRoom, dismissPatientFromRoom } from "../services/roomService.js";
 import { hasPermission } from "../services/permissionService.js";
 
 export default function Rooms() {
@@ -8,6 +8,12 @@ export default function Rooms() {
     const [error, setError] = useState("");
     const [canAssignRooms, setCanAssignRooms] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState(null);
+    const [canDismissRooms, setCanDismissRooms] = useState(false);
+
+    const [selectedDismissalRoom, setSelectedDismissalRoom] = useState(null);
+    const [dismissing, setDismissing] = useState(false);
+    const [dismissalError, setDismissalError] = useState("");
+    const [dismissalSuccess, setDismissalSuccess] = useState("");
 
     const [patients, setPatients] = useState([]);
     const [selectedPatientId, setSelectedPatientId] = useState("");
@@ -69,6 +75,32 @@ export default function Rooms() {
         }
 
         checkAssignmentPermission();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function checkDismissalPermission() {
+            try {
+                const allowed = await hasPermission("room.dismiss");
+
+                if (!cancelled) {
+                    setCanDismissRooms(allowed === true);
+                }
+            } catch (err) {
+                console.error("Unable to check room dismissal permission:", err);
+
+                if (!cancelled) {
+                    setCanDismissRooms(false);
+                }
+            }
+        }
+
+        checkDismissalPermission();
 
         return () => {
             cancelled = true;
@@ -152,6 +184,44 @@ export default function Rooms() {
         }
     }
 
+    async function handleDismissPatient() {
+        if (
+            !selectedDismissalRoom ||
+            !selectedDismissalRoom.patient_id ||
+            !canDismissRooms ||
+            dismissing
+        ) {
+            return;
+        }
+
+        setDismissing(true);
+        setDismissalError("");
+        setDismissalSuccess("");
+
+        try {
+            await dismissPatientFromRoom(selectedDismissalRoom.patient_id);
+
+            // Close the confirmation panel after a successful dismissal.
+            setSelectedDismissalRoom(null);
+            setDismissalSuccess("Patient dismissed from room successfully.");
+
+            // Refresh room occupancy information.
+            try {
+                const updatedRooms = await getRooms();
+                setRooms(updatedRooms);
+            } catch (refreshError) {
+                console.error("Dismissal succeeded, but rooms could not be refreshed:", refreshError);
+                setDismissalError("Dismissal succeeded, but room information could not be refreshed. Please reload the page.");
+            }
+        } catch (err) {
+            console.error("Unable to dismiss patient:", err);
+
+            setDismissalError(err.message || "Unable to dismiss patient from room.");
+        } finally {
+            setDismissing(false);
+        }
+    }
+
     const totalRooms = rooms.length;
     const occupiedRooms = rooms.filter(
         (room) => room.is_active && room.is_occupied
@@ -177,6 +247,10 @@ export default function Rooms() {
                 <div role="status" className="border border-emerald-200 bg-emerald-50 p-4 mb-6">
                     <p className="text-sm text-emerald-700">{assignmentSuccess}</p>
                 </div>
+            )}
+
+            {dismissalSuccess && (
+                <div role="status" className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{dismissalSuccess}</div>
             )}
 
             {loading ? (
@@ -252,6 +326,53 @@ export default function Rooms() {
                         </section>
                     )}
 
+                    {selectedDismissalRoom && (
+                        <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900">Confirm Patient Dismissal</h3>
+
+                            <p className="mt-2 text-sm text-slate-600">Are you sure you want to dismiss this patient from their assigned room?</p>
+
+                            <div className="mt-4 space-y-2 text-sm text-slate-700">
+                                <p>
+                                    <span className="font-semibold">Room:</span>{" "}
+                                    {selectedDismissalRoom.room_number}
+                                </p>
+
+                                <p>
+                                    <span className="font-semibold">Patient ID:</span>{" "}
+                                    {selectedDismissalRoom.patient_id}
+                                </p>
+                            </div>
+
+                            {dismissalError && (
+                                <p role="alert" className="mt-4 text-sm text-rose-700">{dismissalError}</p>
+                            )}
+
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedDismissalRoom(null);
+                                        setDismissalError("");
+                                    }}
+                                    disabled={dismissing}
+                                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleDismissPatient}
+                                    disabled={dismissing}
+                                    className="rounded-md bg-rose-700 px-4 py-2 text-sm font-medium text-white hover:bg-rose-800 disabled:opacity-50"
+                                >
+                                    {dismissing ? "Dismissing..." : "Confirm Dismissal"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                         {[
                             { label: "Total Rooms", value: totalRooms },
@@ -285,7 +406,7 @@ export default function Rooms() {
                                             <th className="px-6 py-4 font-medium">Location</th>
                                             <th className="px-6 py-4 font-medium">Status</th>
                                             <th className="px-6 py-4 font-medium">Patient Assignment</th>
-                                            {canAssignRooms && (
+                                            {(canAssignRooms || canDismissRooms) && (
                                                 <th className="px-6 py-4 font-medium">Actions</th>
                                             )}
                                         </tr>
@@ -317,10 +438,28 @@ export default function Rooms() {
                                                             ? `Patient ID: ${room.patient_id}`
                                                             : "Unassigned"}
                                                     </td>
-                                                    {canAssignRooms && (
+                                                    {(canAssignRooms || canDismissRooms) && (
                                                         <td className="px-6 py-4">
-                                                            {room.is_active && !room.is_occupied ? (
-                                                                <button type="button" onClick={() => setSelectedRoomId(room.id)} className="px-4 py-2 text-xs font-medium bg-slate-900 text-white hover:bg-slate-700 transition-colors">Assign Patient</button>
+                                                            {room.is_active && !room.is_occupied && canAssignRooms? (
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => setSelectedRoomId(room.id)} 
+                                                                    className="px-4 py-2 text-xs font-medium bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                                                                >
+                                                                    Assign Patient
+                                                                </button>
+                                                            ) : room.is_occupied && room.patient_id && canDismissRooms ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="px-4 py-2 text-xs font-medium bg-rose-100 text-rose-700 opacity-60 cursor-not-allowed"
+                                                                    onClick={() => {
+                                                                        setSelectedDismissalRoom(room);
+                                                                        setDismissalError("");
+                                                                        setDismissalSuccess("");
+                                                                    }}
+                                                                >
+                                                                    Dismiss Patient
+                                                                </button>
                                                             ) : (
                                                                 <span className="text-xs text-slate-400">—</span>
                                                             )}

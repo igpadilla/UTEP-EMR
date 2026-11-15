@@ -40,3 +40,18 @@ export async function getPatientsForRoomAssignment() {
 
   return data ?? [];
 }
+
+export async function dismissPatientFromRoom(patientId) {
+    const { data, error } = await supabase.rpc(
+        "dismiss_patient_from_room",
+        {
+            p_patient_id: patientId,
+        }
+    );
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
