@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getRooms, getPatientsForRoomAssignment, assignPatientToRoom, dismissPatientFromRoom } from "../services/roomService.js";
+import { getRooms, getPatientsForRoomAssignment, assignPatientToRoom, dismissPatientFromRoom, getRoomOccupancyHistory } from "../services/roomService.js";
 import { hasPermission } from "../services/permissionService.js";
 
 export default function Rooms() {
@@ -23,6 +23,12 @@ export default function Rooms() {
     const [assigning, setAssigning] = useState(false);
     const [assignmentError, setAssignmentError] = useState("");
     const [assignmentSuccess, setAssignmentSuccess] = useState("");
+
+    const [canReadRoomHistory, setCanReadRoomHistory] = useState(false);
+    const [selectedHistoryRoom, setSelectedHistoryRoom] = useState(null);
+    const [roomHistory, setRoomHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -106,6 +112,73 @@ export default function Rooms() {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function checkRoomHistoryPermission() {
+            try {
+                const allowed = await hasPermission("room.history.read");
+
+                if (!cancelled) {
+                    setCanReadRoomHistory(allowed === true);
+                }
+            } catch (err) {
+                console.error("Unable to check room history permission:", err);
+
+                if (!cancelled) {
+                    setCanReadRoomHistory(false);
+                }
+            }
+        }
+
+        checkRoomHistoryPermission();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!selectedHistoryRoom || !canReadRoomHistory) {
+            setRoomHistory([]);
+            setHistoryLoading(false);
+            setHistoryError("");
+            return;
+        }
+
+        let cancelled = false;
+
+        async function loadRoomHistory() {
+            setHistoryLoading(true);
+            setHistoryError("");
+            setRoomHistory([]);
+
+            try {
+                const history = await getRoomOccupancyHistory(selectedHistoryRoom.id);
+
+                if (!cancelled) {
+                    setRoomHistory(history);
+                }
+            } catch (err) {
+                console.error("Unable to load room history:", err);
+
+                if (!cancelled) {
+                    setHistoryError(err.message || "Unable to load room occupancy history.");
+                }
+            } finally {
+                if (!cancelled) {
+                    setHistoryLoading(false);
+                }
+            }
+        }
+
+        loadRoomHistory();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedHistoryRoom, canReadRoomHistory]);
 
     useEffect(() => {
         if (!selectedRoomId || !canAssignRooms) {
@@ -373,6 +446,73 @@ export default function Rooms() {
                         </div>
                     )}
 
+                    {selectedHistoryRoom && canReadRoomHistory && (
+                        <div className="mt-6 border border-slate-200 bg-white p-6">
+                            <div className="flex items-center justify-between gap-4 mb-4">
+                                <div>
+                                    <h2 className="text-lg font-semibold text-slate-900">Room Occupancy History</h2>
+                                    <p className="text-sm text-slate-500 mt-1">Room {selectedHistoryRoom.room_number}</p>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedHistoryRoom(null)}
+                                    className="px-4 py-2 text-sm border border-slate-300 text-slate-700 hover:bg-slate-50"
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                            {historyLoading ? (
+                                <p className="text-sm text-slate-500">Loading occupancy history...</p>
+                            ) : historyError ? (
+                                <p role="alert" className="text-sm text-red-600">{historyError}</p>
+                            ) : roomHistory.length === 0 ? (
+                                <p className="text-sm text-slate-500">No occupancy history found for this room.</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 text-slate-600">
+                                            <tr>
+                                                <th className="px-4 py-3 font-medium">Patient ID</th>
+                                                <th className="px-4 py-3 font-medium">Assigned At</th>
+                                                <th className="px-4 py-3 font-medium">Dismissed At</th>
+                                                <th className="px-4 py-3 font-medium">Status</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody className="divide-y divide-slate-100">
+                                            {roomHistory.map((record) => (
+                                                <tr key={record.occupancy_id}>
+                                                    <td className="px-4 py-3 font-mono text-xs">{record.patient_id}</td>
+                                                    <td className="px-4 py-3">
+                                                        {new Date(
+                                                            record.assigned_at
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {record.dismissed_at
+                                                            ? new Date(
+                                                                record.dismissed_at
+                                                            ).toLocaleString()
+                                                            : "—"}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {record.dismissed_at ? (
+                                                            <span className="text-slate-600">Dismissed</span>
+                                                        ) : (
+                                                            <span className="text-emerald-700"> Current</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                         {[
                             { label: "Total Rooms", value: totalRooms },
@@ -406,7 +546,7 @@ export default function Rooms() {
                                             <th className="px-6 py-4 font-medium">Location</th>
                                             <th className="px-6 py-4 font-medium">Status</th>
                                             <th className="px-6 py-4 font-medium">Patient Assignment</th>
-                                            {(canAssignRooms || canDismissRooms) && (
+                                            {(canAssignRooms || canDismissRooms || canReadRoomHistory) && (
                                                 <th className="px-6 py-4 font-medium">Actions</th>
                                             )}
                                         </tr>
@@ -438,31 +578,47 @@ export default function Rooms() {
                                                             ? `Patient ID: ${room.patient_id}`
                                                             : "Unassigned"}
                                                     </td>
-                                                    {(canAssignRooms || canDismissRooms) && (
+                                                    {(canAssignRooms || canDismissRooms || canReadRoomHistory) && (
                                                         <td className="px-6 py-4">
-                                                            {room.is_active && !room.is_occupied && canAssignRooms? (
-                                                                <button 
-                                                                    type="button" 
-                                                                    onClick={() => setSelectedRoomId(room.id)} 
-                                                                    className="px-4 py-2 text-xs font-medium bg-slate-900 text-white hover:bg-slate-700 transition-colors"
-                                                                >
-                                                                    Assign Patient
-                                                                </button>
-                                                            ) : room.is_occupied && room.patient_id && canDismissRooms ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className="px-4 py-2 text-xs font-medium bg-rose-100 text-rose-700 opacity-60 cursor-not-allowed"
-                                                                    onClick={() => {
-                                                                        setSelectedDismissalRoom(room);
-                                                                        setDismissalError("");
-                                                                        setDismissalSuccess("");
-                                                                    }}
-                                                                >
-                                                                    Dismiss Patient
-                                                                </button>
-                                                            ) : (
-                                                                <span className="text-xs text-slate-400">—</span>
-                                                            )}
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {room.is_active && !room.is_occupied && canAssignRooms && (
+                                                                    <button 
+                                                                        type="button" 
+                                                                        onClick={() => setSelectedRoomId(room.id)} 
+                                                                        className="px-4 py-2 text-xs font-medium bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                                                                    >
+                                                                        Assign Patient
+                                                                    </button>
+                                                                )}
+                                                                
+                                                                {room.is_occupied && room.patient_id && canDismissRooms && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="px-4 py-2 text-xs font-medium bg-rose-100 text-rose-700 opacity-60 cursor-not-allowed"
+                                                                        onClick={() => {
+                                                                            setSelectedDismissalRoom(room);
+                                                                            setDismissalError("");
+                                                                            setDismissalSuccess("");
+                                                                        }}
+                                                                    >
+                                                                        Dismiss Patient
+                                                                    </button>
+                                                                )}
+
+                                                                {canReadRoomHistory && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="px-4 py-2 text-xs font-medium border border-slate-300 text-slate-500 opacity-60 cursor-not-allowed"
+                                                                        onClick={() => {
+                                                                            setSelectedHistoryRoom(room);
+                                                                            setRoomHistory([]);
+                                                                            setHistoryError("");
+                                                                        }}
+                                                                    >
+                                                                        View History
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     )}
                                                 </tr>

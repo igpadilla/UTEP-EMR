@@ -55,3 +55,18 @@ export async function dismissPatientFromRoom(patientId) {
 
     return data;
 }
+
+export async function getRoomOccupancyHistory(roomId) {
+    const { data, error } = await supabase.rpc(
+        "get_room_occupancy_history",
+        {
+            p_room_id: roomId,
+        }
+    );
+
+    if (error) {
+        throw error;
+    }
+
+    return data ?? [];
+}
