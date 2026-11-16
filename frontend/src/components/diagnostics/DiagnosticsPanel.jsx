@@ -465,7 +465,7 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                         {order.priority}
                                     </span>
                                     <span className={`diag-badge diag-badge-status-${order.status}`}>
-                                        {order.status.replace("_", " ")}
+                                        {(order.status || "ordered").replace("_", " ")}
                                     </span>
                                     {latestResult && (
                                         <span className={`diag-flag-${latestResult.overall_flag}`}>

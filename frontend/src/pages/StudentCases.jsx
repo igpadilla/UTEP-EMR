@@ -78,12 +78,12 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         fetchCases();
     }, []);
 
-    const openedFromLink = useRef(false);
+    const openedFromLink = useRef(null);
     useEffect(() => {
-        if (!openCaseId || openedFromLink.current || loading) return;
+        if (!openCaseId || openedFromLink.current === openCaseId || loading) return;
         const target = cases.find((c) => c.id === openCaseId);
         if (target) {
-            openedFromLink.current = true;
+            openedFromLink.current = openCaseId;
             openCase(target);
         }
     }, [openCaseId, loading, cases]);

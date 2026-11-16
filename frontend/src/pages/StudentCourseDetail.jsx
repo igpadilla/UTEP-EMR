@@ -75,17 +75,39 @@ export default function StudentCourseDetail({ course, onNavigate }) {
     const [activeTab, setActiveTab] = useState("home");
 
     useEffect(() => {
+        if (!course?.id) {
+            setLoading(false);
+            return;
+        }
         Promise.all([
             getMyCourseCases(course.id),
             getCourseAnnouncements(course.id).catch(() => []),
         ])
             .then(([courseCases, courseAnnouncements]) => {
-                setCases(courseCases);
+                setCases(courseCases ?? []);
                 setAnnouncements(courseAnnouncements ?? []);
             })
             .catch((err) => { console.error(err); setError("Failed to load cases."); })
             .finally(() => setLoading(false));
-    }, [course.id]);
+    }, [course?.id]);
+
+    useEffect(() => {
+        if (!course?.id || loading || activeTab === "cases") return;
+        getMyCourseCases(course.id)
+            .then((courseCases) => setCases(courseCases ?? []))
+            .catch(() => {});
+    }, [activeTab, course?.id]);
+
+    if (!course) {
+        return (
+            <main className="instructor-main">
+                <p className="instructor-loading">Course not found.</p>
+                <button className="secondary-action-button" type="button" onClick={() => onNavigate("studentCourses")}>
+                    ← My Courses
+                </button>
+            </main>
+        );
+    }
 
     const instructor = course.profiles;
     const banner = DISCIPLINE_BANNERS[course.discipline] ?? DEFAULT_BANNER;

@@ -120,7 +120,7 @@ export default function CourseForm({ onNavigate }) {
         try {
             if (editingId) {
                 const updated = await updateCourse(editingId, form);
-                setCourses((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+                setCourses((prev) => prev.map((c) => (c.id === editingId ? { ...c, ...updated } : c)));
                 setSuccess("Course updated.");
             } else {
                 const created = await createCourse(form);

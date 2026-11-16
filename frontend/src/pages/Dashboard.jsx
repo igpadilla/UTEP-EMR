@@ -526,7 +526,12 @@ export default function Dashboard({ user, onNavigate }) {
                                                             onClick={() =>
                                                                 c.course_id
                                                                     ? onNavigate("courseDetail", c.course_id)
-                                                                    : onNavigate("instructorCases")
+                                                                    : isAdmin
+                                                                      ? onNavigate("patientChart", null, {
+                                                                            caseId: c.id,
+                                                                            backTo: "dashboard",
+                                                                        })
+                                                                      : onNavigate("instructorCases")
                                                             }
                                                             className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                                                         >

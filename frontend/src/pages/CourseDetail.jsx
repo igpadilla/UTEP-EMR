@@ -134,6 +134,13 @@ export default function CourseDetail({ courseId, onNavigate }) {
         load();
     }, [courseId]);
 
+    useEffect(() => {
+        if (!courseId || loading || activeTab === "cases") return;
+        getCourseAssignedCases(courseId)
+            .then((ca) => setCases(ca ?? []))
+            .catch(() => {});
+    }, [activeTab, assignState, courseId]);
+
     // ── Settings ────────────────────────────────────────────────────────────
     function startEdit() {
         setEditForm({
@@ -1041,10 +1048,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                             {/* Right — rubric */}
                             <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc" }}>
-                                {(reviewCase.patient_snapshot?.expectations_rubric) && (
+                                {(reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric) && (
                                     <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
                                         <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>Expectations & Milestones</p>
-                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_snapshot.expectations_rubric}</p>
+                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}</p>
                                     </div>
                                 )}
 

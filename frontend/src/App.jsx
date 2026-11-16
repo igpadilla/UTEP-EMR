@@ -296,7 +296,7 @@ export default function App() {
             break;
         case "patientChart":
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
-                id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
+                id={nav.id} caseId={nav.caseId} backTo={nav.backTo} backId={nav.backId ?? null} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
                 canManagePortal={isAdmin}
                 onArchived={() => navigate("patientManager")}
@@ -332,7 +332,9 @@ export default function App() {
             pageContent = <StudentCourses onNavigate={navigate} />;
             break;
         case "studentCourseDetail":
-            pageContent = <StudentCourseDetail course={nav.course} onNavigate={navigate} />;
+            pageContent = nav.course
+                ? <StudentCourseDetail course={nav.course} onNavigate={navigate} />
+                : <StudentCourses onNavigate={navigate} />;
             break;
         case "courses":
             pageContent = canManageCourses

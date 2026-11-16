@@ -9,7 +9,10 @@ export default function PatientVisits({ patient, caseId, canEdit, canManagePorta
     const [error, setError] = useState("");
 
     useEffect(() => {
-        if (caseId || !patient?.id) return;
+        if (caseId || !patient?.id) {
+            setLoading(false);
+            return;
+        }
         let cancelled = false;
         getPatientVisits(patient.id)
             .then((data) => { if (!cancelled) setVisits(data); })

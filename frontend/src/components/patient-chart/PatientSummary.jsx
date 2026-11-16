@@ -123,7 +123,9 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
         </section>;
     }
 
-    const contacts = Array.isArray(patient.emergency_contacts) ? patient.emergency_contacts.filter(Boolean) : [];
+    const contacts = Array.isArray(patient.emergency_contacts)
+        ? patient.emergency_contacts.filter((c) => c && (c.name?.trim() || c.phone?.trim()))
+        : [];
     const allergies = Array.isArray(patient.allergies) ? patient.allergies.filter(Boolean) : [];
     const medicalHistory = Array.isArray(patient.medical_history) ? patient.medical_history.filter(Boolean) : [];
     const medications = Array.isArray(patient.current_medications)

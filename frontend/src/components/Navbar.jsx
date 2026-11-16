@@ -211,7 +211,7 @@ export default function Navbar({
                             }`}
                         >
                             <NavIcon name={item.id} />
-                            {!isCollapsed && <span className="truncate">{item.label}</span>}
+                            <span className={isCollapsed ? "sr-only" : "truncate"}>{item.label}</span>
                         </button>
                     );
                 })}
