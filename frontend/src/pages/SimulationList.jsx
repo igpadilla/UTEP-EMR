@@ -43,6 +43,7 @@ export default function SimulationList({ courseId, courseName, onNavigate }) {
                 <button
                     type="button"
                     className="primary-button"
+                    style={{ width: "auto" }}
                     onClick={() => onNavigate("simulationBuilder", null, { courseId, courseName })}
                 >
                     + New simulation
@@ -53,7 +54,7 @@ export default function SimulationList({ courseId, courseName, onNavigate }) {
 
             {sims.length === 0 ? (
                 <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
-                    <div className="patients-empty-icon" aria-hidden="true">🏥</div>
+                    <div className="patients-empty-icon" aria-hidden="true">🎬</div>
                     <strong>No simulations yet</strong>
                     <p>Create a simulation to run a live front-desk workflow exercise in class.</p>
                     <button

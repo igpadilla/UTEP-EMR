@@ -107,8 +107,9 @@ export async function getCourseAssignedCases(courseId) {
         .from("assigned_cases")
         .select(`
             id, encounter_status, assigned_at, due_date, score, max_score,
-            instructor_feedback, chart_annotations, template_id, patient_snapshot,
-            patient_templates ( first_name, last_name, chief_complaint ),
+            instructor_feedback, chart_annotations, rubric_scores, template_id,
+            patient_snapshot, encounter_notes,
+            patient_templates ( first_name, last_name, chief_complaint, rubric_criteria, expectations_rubric ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
         .eq("course_id", courseId)
@@ -168,12 +169,21 @@ export async function getClinicalRoles() {
 }
 
 export async function getCourseStudents(courseId) {
-    const { data, error } = await supabase
-        .from("course_enrollments")
-        .select("student_id, profiles!student_id ( user_id, first_name, last_name )")
-        .eq("course_id", courseId);
-    if (error) throw error;
-    return data.map((row) => row.profiles).filter(Boolean);
+    const [enrollments, emailRows] = await Promise.all([
+        supabase
+            .from("course_enrollments")
+            .select("student_id, profiles!student_id ( user_id, first_name, last_name )")
+            .eq("course_id", courseId)
+            .then(({ data, error }) => { if (error) throw error; return data; }),
+        supabase
+            .rpc("get_course_student_emails", { p_course_id: courseId })
+            .then(({ data, error }) => { if (error) throw error; return data ?? []; }),
+    ]);
+    const emailMap = Object.fromEntries(emailRows.map((r) => [r.user_id, r.email]));
+    return enrollments
+        .map((row) => row.profiles)
+        .filter(Boolean)
+        .map((p) => ({ ...p, email: emailMap[p.user_id] ?? null }));
 }
 
 export async function unenrollStudent(courseId, studentId) {
@@ -263,9 +273,9 @@ export async function signOffCase(caseId, instructorFeedback) {
         .select()
         .single();
     if (error) throw error;
-    await logCaseAction(caseId, user.id, ACTION_TYPES.CASE_SIGNED_OFF, "pending review", "completed").catch(() => {});
+    await logCaseAction(caseId, user.id, ACTION_TYPES.CASE_SIGNED_OFF, "pending review", "completed").catch(() => { });
     if (instructorFeedback?.trim()) {
-        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, instructorFeedback.trim()).catch(() => {});
+        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, instructorFeedback.trim()).catch(() => { });
     }
     return data;
 }
@@ -279,9 +289,9 @@ export async function returnCase(caseId, instructorFeedback) {
         .select()
         .single();
     if (error) throw error;
-    await logCaseAction(caseId, user.id, ACTION_TYPES.CASE_RETURNED, "pending review", "revision_requested").catch(() => {});
+    await logCaseAction(caseId, user.id, ACTION_TYPES.CASE_RETURNED, "pending review", "revision_requested").catch(() => { });
     if (instructorFeedback?.trim()) {
-        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, instructorFeedback.trim()).catch(() => {});
+        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, instructorFeedback.trim()).catch(() => { });
     }
     return data;
 }
@@ -310,9 +320,9 @@ export async function gradeCase(caseId, { criteria, rubricScores, chartAnnotatio
     if (error) throw error;
 
     const actionType = decision === "approve" ? ACTION_TYPES.CASE_SIGNED_OFF : ACTION_TYPES.CASE_RETURNED;
-    await logCaseAction(caseId, user.id, actionType, "pending review", newStatus).catch(() => {});
+    await logCaseAction(caseId, user.id, actionType, "pending review", newStatus).catch(() => { });
     if (feedback?.trim()) {
-        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, feedback.trim()).catch(() => {});
+        await logCaseAction(caseId, user.id, ACTION_TYPES.FEEDBACK_ADDED, null, feedback.trim()).catch(() => { });
     }
 
     return data;
@@ -334,7 +344,7 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
         .select()
         .single();
     if (error) throw error;
-    await logCaseAction(data.id, user.id, ACTION_TYPES.CASE_ASSIGNED, null, studentId).catch(() => {});
+    await logCaseAction(data.id, user.id, ACTION_TYPES.CASE_ASSIGNED, null, studentId).catch(() => { });
 
     if (patientSnapshot?.initial_referral?.target_discipline) {
         const priority = patientSnapshot.initial_referral.priority || "routine";
@@ -351,11 +361,25 @@ export async function assignCase(templateId, studentId, patientSnapshot, dueDate
             console.error("Failed to seed initial referral:", refError);
         } else {
             const detail = `${patientSnapshot.initial_referral.target_discipline} (${priority.toUpperCase()}) — ${reason}`;
-            await logCaseAction(data.id, user.id, ACTION_TYPES.REFERRAL_REQUESTED, null, detail).catch(() => {});
+            await logCaseAction(data.id, user.id, ACTION_TYPES.REFERRAL_REQUESTED, null, detail).catch(() => { });
         }
     }
 
     return data;
+}
+
+export async function getCourseSimulations(courseId) {
+    const { data, error } = await supabase
+        .from("simulations")
+        .select(`
+            id, title, status, mode, started_at, ended_at, created_at,
+            simulation_participants ( user_id, sim_role )
+        `)
+        .eq("course_id", courseId)
+        .neq("status", "draft")
+        .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
 }
 
 // ── Course Announcements ──────────────────────────────────────────────────────

@@ -118,7 +118,8 @@ export async function getSimEncounters(simId) {
             discharged_at, checked_in_by,
             patient_templates!template_id ( id, patient_id, first_name, last_name, age, sex, chief_complaint, clinical_baseline ),
             actor:profiles!patient_actor_id ( user_id, first_name, last_name ),
-            med_student:profiles!assigned_med_id ( user_id, first_name, last_name )
+            med_student:profiles!assigned_med_id ( user_id, first_name, last_name ),
+            front_desk:profiles!checked_in_by ( user_id, first_name, last_name )
         `)
         .eq("simulation_id", simId)
         .order("scheduled_time", { ascending: true, nullsFirst: false });
@@ -137,7 +138,11 @@ export async function openSimCase(encounterId) {
 export async function getSimEvents(simId) {
     const { data, error } = await supabase
         .from("simulation_events")
-        .select("id, event_type, payload, actor_id, encounter_id, created_at")
+        .select(`
+            id, event_type, payload, actor_id, encounter_id, created_at,
+            actor:profiles!actor_id ( first_name, last_name ),
+            encounter:simulation_encounters!encounter_id ( patient_templates!template_id ( first_name, last_name ) )
+        `)
         .eq("simulation_id", simId)
         .order("id", { ascending: true });
     if (error) throw error;

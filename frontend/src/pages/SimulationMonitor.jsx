@@ -104,7 +104,7 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                 {/* ── Header ── */}
                 <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
                     <button type="button" className="back-button"
-                        onClick={() => onNavigate("simulationList", null, { courseId, courseName })}>
+                        onClick={() => onNavigate("courseDetail", courseId)}>
                         ← Back
                     </button>
                     <div style={{ flex: 1 }}>
@@ -195,25 +195,45 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                                 padding: "0.5rem", minHeight: "120px", border: "1px solid var(--border)",
                                 borderTop: "none"
                             }}>
-                                {byStatus[status].map(enc => (
-                                    <div key={enc.id} style={{
-                                        background: "#fff", borderRadius: "6px",
-                                        padding: "0.6rem 0.75rem", marginBottom: "0.5rem",
-                                        border: "1px solid var(--border)", fontSize: "0.8rem"
-                                    }}>
-                                        <div style={{ fontWeight: 600 }}>{patientName(enc)}</div>
-                                        {enc.scheduled_time && (
-                                            <div style={{ color: "var(--text-muted)" }}>
-                                                {enc.scheduled_time.slice(0, 5)}
-                                            </div>
-                                        )}
-                                        {enc.checked_in_at && status !== "expected" && (
-                                            <div style={{ color: "var(--text-muted)" }}>
-                                                +{elapsed(enc.checked_in_at)}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                {byStatus[status].map(enc => {
+                                    const actor = enc.actor ? `${enc.actor.first_name} ${enc.actor.last_name}` : null;
+                                    const frontDesk = enc.front_desk ? `${enc.front_desk.first_name} ${enc.front_desk.last_name}` : null;
+                                    const medStudent = enc.med_student ? `${enc.med_student.first_name} ${enc.med_student.last_name}` : null;
+                                    return (
+                                        <div key={enc.id} style={{
+                                            background: "#fff", borderRadius: "6px",
+                                            padding: "0.6rem 0.75rem", marginBottom: "0.5rem",
+                                            border: "1px solid var(--border)", fontSize: "0.8rem"
+                                        }}>
+                                            <div style={{ fontWeight: 600 }}>{patientName(enc)}</div>
+                                            {enc.scheduled_time && (
+                                                <div style={{ color: "var(--text-muted)" }}>
+                                                    {enc.scheduled_time.slice(0, 5)}
+                                                </div>
+                                            )}
+                                            {enc.checked_in_at && status !== "expected" && (
+                                                <div style={{ color: "var(--text-muted)" }}>
+                                                    +{elapsed(enc.checked_in_at)}
+                                                </div>
+                                            )}
+                                            {actor && (
+                                                <div style={{ marginTop: "0.3rem", fontSize: "0.72rem", color: "#0369a1" }}>
+                                                    Actor: {actor}
+                                                </div>
+                                            )}
+                                            {frontDesk && (
+                                                <div style={{ fontSize: "0.72rem", color: "#15803d" }}>
+                                                    Front desk: {frontDesk}
+                                                </div>
+                                            )}
+                                            {medStudent && (
+                                                <div style={{ fontSize: "0.72rem", color: "#7c3aed" }}>
+                                                    Med: {medStudent}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     ))}
@@ -229,18 +249,35 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                         {events.length === 0 && (
                             <p style={{ padding: "1rem", color: "var(--text-muted)", margin: 0 }}>No events yet.</p>
                         )}
-                        {[...events].reverse().map(evt => (
-                            <div key={evt.id} style={{
-                                padding: "0.5rem 0.75rem",
-                                borderBottom: "1px solid var(--border)",
-                                background: evt.event_type === "wrong_record_selected" ? "#fef9c3" : "#fff"
-                            }}>
-                                <span style={{ color: "var(--text-muted)", marginRight: "0.5rem" }}>
-                                    {new Date(evt.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                                </span>
-                                <span style={{ fontWeight: 500 }}>{evt.event_type.replace(/_/g, " ")}</span>
-                            </div>
-                        ))}
+                        {[...events].reverse().map(evt => {
+                            const pt = evt.encounter?.patient_templates;
+                            const patName = pt ? `${pt.first_name} ${pt.last_name}` : null;
+                            return (
+                                <div key={evt.id} style={{
+                                    padding: "0.5rem 0.75rem",
+                                    borderBottom: "1px solid var(--border)",
+                                    background: evt.event_type === "wrong_record_selected" ? "#fef9c3" : "#fff",
+                                    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem"
+                                }}>
+                                    <div>
+                                        <span style={{ color: "var(--text-muted)", marginRight: "0.5rem" }}>
+                                            {new Date(evt.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                        </span>
+                                        <span style={{ fontWeight: 500 }}>{evt.event_type.replace(/_/g, " ")}</span>
+                                        {patName && (
+                                            <span style={{ marginLeft: "0.5rem", color: "var(--text-muted)" }}>
+                                                — {patName}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {evt.actor && (
+                                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                                            {evt.actor.first_name} {evt.actor.last_name}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
             </main>

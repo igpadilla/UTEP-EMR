@@ -144,7 +144,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                         padding: "0.75rem 1.25rem", margin: "1rem 2rem",
                         display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
                     <span style={{ fontWeight: 600, color: "#15803d" }}>
-                        🏥 Active simulation: {p.simulations?.title}
+                        Active simulation: {p.simulations?.title}
                     </span>
                     <button type="button" className="primary-button"
                         style={{ padding: "0.35rem 0.9rem", fontSize: "0.875rem" }}

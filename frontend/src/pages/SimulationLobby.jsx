@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getSimulation, getMySimRole } from "../services/simulationService.js";
 
 const ROLE_INFO = {
-    front_desk: { label: "Front Desk", icon: "🏥", desc: "Find and check in patients. Use the front desk board to manage arrivals." },
-    med: { label: "Med Student", icon: "🩺", desc: "Wait for your assigned patient to be checked in, then open their case." },
+    front_desk: { label: "Front Desk", icon: "📋", desc: "Find and check in patients. Use the front desk board to manage arrivals." },
+    med: { label: "Med Student", icon: "💊", desc: "Wait for your assigned patient to be checked in, then open their case." },
     patient_actor: { label: "Patient Actor", icon: "🎭", desc: "Walk up to the front desk and play your assigned patient." },
     observer: { label: "Observer", icon: "👁", desc: "Watch the simulation in progress from the monitor view." },
 };
