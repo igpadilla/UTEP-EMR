@@ -106,7 +106,7 @@ export async function getCourseAssignedCases(courseId) {
         .select(`
             id, encounter_status, assigned_at, due_date, score, max_score,
             instructor_feedback, chart_annotations, template_id, patient_snapshot,
-            patient_templates ( first_name, last_name, chief_complaint ),
+            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
         .eq("course_id", courseId)
@@ -220,7 +220,7 @@ export async function getMyAssignedCases(includeArchived = false) {
         .from("assigned_cases")
         .select(`
             *,
-            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric ),
+            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
             profiles!student_id ( first_name, last_name )
         `)
         .order("assigned_at", { ascending: false });
