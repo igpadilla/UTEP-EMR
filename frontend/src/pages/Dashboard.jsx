@@ -469,6 +469,11 @@ export default function Dashboard({ user, onNavigate }) {
                                                 >
                                                     {statusInfo.label}
                                                 </span>
+                                                {Array.isArray(c.addendums) && c.addendums.length > 0 && (
+                                                    <span className="ml-1.5 inline-block font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-600 rounded-sm">
+                                                        Addendum ({c.addendums.length})
+                                                    </span>
+                                                )}
                                                 {c.score != null && (
                                                     <span className="ml-2 font-mono text-[11px] text-slate-500 tabular-nums">
                                                         {c.score}/{c.max_score ?? 100}
@@ -518,7 +523,9 @@ export default function Dashboard({ user, onNavigate }) {
                                                                   ? "Continue"
                                                                   : c.encounter_status === "not started"
                                                                     ? "Start Case"
-                                                                    : "View Note"}
+                                                                    : c.encounter_status === "completed"
+                                                                      ? "Note / Addendum"
+                                                                      : "View Note"}
                                                         </button>
                                                     ) : (
                                                         <button
