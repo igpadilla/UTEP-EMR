@@ -43,15 +43,15 @@ UTEP-EMR/
 
 ## Quickstart
 
-Install Node.js (18 or newer) and Docker Desktop, then start Docker. From the repository root, run:
+Install Node.js 22.20 or newer and install the frontend dependencies with `npm --prefix frontend ci`. Copy `.env.shared.example` to `.env.shared.local` and enter the shared project's public URL and publishable/anon key. From the repository root, run:
 
 ```bash
 npm run dev
 ```
 
-This starts local Supabase, applies pending migrations without resetting your data, serves both Edge Functions, installs frontend packages if needed, and starts Vite. Open the Local URL printed by Vite (usually `http://localhost:5173/`). On a fresh local database, the command creates one admin account and prints its random password once. Keep those credentials private. Each teammate has their own local database and users; cloning the repo does not copy anyone else's accounts.
+This starts the frontend against the **shared online Supabase project**. Open the address printed by Vite (usually `http://localhost:5173/`). The frontend runs on your computer, while accounts and records come from the shared project. Docker is not needed. This command does not create accounts or apply shared database migrations.
 
-Press Ctrl+C to stop Vite and any Edge Functions started by this command. Supabase's Docker services stay running for the next session. To stop them later, run `npx supabase@2.113.0 stop` from the repository root. Docker images and the Supabase CLI may need to download on the first run.
+For an isolated local database, start Docker Desktop and run `npm run dev:local`. That command applies local migrations, serves local Edge Functions, and creates a local admin if needed. Local accounts and records are separate from the shared project. Press Ctrl+C to stop the frontend. Stop local Docker services with `npx supabase@2.113.0 stop` when no longer needed.
 
 ### Optional FastAPI backend
 
@@ -75,7 +75,7 @@ Interactive API docs will be at `http://127.0.0.1:8000/docs`.
 - **`feature/<name>`**: Feature branches cut from `develop` and merged via Pull Request.
 ## Local Test Data
 
-`npm run dev` creates an admin on a fresh local database, but does not add patients or reset existing records. The older `frontend/seed.cjs` script is not part of this setup and may not match the current database schema.
+`npm run dev:local` creates an admin on a fresh local database, but does not add patients or reset existing records. The older `frontend/seed.cjs` script is not part of this setup and may not match the current database schema.
 
 ## Verification
 
