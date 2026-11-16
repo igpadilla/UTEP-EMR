@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMyCourseCases } from "../services/instructorService.js";
+import { getMyCourseCases, getCourseAnnouncements } from "../services/instructorService.js";
 import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
