@@ -71,6 +71,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
     const [annotations, setAnnotations] = useState([]);
     const [annotationDraft, setAnnotationDraft] = useState("");
     const [annotationTarget, setAnnotationTarget] = useState("General");
+    const [showAnswerKey, setShowAnswerKey] = useState(true);
 
     // Audit log modal
     const [auditLogs, setAuditLogs] = useState([]);
@@ -183,6 +184,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
         setRubricScores(initial);
         setAnnotationDraft("");
         setAnnotationTarget("General");
+        setShowAnswerKey(true);
     }
 
     function closeReview() {
@@ -814,6 +816,28 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                         <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>
                                             {reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}
                                         </p>
+                                    </div>
+                                )}
+
+                                {reviewCase.patient_templates?.answer_key?.trim() && (
+                                    <div className="mb-5 rounded-md border border-slate-200 bg-white p-3.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
+                                                Instructor Answer Key · Staff Only
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAnswerKey((prev) => !prev)}
+                                                className="font-mono text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-800 cursor-pointer bg-transparent border-0 p-0"
+                                            >
+                                                {showAnswerKey ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                        {showAnswerKey && (
+                                            <p className="mt-2 mb-0 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                                {reviewCase.patient_templates.answer_key}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 

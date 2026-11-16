@@ -45,11 +45,11 @@ async function setup() {
         insert into course_enrollments(course_id, student_id, enrolled_by) values
             ('${NURSING_COURSE}','${NURSE_STUDENT}','${ADMIN}'),
             ('${PT_COURSE}','${PT_STUDENT}','${ADMIN}');
-        insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, hidden_diagnosis, traps)
-            values ('${TEMPLATE}','${TEACHER}','Maria','G',58,'chest pain','NSTEMI','[{"t":"trap"}]');
+        insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, hidden_diagnosis, traps, answer_key)
+            values ('${TEMPLATE}','${TEACHER}','Maria','G',58,'chest pain','NSTEMI','[{"t":"trap"}]','Order troponin and ECG');
         -- Cases an admin assigned before admins lost that right; the course instructor manages them through the course.
         insert into assigned_cases(id, template_id, student_id, assigned_by, course_id, patient_snapshot) values
-            ('${NURSE_CASE}','${TEMPLATE}','${NURSE_STUDENT}','${ADMIN}','${NURSING_COURSE}','{"first_name":"Maria","traps":[1],"rubric_criteria":[1]}'),
+            ('${NURSE_CASE}','${TEMPLATE}','${NURSE_STUDENT}','${ADMIN}','${NURSING_COURSE}','{"first_name":"Maria","traps":[1],"rubric_criteria":[1],"answer_key":"secret"}'),
             ('${PT_CASE}','${TEMPLATE}','${PT_STUDENT}','${ADMIN}','${PT_COURSE}','{"first_name":"Maria"}');
         insert into patients(id, first_name, last_name, age) values ('${PATIENT}','John','Doe',45);
     `);
@@ -93,7 +93,9 @@ test("students work only on their own open case and cannot grade it", async () =
 test("students never see the answer key", async () => {
     const db = await setup();
     try {
-        assert.equal((await as(db, NURSE_STUDENT, `select hidden_diagnosis from patient_templates`)).length, 0);
+        assert.equal((await as(db, NURSE_STUDENT, `select hidden_diagnosis, answer_key from patient_templates`)).length, 0);
+        const [tpl] = await as(db, TEACHER, `select answer_key from patient_templates where id = '${TEMPLATE}'`);
+        assert.equal(tpl.answer_key, "Order troponin and ECG");
         const [row] = await as(db, NURSE_STUDENT, `select patient_snapshot from assigned_cases where id = '${NURSE_CASE}'`);
         assert.deepEqual(row.patient_snapshot, { first_name: "Maria" });
     } finally {
