@@ -13,6 +13,13 @@ function NavIcon({ name }) {
                     <rect x="3" y="14" width="7" height="7" rx="1" />
                 </svg>
             );
+        case "rooms":
+            return (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 10h18M9 10v10M15 10v10" />
+                </svg>
+            );
         case "patients":
             return (
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -61,6 +68,7 @@ export default function Navbar({
     onNavigate,
     user,
     canUseLivePatients = false,
+    canReadRooms = false,
     collapsed: controlledCollapsed,
     onToggleCollapse,
 }) {
@@ -105,6 +113,7 @@ export default function Navbar({
               ? [{ id: "courses", label: "Courses" }]
               : []),
         ...(showPatients ? [{ id: "patients", label: "Patients" }] : []),
+        ...(canReadRooms ? [{ id: "rooms", label: "Rooms" }] : []),
         ...(canManageStudents ? [{ id: "students", label: "Students" }] : []),
         ...(isAdmin ? [{ id: "auditLog", label: "Audit Log" }] : []),
         ...(isStudent && canUseLivePatients ? [{ id: "appointments", label: "Appointments" }] : []),
