@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { getRooms, getPatientsForRoomAssignment, assignPatientToRoom, dismissPatientFromRoom, getRoomOccupancyHistory } from "../services/roomService.js";
+import { getRooms, 
+    getPatientsForRoomAssignment, 
+    assignPatientToRoom, 
+    dismissPatientFromRoom, 
+    getRoomOccupancyHistory, 
+    createRoom, 
+    updateRoom 
+} from "../services/roomService.js";
 import { hasPermission } from "../services/permissionService.js";
 
 export default function Rooms() {
@@ -9,6 +16,7 @@ export default function Rooms() {
     const [canAssignRooms, setCanAssignRooms] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState(null);
     const [canDismissRooms, setCanDismissRooms] = useState(false);
+    const [canManageRooms, setCanManageRooms] = useState(false);
 
     const [selectedDismissalRoom, setSelectedDismissalRoom] = useState(null);
     const [dismissing, setDismissing] = useState(false);
@@ -29,6 +37,21 @@ export default function Rooms() {
     const [roomHistory, setRoomHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState("");
+
+    const [showCreateRoomForm, setShowCreateRoomForm] = useState(false);
+    const [newRoomNumber, setNewRoomNumber] = useState("");
+    const [newRoomLocation, setNewRoomLocation] = useState("");
+    const [creatingRoom, setCreatingRoom] = useState(false);
+    const [createRoomError, setCreateRoomError] = useState("");
+    const [createRoomSuccess, setCreateRoomSuccess] = useState("");
+
+    const [editingRoomId, setEditingRoomId] = useState(null);
+    const [editRoomNumber, setEditRoomNumber] = useState("");
+    const [editRoomLocation, setEditRoomLocation] = useState("");
+    const [updatingRoom, setUpdatingRoom] = useState(false);
+    const [editRoomError, setEditRoomError] = useState("");
+    const [editRoomSuccess, setEditRoomSuccess] = useState("");
+
 
     useEffect(() => {
         let cancelled = false;
@@ -133,6 +156,32 @@ export default function Rooms() {
         }
 
         checkRoomHistoryPermission();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function checkRoomManagementPermission() {
+            try {
+                const allowed = await hasPermission("room.manage");
+
+                if (!cancelled) {
+                    setCanManageRooms(allowed === true);
+                }
+            } catch (err) {
+                console.error("Unable to check room management permission:", err);
+
+                if (!cancelled) {
+                    setCanManageRooms(false);
+                }
+            }
+        }
+
+        checkRoomManagementPermission();
 
         return () => {
             cancelled = true;
@@ -295,6 +344,96 @@ export default function Rooms() {
         }
     }
 
+    async function handleCreateRoom(event) {
+        event.preventDefault();
+
+        if (!canManageRooms || creatingRoom) {
+            return;
+        }
+
+        setCreateRoomError("");
+        setCreateRoomSuccess("");
+
+        if (!newRoomNumber.trim()) {
+            setCreateRoomError("Room number is required.");
+            return;
+        }
+
+        setCreatingRoom(true);
+
+        try {
+            await createRoom(
+                newRoomNumber.trim(),
+                newRoomLocation.trim()
+            );
+
+            setNewRoomNumber("");
+            setNewRoomLocation("");
+            setShowCreateRoomForm(false);
+            setCreateRoomSuccess("Room created successfully.");
+
+            // Refresh the room list.
+            const updatedRooms = await getRooms();
+            setRooms(updatedRooms);
+            setError("");
+        } catch (err) {
+            console.error("Unable to create room:", err);
+
+            if (err.code === "23505") {
+                setCreateRoomError("A room with this number already exists.");
+            } else {
+                setCreateRoomError(err.message || "Unable to create room.");
+            }
+        } finally {
+            setCreatingRoom(false);
+        }
+    }
+
+    async function handleEditRoom(event) {
+        event.preventDefault();
+
+        if (!canManageRooms || !editingRoomId || updatingRoom) {
+            return;
+        }
+
+        setEditRoomError("");
+        setEditRoomSuccess("");
+
+        if (!editRoomNumber.trim()) {
+            setEditRoomError("Room number is required.");
+            return;
+        }
+
+        setUpdatingRoom(true);
+
+        try {
+            await updateRoom(
+                editingRoomId,
+                editRoomNumber.trim(),
+                editRoomLocation.trim()
+            );
+
+            setEditingRoomId(null);
+            setEditRoomNumber("");
+            setEditRoomLocation("");
+            setEditRoomSuccess("Room updated successfully.");
+
+            const updatedRooms = await getRooms();
+            setRooms(updatedRooms);
+            setError("");
+        } catch (err) {
+            console.error("Unable to update room:", err);
+
+            if (err.code === "23505") {
+                setEditRoomError("A room with this number already exists.");
+            } else {
+                setEditRoomError(err.message || "Unable to update room.");
+            }
+        } finally {
+            setUpdatingRoom(false);
+        }
+    }
+
     const totalRooms = rooms.length;
     const occupiedRooms = rooms.filter(
         (room) => room.is_active && room.is_occupied
@@ -314,7 +453,172 @@ export default function Rooms() {
                 <h1 className="text-2xl font-semibold text-slate-900">Rooms</h1>
 
                 <p className="text-sm text-slate-500 mt-2">View room availability, patient assignments, and occupancy history.</p>
+
+                {canManageRooms && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCreateRoomForm(true);
+                                setCreateRoomError("");
+                                setCreateRoomSuccess("");
+                            }}
+                            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                        >
+                            + Create Room
+                        </button>
+                    )}
             </div>
+
+            {canManageRooms && showCreateRoomForm && (
+                <section className="mb-6 rounded-lg border border-slate-200 bg-white p-6">
+                    <h2 className="mb-4 text-lg font-semibold text-slate-900">Create New Room</h2>
+
+                    <form onSubmit={handleCreateRoom}>
+                        <div className="mb-4">
+                            <label htmlFor="new-room-number" className="mb-2 block text-sm font-medium text-slate-700">Room Number *</label>
+
+                            <input
+                                id="new-room-number"
+                                type="text"
+                                value={newRoomNumber}
+                                onChange={(event) => setNewRoomNumber(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="e.g. 101"
+                                required
+                            />
+                        </div>
+
+                        <div className="mb-4">
+                            <label htmlFor="new-room-location" className="mb-2 block text-sm font-medium text-slate-700">Location (Optional)</label>
+
+                            <input
+                                id="new-room-location"
+                                type="text"
+                                value={newRoomLocation}
+                                onChange={(event) => setNewRoomLocation(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="e.g. First Floor"
+                            />
+                        </div>
+
+                        {createRoomError && (
+                            <p role="alert" className="mb-4 text-sm text-red-700">{createRoomError}</p>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                type="submit"
+                                disabled={creatingRoom}
+                                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                                {creatingRoom ? "Creating..." : "Create Room"}
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={creatingRoom}
+                                onClick={() => {
+                                    setShowCreateRoomForm(false);
+                                    setCreateRoomError("");
+                                    setNewRoomNumber("");
+                                    setNewRoomLocation("");
+                                }}
+                                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            )}
+
+            {createRoomSuccess && (
+                <div role="status" className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-sm text-emerald-700">{createRoomSuccess}</p>
+                </div>
+            )}
+
+            {canManageRooms && editingRoomId && (
+                <section className="mb-6 rounded-lg border border-slate-200 bg-white p-6">
+                    <h2 className="mb-4 text-lg font-semibold text-slate-900">Edit Room</h2>
+
+                    <form onSubmit={handleEditRoom}>
+                        <div className="mb-4">
+                            <label
+                                htmlFor="edit-room-number"
+                                className="mb-2 block text-sm font-medium text-slate-700"
+                            >
+                                Room Number *
+                            </label>
+
+                            <input
+                                id="edit-room-number"
+                                type="text"
+                                value={editRoomNumber}
+                                onChange={(event) => setEditRoomNumber(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div className="mb-4">
+                            <label
+                                htmlFor="edit-room-location"
+                                className="mb-2 block text-sm font-medium text-slate-700"
+                            >
+                                Location (Optional)
+                            </label>
+
+                            <input
+                                id="edit-room-location"
+                                type="text"
+                                value={editRoomLocation}
+                                onChange={(event) => setEditRoomLocation(event.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                        </div>
+
+                        {editRoomError && (
+                            <p role="alert" className="mb-4 text-sm text-red-700">{editRoomError}</p>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                type="submit"
+                                disabled={updatingRoom}
+                                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                                {updatingRoom ? "Saving..." : "Save Changes"}
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={updatingRoom}
+                                onClick={() => {
+                                    setEditingRoomId(null);
+                                    setEditRoomNumber("");
+                                    setEditRoomLocation("");
+                                    setEditRoomError("");
+                                }}
+                                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            )}
+
+            {editRoomSuccess && (
+                <div
+                    role="status"
+                    className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4"
+                >
+                    <p className="text-sm text-emerald-700">
+                        {editRoomSuccess}
+                    </p>
+                </div>
+            )}
 
             {assignmentSuccess && (
                 <div role="status" className="border border-emerald-200 bg-emerald-50 p-4 mb-6">
@@ -546,7 +850,7 @@ export default function Rooms() {
                                             <th className="px-6 py-4 font-medium">Location</th>
                                             <th className="px-6 py-4 font-medium">Status</th>
                                             <th className="px-6 py-4 font-medium">Patient Assignment</th>
-                                            {(canAssignRooms || canDismissRooms || canReadRoomHistory) && (
+                                            {(canAssignRooms || canDismissRooms || canReadRoomHistory || canManageRooms) && (
                                                 <th className="px-6 py-4 font-medium">Actions</th>
                                             )}
                                         </tr>
@@ -618,6 +922,23 @@ export default function Rooms() {
                                                                         View History
                                                                     </button>
                                                                 )}
+
+                                                                {canManageRooms && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setEditingRoomId(room.id);
+                                                                            setEditRoomNumber(room.room_number);
+                                                                            setEditRoomLocation(room.location || "");
+                                                                            setEditRoomError("");
+                                                                            setEditRoomSuccess("");
+                                                                        }}
+                                                                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                                                                    >
+                                                                        Edit Room
+                                                                    </button>
+                                                                )}
+
                                                             </div>
                                                         </td>
                                                     )}

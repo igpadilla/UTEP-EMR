@@ -70,3 +70,30 @@ export async function getRoomOccupancyHistory(roomId) {
 
     return data ?? [];
 }
+
+export async function createRoom(roomNumber, location) {
+    const { data, error } = await supabase.rpc("create_room", {
+        p_room_number: roomNumber,
+        p_location: location
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
+
+export async function updateRoom(roomId, roomNumber, location) {
+    const { data, error } = await supabase.rpc("update_room", {
+        p_room_id: roomId,
+        p_room_number: roomNumber,
+        p_location: location
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
