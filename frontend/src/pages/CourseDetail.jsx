@@ -12,6 +12,7 @@ import {
     gradeCase,
 } from "../services/instructorService.js";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
+import { downloadGradebookCsv } from "../lib/gradebookExport.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
 import InstructorCases from "./InstructorCases.jsx";
@@ -519,6 +520,14 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                         {gradebook.filter((r) => r.avg !== null).length} of {gradebook.length} student{gradebook.length !== 1 ? "s" : ""} scored
                                     </p>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => downloadGradebookCsv({ course, students, cases })}
+                                    disabled={students.length === 0}
+                                    className="px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-slate-900 bg-white border border-slate-200 hover:border-slate-400 rounded-sm transition-colors disabled:opacity-40"
+                                >
+                                    Export CSV
+                                </button>
                             </div>
 
                             <div className="course-detail-section">
