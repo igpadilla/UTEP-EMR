@@ -61,6 +61,7 @@ export default function Navbar({
     onNavigate,
     user,
     canUseLivePatients = false,
+    autoCollapse = false,
     collapsed: controlledCollapsed,
     onToggleCollapse,
 }) {
@@ -71,20 +72,40 @@ export default function Navbar({
             return false;
         }
     });
-
-    const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+    const [manualOverride, setManualOverride] = useState(null);
 
     useEffect(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, String(isCollapsed));
-        } catch {}
-    }, [isCollapsed]);
+        setManualOverride(null);
+    }, [autoCollapse]);
+
+    const isCollapsed =
+        controlledCollapsed !== undefined
+            ? controlledCollapsed
+            : manualOverride !== null
+              ? manualOverride
+              : autoCollapse
+                ? true
+                : internalCollapsed;
+
+    useEffect(() => {
+        if (!autoCollapse && manualOverride === null) {
+            try {
+                localStorage.setItem(STORAGE_KEY, String(internalCollapsed));
+            } catch {}
+        }
+    }, [internalCollapsed, autoCollapse, manualOverride]);
 
     function handleToggle() {
+        const next = !isCollapsed;
         if (onToggleCollapse) {
-            onToggleCollapse(!isCollapsed);
+            onToggleCollapse(next);
+        } else if (autoCollapse) {
+            setManualOverride(next);
         } else {
-            setInternalCollapsed((prev) => !prev);
+            setInternalCollapsed(next);
+            try {
+                localStorage.setItem(STORAGE_KEY, String(next));
+            } catch {}
         }
     }
 
@@ -126,7 +147,7 @@ export default function Navbar({
                         isCollapsed ? "sr-only" : "min-w-0"
                     }`}
                 >
-                    <span className="w-6 h-6 border border-slate-900 bg-slate-900 text-white flex items-center justify-center font-mono text-[11px] font-medium tracking-tighter shrink-0">
+                    <span className="w-6 h-6 border border-utep-blue bg-utep-blue text-white flex items-center justify-center font-mono text-[11px] font-medium tracking-tighter shrink-0">
                         EMR
                     </span>
                     <div className="truncate">
@@ -185,7 +206,7 @@ export default function Navbar({
                                 isCollapsed ? "justify-center" : "justify-start"
                             } ${
                                 isActive
-                                    ? "bg-slate-900 text-white"
+                                    ? "bg-utep-blue text-white"
                                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                             }`}
                         >

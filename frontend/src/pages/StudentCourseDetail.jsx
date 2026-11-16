@@ -48,7 +48,7 @@ const TABS = [
     { id: "home",          label: "Home"          },
     { id: "cases",         label: "Cases"         },
     { id: "gradebook",     label: "Gradebook"     },
-    { id: "announcements", label: "Announcements", disabled: true },
+    { id: "announcements", label: "Announcements" },
 ];
 
 function formatDate(iso) {
@@ -75,8 +75,14 @@ export default function StudentCourseDetail({ course, onNavigate }) {
     const [activeTab, setActiveTab] = useState("home");
 
     useEffect(() => {
-        getMyCourseCases(course.id)
-            .then(setCases)
+        Promise.all([
+            getMyCourseCases(course.id),
+            getCourseAnnouncements(course.id).catch(() => []),
+        ])
+            .then(([courseCases, courseAnnouncements]) => {
+                setCases(courseCases);
+                setAnnouncements(courseAnnouncements ?? []);
+            })
             .catch((err) => { console.error(err); setError("Failed to load cases."); })
             .finally(() => setLoading(false));
     }, [course.id]);

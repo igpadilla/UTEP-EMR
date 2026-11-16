@@ -4,6 +4,7 @@ import {
     getCourseById,
     getCourseStudents,
     getCourseAssignedCases,
+    getCourseAnnouncements,
     getClinicalRoles,
     updateCourse,
     unenrollStudent,
@@ -52,7 +53,7 @@ const TABS = [
     { id: "patients",      label: "Patients"      },
     { id: "roster",        label: "Roster"        },
     { id: "gradebook",     label: "Gradebook"     },
-    { id: "announcements", label: "Announcements", disabled: true },
+    { id: "announcements", label: "Announcements" },
     { id: "settings",      label: "Settings"      },
 ];
 
@@ -112,16 +113,18 @@ export default function CourseDetail({ courseId, onNavigate }) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 setCurrentUserId(user?.id ?? null);
-                const [c, s, ca, r] = await Promise.all([
+                const [c, s, ca, r, ann] = await Promise.all([
                     getCourseById(courseId),
                     getCourseStudents(courseId),
                     getCourseAssignedCases(courseId),
                     getClinicalRoles(),
+                    getCourseAnnouncements(courseId).catch(() => []),
                 ]);
                 setCourse(c);
                 setStudents(s);
                 setCases(ca);
                 setRoles(r);
+                setAnnouncements(ann ?? []);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load course.");

@@ -370,6 +370,7 @@ export default function App() {
                 currentPage={navbarPage}
                 onNavigate={handleNavbarNavigate}
                 canUseLivePatients={liveAccess.read}
+                autoCollapse={page === "courseDetail" || page === "studentCourseDetail"}
             />
             <div className="flex-1 flex flex-col min-w-0 bg-white">
                 <Header
