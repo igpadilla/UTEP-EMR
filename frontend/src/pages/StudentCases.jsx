@@ -3,11 +3,13 @@ import {
     getMyAssignedCases,
     startCase,
     saveCaseNotes,
-    submitCase
+    submitCase,
+    submitCaseAddendum,
 } from "../services/studentCaseService.js";
 import TagSelector from "../components/TagSelector.jsx";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import { getClinicalNoteTemplatesForCase } from "../services/clinicalNoteTemplateService.js";
 import PatientChart from "./PatientChart.jsx";
 
@@ -305,7 +307,15 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         setSubmitting(false);
     }
 
-    const isEditable = activeCase && EDITABLE_STATUSES.includes(activeCase.encounter_status);
+    const hasAddendums = Array.isArray(activeCase?.addendums) && activeCase.addendums.length > 0;
+    const isEditable =
+        activeCase &&
+        EDITABLE_STATUSES.includes(activeCase.encounter_status) &&
+        !hasAddendums;
+    const canAddAddendum =
+        Boolean(activeCase) &&
+        (activeCase.encounter_status === "completed" ||
+            (activeCase.encounter_status === "revision_requested" && hasAddendums));
 
     const visibleCases = fromCourse
         ? cases.filter((c) => c.course_id === fromCourse.id)
@@ -615,6 +625,23 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                         ) : (
                             <p>No clinical note form is available.</p>
                         )}
+
+                        <ClinicalNoteAddendums
+                            addendums={activeCase.addendums ?? []}
+                            canAdd={canAddAddendum}
+                            encounterStatus={activeCase.encounter_status}
+                            onSubmitAddendum={async ({ reason, content }) => {
+                                const updated = await submitCaseAddendum(
+                                    activeCase.id,
+                                    activeCase.addendums ?? [],
+                                    { reason, content }
+                                );
+                                setActiveCase(updated);
+                                setCases((prev) =>
+                                    prev.map((x) => (x.id === updated.id ? updated : x))
+                                );
+                            }}
+                        />
                     </div>
 
                     {modalError && (

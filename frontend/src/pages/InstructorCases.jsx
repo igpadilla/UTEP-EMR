@@ -3,6 +3,7 @@ import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, gra
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 
 const STATUS_STYLES = {
@@ -706,6 +707,12 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                         return <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
                                     })()}
                                 </div>
+
+                                <ClinicalNoteAddendums
+                                    addendums={reviewCase.addendums ?? []}
+                                    canAdd={false}
+                                    encounterStatus={reviewCase.encounter_status}
+                                />
 
                                 {annotations.length > 0 && (
                                     <div style={{ marginTop: "1.25rem" }}>

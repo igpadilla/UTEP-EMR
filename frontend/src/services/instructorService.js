@@ -105,8 +105,9 @@ export async function getCourseAssignedCases(courseId) {
         .from("assigned_cases")
         .select(`
             id, encounter_status, assigned_at, due_date, score, max_score,
+            encounter_notes, addendums, rubric_scores,
             instructor_feedback, chart_annotations, template_id, patient_snapshot,
-            patient_templates ( first_name, last_name, chief_complaint ),
+            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
         .eq("course_id", courseId)
@@ -196,6 +197,7 @@ export async function getMyCourseCases(courseId) {
         .from("assigned_cases")
         .select(`
             id, encounter_status, assigned_at, due_date, score, max_score,
+            encounter_notes, addendums,
             instructor_feedback, chart_annotations, patient_snapshot
         `)
         .eq("course_id", courseId)

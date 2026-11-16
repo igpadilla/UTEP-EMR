@@ -445,3 +445,66 @@ test("patient changes are written to the PHI audit log, which only admins read a
         await db.close();
     }
 });
+
+test("signed clinical notes are immutable; students can only append addendums for review", async () => {
+    const db = await setup();
+    try {
+        // Cannot add an addendum before first sign-off
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set addendums = '[{"id":"1","content":"early"}]'::jsonb where id = '${NURSE_CASE}'`),
+            /Addendums can only be added after a note has been signed off/
+        );
+
+        // Student submits initial note, instructor signs off
+        await as(db, NURSE_STUDENT, `update assigned_cases set encounter_status = 'pending review', encounter_notes = 'Signed SOAP note' where id = '${NURSE_CASE}'`);
+        await as(db, TEACHER, `update assigned_cases set score = 95, encounter_status = 'completed' where id = '${NURSE_CASE}'`);
+
+        // Original encounter_notes cannot be modified once completed
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set encounter_notes = 'tampered note', encounter_status = 'pending review', addendums = '[{"id":"1","content":"a"}]'::jsonb where id = '${NURSE_CASE}'`),
+            /Signed clinical notes are immutable/
+        );
+
+        // Blank addendum content is rejected
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set addendums = '[{"id":"a0","content":"   "}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`),
+            /Addendum entry must include non-empty clinical content/
+        );
+
+        // Appending first addendum routes case to pending review
+        await as(
+            db,
+            NURSE_STUDENT,
+            `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"Clarified left knee ROM"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`
+        );
+        await as(
+            db,
+            NURSE_STUDENT,
+            `insert into audit_logs(case_id, actor_id, action_type, old_value, new_value) values ('${NURSE_CASE}', '${NURSE_STUDENT}', 'ADDENDUM_SUBMITTED', 'completed', 'Addendum (clarification)')`
+        );
+
+        // Instructor signs off the addendum
+        await as(db, TEACHER, `update assigned_cases set score = 98, encounter_status = 'completed' where id = '${NURSE_CASE}'`);
+
+        // Student cannot alter or overwrite prior addendum a1 when adding a2
+        await assert.rejects(
+            as(
+                db,
+                NURSE_STUDENT,
+                `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"TAMPERED"},{"id":"a2","content":"new"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`
+            ),
+            /Existing addendums are immutable/
+        );
+
+        // Student can append a second addendum while preserving the first
+        const [updated] = await as(
+            db,
+            NURSE_STUDENT,
+            `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"Clarified left knee ROM"},{"id":"a2","reason":"late_entry","content":"Added afternoon vitals follow-up"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}' returning addendums, encounter_status`
+        );
+        assert.equal(updated.encounter_status, "pending review");
+        assert.equal(updated.addendums.length, 2);
+    } finally {
+        await db.close();
+    }
+});
