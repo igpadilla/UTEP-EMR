@@ -612,3 +612,59 @@ test("RLS: boards go read-only after stop — events still visible, no new check
         await db.close();
     }
 });
+
+test("RLS: sim participants cannot read hidden template fields; get_sim_patients returns only safe fields", async () => {
+    const db = await setup();
+    try {
+        await db.exec(`update patient_templates set hidden_diagnosis = 'Pneumonia', answer_key = 'Order chest X-ray' where id = '${TEMPLATE_1}'`);
+        const [{ create_simulation: simId }] = await rpc(
+            db, INSTRUCTOR, "public.create_simulation", COURSE, "Template Leak Test", "standard", "workflow", null
+        );
+        await rpc(db, INSTRUCTOR, "public.set_sim_participants", simId, [
+            { user_id: FRONT_DESK, sim_role: "front_desk" },
+            { user_id: MED_A, sim_role: "med", discipline: "nursing" },
+            { user_id: ACTOR, sim_role: "patient_actor" },
+            { user_id: OBSERVER, sim_role: "observer" },
+        ]);
+        await rpc(db, INSTRUCTOR, "public.set_sim_encounters", simId, [
+            { template_id: TEMPLATE_1, patient_actor_id: ACTOR, assigned_med_id: MED_A, arrival_type: "scheduled", scheduled_time: "09:00" },
+        ]);
+
+        // Students in the sim cannot read template rows directly (hidden diagnosis, answer key...)
+        for (const user of [FRONT_DESK, MED_A, ACTOR, OBSERVER]) {
+            const rows = await as(db, user, `select hidden_diagnosis, answer_key from patient_templates`);
+            assert.equal(rows.length, 0, `participant ${user} must not read patient_templates`);
+        }
+
+        // get_sim_patients gives participants only the fields the sim screens show
+        const [patient, ...rest] = await as(db, MED_A, `select * from public.get_sim_patients('${simId}')`);
+        assert.equal(rest.length, 0);
+        assert.equal(patient.first_name, "Alice");
+        assert.equal(patient.chief_complaint, "cough");
+        assert.equal(patient.hidden_diagnosis, undefined);
+        assert.equal(patient.answer_key, undefined);
+
+        // The instructor running the sim gets the patients; outsiders get nothing
+        assert.equal((await as(db, INSTRUCTOR, `select * from public.get_sim_patients('${simId}')`)).length, 1);
+        assert.equal((await as(db, OUTSIDER, `select * from public.get_sim_patients('${simId}')`)).length, 0);
+    } finally {
+        await db.close();
+    }
+});
+
+test("get_course_student_emails: only the course's instructor gets the emails", async () => {
+    const db = await setup();
+    try {
+        const owner = await as(db, INSTRUCTOR, `select * from public.get_course_student_emails('${COURSE}')`);
+        assert.equal(owner.length, 6, "course instructor sees all enrolled students");
+        assert.ok(owner.some((r) => r.email === "fd@x"));
+
+        const otherInstructor = await as(db, OTHER_INSTR, `select * from public.get_course_student_emails('${COURSE}')`);
+        assert.equal(otherInstructor.length, 0, "another instructor gets no emails");
+
+        const student = await as(db, MED_A, `select * from public.get_course_student_emails('${COURSE}')`);
+        assert.equal(student.length, 0, "a student gets no emails");
+    } finally {
+        await db.close();
+    }
+});

@@ -4,7 +4,8 @@
 --
 --   supabase db execute --file supabase/simulation_dev_seed.sql
 --
--- Credentials (auto-generated passwords shown below — change before sharing):
+-- LOCAL ONLY: never run this against the shared or production project.
+-- Credentials:
 --   instructor@sim.dev    / SimInstr123!
 --   frontdesk@sim.dev     / SimFront123!
 --   med-a@sim.dev         / SimMedA123!
@@ -30,15 +31,43 @@ declare
     v_sim         uuid := 'dddddddd-0000-4000-8000-000000000001';
 begin
 
-    -- Auth users (Supabase Cloud: use the dashboard to create these accounts;
-    -- local: insert directly into auth.users)
-    insert into auth.users (id, email) values
-        (v_instructor, 'instructor@sim.dev'),
-        (v_front,      'frontdesk@sim.dev'),
-        (v_med_a,      'med-a@sim.dev'),
-        (v_med_b,      'med-b@sim.dev'),
-        (v_actor,      'actor@sim.dev')
-    on conflict (id) do nothing;
+    -- Auth users with the passwords listed above. Supabase Auth needs the password hash,
+    -- a confirmed email, timestamps, and empty (not NULL) token fields to allow sign-in.
+    -- Re-running this also repairs accounts created by the older version of this seed.
+    insert into auth.users (
+        id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+        confirmation_token, recovery_token, email_change, email_change_token_new,
+        email_change_token_current, phone_change, phone_change_token, reauthentication_token
+    )
+    select u.id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', u.email,
+           extensions.crypt(u.pw, extensions.gen_salt('bf')), now(),
+           '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+           '', '', '', '', '', '', '', ''
+    from (values
+        (v_instructor, 'instructor@sim.dev', 'SimInstr123!'),
+        (v_front,      'frontdesk@sim.dev',  'SimFront123!'),
+        (v_med_a,      'med-a@sim.dev',      'SimMedA123!'),
+        (v_med_b,      'med-b@sim.dev',      'SimMedB123!'),
+        (v_actor,      'actor@sim.dev',      'SimActor123!')
+    ) as u(id, email, pw)
+    on conflict (id) do update set
+        instance_id = excluded.instance_id, aud = excluded.aud, role = excluded.role,
+        encrypted_password = excluded.encrypted_password,
+        email_confirmed_at = coalesce(auth.users.email_confirmed_at, excluded.email_confirmed_at),
+        raw_app_meta_data = excluded.raw_app_meta_data,
+        created_at = coalesce(auth.users.created_at, excluded.created_at), updated_at = now(),
+        confirmation_token = '', recovery_token = '', email_change = '', email_change_token_new = '',
+        email_change_token_current = '', phone_change = '', phone_change_token = '', reauthentication_token = '';
+
+    -- Supabase Auth also expects an email identity for each account.
+    insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+    select u.id::text, u.id,
+           jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
+           'email', now(), now(), now()
+    from auth.users u
+    where u.id in (v_instructor, v_front, v_med_a, v_med_b, v_actor)
+      and not exists (select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email');
 
     -- Profiles
     update public.profiles set
@@ -116,15 +145,16 @@ begin
         (v_sim, v_med_b,  'med',           'nursing'),
         (v_sim, v_actor,  'patient_actor', null);
 
-    -- Encounters: 2 assigned to med-a, 1 to med-b
+    -- Encounters: 2 assigned to med-a, 1 to med-b.
+    -- A student can play only one patient, so the instructor plays encounters 2 and 3.
     delete from public.simulation_encounters where simulation_id = v_sim;
     insert into public.simulation_encounters
         (simulation_id, template_id, patient_actor_id, arrival_type,
          scheduled_time, assigned_med_id)
     values
         (v_sim, v_tpl_1, v_actor, 'scheduled', '09:00:00', v_med_a),
-        (v_sim, v_tpl_2, v_actor, 'scheduled', '09:15:00', v_med_a),
-        (v_sim, v_tpl_3, v_actor, 'scheduled', '09:30:00', v_med_b);
+        (v_sim, v_tpl_2, v_instructor, 'scheduled', '09:15:00', v_med_a),
+        (v_sim, v_tpl_3, v_instructor, 'scheduled', '09:30:00', v_med_b);
 
     raise notice 'Seed complete. Sign in as instructor@sim.dev, open Course SIM 101, and start the simulation from the Simulations tab.';
 end;

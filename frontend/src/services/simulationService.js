@@ -114,6 +114,18 @@ export async function getMySimsForCourse(courseId) {
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
+// Patient details for a simulation, keyed by template id (only the fields the sim screens show).
+// Students cannot read patient_templates directly, so this goes through get_sim_patients.
+async function getSimPatients(simId) {
+    const { data, error } = await supabase.rpc("get_sim_patients", { p_sim_id: simId });
+    if (error) throw error;
+    return Object.fromEntries((data || []).map((p) => [p.id, p]));
+}
+
+function withPatient(encounter, patients) {
+    return { ...encounter, patient_templates: patients[encounter.template_id] ?? null };
+}
+
 // Returns the calling student's roles and encounter activity for a single simulation.
 export async function getMySimSummary(simId) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -128,26 +140,30 @@ export async function getMySimSummary(simId) {
             .order("round"),
         supabase
             .from("simulation_encounters")
-            .select("id, round, status, med_started_at, med_completed_at, assigned_case_id, patient_templates!template_id(first_name, last_name, chief_complaint)")
+            .select("id, round, status, med_started_at, med_completed_at, assigned_case_id, template_id")
             .eq("simulation_id", simId)
             .eq("assigned_med_id", user.id),
         supabase
             .from("simulation_encounters")
-            .select("id, round, status, checked_in_at, patient_templates!template_id(first_name, last_name, chief_complaint)")
+            .select("id, round, status, checked_in_at, template_id")
             .eq("simulation_id", simId)
             .eq("checked_in_by", user.id),
         supabase
             .from("simulation_encounters")
-            .select("id, round, status, patient_templates!template_id(first_name, last_name, chief_complaint)")
+            .select("id, round, status, template_id")
             .eq("simulation_id", simId)
             .eq("patient_actor_id", user.id),
     ]);
 
+    const patients = await getSimPatients(simId).catch(() => ({}));
+    const withPatients = (res) =>
+        res.status === "fulfilled" ? (res.value.data || []).map((e) => withPatient(e, patients)) : [];
+
     return {
         participants:        partsRes.status === "fulfilled" ? (partsRes.value.data  || []) : [],
-        medEncounters:       medRes.status   === "fulfilled" ? (medRes.value.data    || []) : [],
-        frontDeskEncounters: fdRes.status    === "fulfilled" ? (fdRes.value.data     || []) : [],
-        actorEncounters:     actorRes.status === "fulfilled" ? (actorRes.value.data  || []) : [],
+        medEncounters:       withPatients(medRes),
+        frontDeskEncounters: withPatients(fdRes),
+        actorEncounters:     withPatients(actorRes),
     };
 }
 
@@ -283,7 +299,6 @@ export async function getSimEncounters(simId) {
             assigned_med_id, med_owner_id, assigned_case_id, round,
             arrived_at, checked_in_at, med_started_at, med_completed_at,
             discharged_at, checked_in_by, script, script_progress,
-            patient_templates!template_id ( id, patient_id, first_name, last_name, age, sex, chief_complaint, clinical_baseline ),
             actor:profiles!patient_actor_id ( user_id, first_name, last_name ),
             med_student:profiles!assigned_med_id ( user_id, first_name, last_name ),
             front_desk:profiles!checked_in_by ( user_id, first_name, last_name )
@@ -291,7 +306,8 @@ export async function getSimEncounters(simId) {
         .eq("simulation_id", simId)
         .order("scheduled_time", { ascending: true, nullsFirst: false });
     if (error) throw error;
-    return data || [];
+    const patients = await getSimPatients(simId);
+    return (data || []).map((e) => withPatient(e, patients));
 }
 
 export async function dischargeEncounter(encounterId) {
@@ -326,12 +342,13 @@ export async function getSimEvents(simId) {
         .select(`
             id, event_type, payload, actor_id, encounter_id, created_at,
             actor:profiles!actor_id ( first_name, last_name ),
-            encounter:simulation_encounters!encounter_id ( patient_templates!template_id ( first_name, last_name ) )
+            encounter:simulation_encounters!encounter_id ( template_id )
         `)
         .eq("simulation_id", simId)
         .order("id", { ascending: true });
     if (error) throw error;
-    return data || [];
+    const patients = await getSimPatients(simId);
+    return (data || []).map((evt) => (evt.encounter ? { ...evt, encounter: withPatient(evt.encounter, patients) } : evt));
 }
 
 // ── Realtime subscription ─────────────────────────────────────────────────────
