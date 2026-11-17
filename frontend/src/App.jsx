@@ -21,7 +21,18 @@ import PatientChart from "./pages/PatientChart.jsx";
 import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
+import SimulationList from "./pages/SimulationList.jsx";
+import SimulationBuilder from "./pages/SimulationBuilder.jsx";
+import SimulationMonitor from "./pages/SimulationMonitor.jsx";
+import SimulationLobby from "./pages/SimulationLobby.jsx";
+import SimulationLobbyManager from "./pages/SimulationLobbyManager.jsx";
+import SimulationLobbyWaiting from "./pages/SimulationLobbyWaiting.jsx";
+import FrontDeskSimBoard from "./pages/FrontDeskSimBoard.jsx";
+import MedSimBoard from "./pages/MedSimBoard.jsx";
+import SimulationPatientView from "./pages/SimulationPatientView.jsx";
+import PatientActorSim from "./pages/PatientActorSim.jsx";
 import AuditLog from "./pages/AuditLog.jsx";
+import { stopSimulation } from "./services/simulationService.js";
 
 import {
     getSession,
@@ -214,10 +225,13 @@ export default function App() {
         
             if (request !== accountRequest.current) return;
             console.error(error);
-            //     Here we keept it one page and its edits when a background check cannot connect
-            if (background) setAccountWarning("Unable to check your account right now. We'll try again shortly.");
-            else setUser(null);
-            setError("Unable to load your account.");
+            if (background) {
+                // Keep the open page — just show a dismissible warning
+                setAccountWarning("Unable to check your account right now. We'll try again shortly.");
+            } else {
+                setUser(null);
+                setError("Unable to load your account.");
+            }
         }
     }
 
@@ -271,6 +285,9 @@ export default function App() {
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCases" ? "studentCases"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
+        : nav.page === "simulationList" || nav.page === "simulationBuilder" || nav.page === "simulationMonitor" ? "courses"
+        : nav.page === "simulationLobby" || nav.page === "simulationLobbyWaiting" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
+        : nav.page === "simulationLobbyManager" ? "courses"
         : nav.page === "auditLog" ? "auditLog"
         : nav.page === "rooms" ? "rooms"
         : "dashboard";
@@ -327,7 +344,8 @@ export default function App() {
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
                 canManagePortal={isAdmin}
                 onArchived={() => navigate("patientManager")}
-                fromCourse={nav.fromCourse ?? null} />;
+                fromCourse={nav.fromCourse ?? null}
+                simMode={nav.backTo === "medSim"} />;
             break;
             
         case "studentManagement":
@@ -373,6 +391,42 @@ export default function App() {
             pageContent = canManageCourses
                 ? <CourseDetail key={nav.id} courseId={nav.id} onNavigate={navigate} canManageStudents={canManageStudents} />
                 : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationList":
+            pageContent = canManageCourses
+                ? <SimulationList courseId={nav.courseId ?? nav.id} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationBuilder":
+            pageContent = canManageCourses
+                ? <SimulationBuilder simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationMonitor":
+            pageContent = <SimulationMonitor simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />;
+            break;
+        case "simulationLobby":
+            pageContent = <SimulationLobby simId={nav.id} onNavigate={navigate} isStaff={isAdmin || isInstructor} />;
+            break;
+        case "simulationLobbyManager":
+            pageContent = canManageCourses
+                ? <SimulationLobbyManager simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationLobbyWaiting":
+            pageContent = <SimulationLobbyWaiting simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "frontDeskSim":
+            pageContent = <FrontDeskSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "medSim":
+            pageContent = <MedSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "simulationPatient":
+            pageContent = <SimulationPatientView encounterId={nav.id} simId={nav.simId} onNavigate={navigate} />;
+            break;
+        case "patientActorSim":
+            pageContent = <PatientActorSim simId={nav.id} onNavigate={navigate} />;
             break;
         case "auditLog":
             pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;

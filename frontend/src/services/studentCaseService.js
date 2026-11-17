@@ -35,6 +35,23 @@ export async function saveCaseNotes(caseId, notes) {
     return data;
 }
 
+// Simulation sign-off: saves notes and marks the case completed immediately.
+// No instructor review step — the instructor is present during the simulation.
+export async function signCase(caseId, notes) {
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .update({
+            encounter_notes: notes,
+            encounter_status: "completed",
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", caseId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
 // Works whether the student is submitting for the first time (in progress)
 // or resubmitting after the instructor returned it (revision_requested)
 export async function submitCase(caseId, notes) {

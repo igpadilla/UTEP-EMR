@@ -32,6 +32,7 @@ export async function getCaseAuditLogs(caseId) {
         .from("audit_logs")
         .select(`
             id,
+            actor_id,
             action_type,
             old_value,
             new_value,

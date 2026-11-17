@@ -1032,8 +1032,9 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                     <table className="patient-table">
                                         <thead>
                                             <tr>
-                                                <th>When</th>
-                                                <th>Actor</th>
+                                                <th>Timestamp</th>
+                                                <th>Name</th>
+                                                <th>User ID</th>
                                                 <th>Action</th>
                                                 <th>Detail</th>
                                             </tr>
@@ -1041,13 +1042,16 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                         <tbody>
                                             {auditLogs.map((log) => (
                                                 <tr key={log.id} className="instructor-table-row">
-                                                    <td style={{ whiteSpace: "nowrap" }}>
+                                                    <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
                                                         {new Date(log.created_at).toLocaleString()}
                                                     </td>
                                                     <td>
                                                         {log.profiles
                                                             ? `${log.profiles.first_name} ${log.profiles.last_name}`
                                                             : "—"}
+                                                    </td>
+                                                    <td style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                                        {log.actor_id ?? "—"}
                                                     </td>
                                                     <td>
                                                         <span className="instructor-status-badge" style={STATUS_STYLES["in progress"]}>

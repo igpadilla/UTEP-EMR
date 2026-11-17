@@ -5,6 +5,7 @@ import {
     getAllCourses,
 } from "../services/instructorService.js";
 import { getMyAssignedCases as getStudentCases } from "../services/studentCaseService.js";
+import { getMyActiveSimulations } from "../services/simulationService.js";
 
 const STATUS_META = {
     "not started": {
@@ -60,6 +61,11 @@ export default function Dashboard({ user, onNavigate }) {
         profile.firstName ||
         profile.full_name?.split(" ")[0] ||
         "Clinician";
+
+    const [activeSims, setActiveSims] = useState([]);
+    useEffect(() => {
+        getMyActiveSimulations().then(setActiveSims).catch(() => {});
+    }, []);
 
     const [cases, setCases] = useState([]);
     const [courseMap, setCourseMap] = useState({});
@@ -187,6 +193,25 @@ export default function Dashboard({ user, onNavigate }) {
                     </span>
                 </div>
             </header>
+
+            {/* Active simulation banners */}
+            {activeSims.length > 0 && (
+                <div className="pt-4 flex flex-col gap-2">
+                    {activeSims.map(p => (
+                        <div key={p.simulation_id}
+                            className="flex items-center justify-between gap-4 px-4 py-3 rounded-sm border border-green-200 bg-green-50 text-sm">
+                            <span className="font-medium text-green-800">
+                                Active simulation: {p.simulations?.title}
+                            </span>
+                            <button type="button"
+                                className="px-3 py-1 text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-sm transition-colors"
+                                onClick={() => onNavigate("simulationLobby", p.simulation_id)}>
+                                Join →
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Minimalist Metric Strip */}
             <section
@@ -512,8 +537,9 @@ export default function Dashboard({ user, onNavigate }) {
                                                         <button
                                                             type="button"
                                                             onClick={() =>
-                                                                onNavigate("studentCases", null, {
-                                                                    openCaseId: c.id,
+                                                                onNavigate("patientChart", null, {
+                                                                    caseId: c.id,
+                                                                    backTo: "dashboard",
                                                                 })
                                                             }
                                                             className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
