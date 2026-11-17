@@ -37,3 +37,11 @@ export async function releaseVisitSummary(visitId, summary) {
     if (error) throw new Error(error.message);
 }
 
+export async function setLabResultPortalRelease(resultId, released, note) {
+    const { error } = await supabase.rpc("set_diagnostic_result_portal_release", {
+        p_result_id: resultId, p_released: released, p_note: note.trim() || null,
+    });
+    if (error?.code === "PGRST202") throw new Error("Lab sharing is not available yet. Contact your project administrator about the portal update.");
+    if (error) throw new Error(error.message || "Unable to change lab sharing. Please try again.");
+}
+

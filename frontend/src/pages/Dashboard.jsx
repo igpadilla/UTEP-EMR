@@ -55,6 +55,7 @@ export default function Dashboard({ user, onNavigate }) {
     const isAdmin = accountType === "admin";
 
     const firstName =
+    
         profile.first_name ||
         profile.firstName ||
         profile.full_name?.split(" ")[0] ||

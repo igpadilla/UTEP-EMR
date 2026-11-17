@@ -6,6 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ADMIN = id(1), TEACHER = id(2), ALICE = id(3), BOB = id(4), STUDENT = id(5);
 const PATIENT_A = id(10), PATIENT_B = id(11), VISIT = id(20);
+const LAB_A = id(30), LAB_B = id(31), PRIVATE_LAB = id(32), IMAGING = id(33), CANCELLED = id(34), CASE_LAB = id(35);
 
 async function as(db, user, sql, params = []) {
     await db.query("select set_config('test.user_id', $1, false)", [user]);
@@ -13,6 +14,17 @@ async function as(db, user, sql, params = []) {
     try { return (await db.query(sql, params)).rows; }
     finally { await db.exec("reset role"); }
 }
+
+test("lab sharing refuses an out-of-date database before changing its schema", async () => {
+    const db = new PGlite();
+    try {
+        await db.exec('create table public.diagnostic_results(id uuid primary key)');
+        const migration = await readFile(new URL('../supabase/migrations/20261115120000_share_patient_lab_results.sql',import.meta.url),'utf8');
+        await assert.rejects(db.exec(migration), /Apply the team audit-log migrations/);
+        const { rows } = await db.query("select column_name from information_schema.columns where table_name='diagnostic_results'");
+        assert.deepEqual(rows.map((row) => row.column_name), ['id']);
+    } finally { await db.close(); }
+});
 
 test("patient portal isolates records and exposes only released patient-facing content", async (t) => {
     const db = new PGlite();
@@ -42,6 +54,23 @@ test("patient portal isolates records and exposes only released patient-facing c
                 ('${VISIT}','${PATIENT_A}','Follow-up','INTERNAL NOTES NEVER SHARE','2026-01-02');
             insert into courses(instructor_id,course_number,crn) values ('${TEACHER}','DEMO','1');
             insert into profile_roles(user_id,role_id) select '${ALICE}',role_id from roles where role_name = 'front_desk';
+            insert into diagnostic_orders(id,patient_id,category,test_code,test_name,coding_system,clinical_code,clinical_indication,status,ordered_by) values
+                ('${LAB_A}','${PATIENT_A}','lab','demo','Shared panel','LOINC','demo','Fictional teaching record','completed','${TEACHER}'),
+                ('${LAB_B}','${PATIENT_B}','lab','demo','Other patient panel','LOINC','demo','Fictional teaching record','completed','${TEACHER}'),
+                ('${PRIVATE_LAB}','${PATIENT_A}','lab','demo','PRIVATE TEST','LOINC','demo','Fictional teaching record','completed','${TEACHER}'),
+                ('${IMAGING}','${PATIENT_A}','imaging','demo','Private image','CPT','demo','Fictional teaching record','completed','${TEACHER}'),
+                ('${CANCELLED}','${PATIENT_A}','lab','demo','Cancelled panel','LOINC','demo','Fictional teaching record','cancelled','${TEACHER}');
+            insert into diagnostic_results(id,order_id,structured_values,report_findings,report_impression,file_path,resulted_by)
+                select id,id,'[{"code":"demo","name":"Example value","value":0,"unit":"units","reference_range":"0–1","flag":"normal","internal":"PRIVATE VALUE METADATA"}]',
+                    'PRIVATE TECHNICIAN NOTES','PRIVATE INTERPRETATION','private/report.pdf','${TEACHER}'
+                from diagnostic_orders;
+            insert into patient_templates(id,instructor_id,first_name,last_name,age,chief_complaint)
+                values ('${id(40)}','${TEACHER}','Case','Copy',40,'Practice');
+            insert into assigned_cases(id,template_id,student_id,assigned_by,course_id,patient_snapshot)
+                select '${id(41)}','${id(40)}','${STUDENT}','${TEACHER}',id,'{}' from courses limit 1;
+            insert into diagnostic_orders(id,case_id,category,test_code,test_name,coding_system,clinical_code,clinical_indication,status,ordered_by)
+                values ('${CASE_LAB}','${id(41)}','lab','demo','Case panel','LOINC','demo','Practice','completed','${TEACHER}');
+            insert into diagnostic_results(id,order_id,resulted_by) values ('${CASE_LAB}','${CASE_LAB}','${TEACHER}');
         `);
 
         const portal = async (who) => (await as(db, who, 'select get_my_patient_portal() as result'))[0].result;
@@ -79,6 +108,45 @@ test("patient portal isolates records and exposes only released patient-facing c
             assert.equal((await portal(BOB)).last_visit, null);
             assert.ok(!JSON.stringify(alice).includes('Newer private'));
             await assert.rejects(as(db, TEACHER, `select release_patient_visit_summary('${VISIT}','   ')`), /Enter a visit summary/);
+        });
+
+        await t.test("only staff release completed live-patient labs; other patients and private reports remain hidden", async () => {
+            for (const who of [ALICE, STUDENT]) {
+                await assert.rejects(as(db, who, 'select set_diagnostic_result_portal_release($1,true,$2)', [LAB_A,'Public summary']), /Only active staff/);
+            }
+            for (const resultId of [IMAGING, CANCELLED, CASE_LAB, id(99)]) {
+                await assert.rejects(as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,true,$2)', [resultId,'Public summary']), /completed lab result on a patient/);
+            }
+            await assert.rejects(as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,null,null)', [LAB_A]), /Choose shared or private/);
+            await as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,true,$2)', [LAB_A,'Summary explicitly shared by staff']);
+            await as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,true,null)', [LAB_B]);
+            const alice = await portal(ALICE), bob = await portal(BOB);
+            assert.deepEqual(alice.labs.map((lab) => lab.id), [LAB_A]);
+            assert.deepEqual(bob.labs.map((lab) => lab.id), [LAB_B]);
+            assert.equal(alice.labs[0].values[0].value, '0');
+            assert.equal(alice.labs[0].result_note, 'Summary explicitly shared by staff');
+            assert.equal(alice.labs[0].values[0].reference_range, '0–1');
+            assert.ok(!JSON.stringify(alice).includes('PRIVATE'));
+            assert.ok(!JSON.stringify(alice).includes('private/report.pdf'));
+            assert.equal((await as(db, ALICE, 'select * from diagnostic_results')).length, 0);
+            await as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,false,null)', [LAB_A]);
+            assert.deepEqual((await portal(ALICE)).labs, []);
+            await db.query("update diagnostic_results set portal_released_at = now() + interval '1 day' where id = $1", [LAB_A]);
+            assert.deepEqual((await portal(ALICE)).labs, []);
+            await db.query("update diagnostic_results set structured_values = '[]' where id = $1", [LAB_A]);
+            await assert.rejects(as(db, TEACHER, 'select set_diagnostic_result_portal_release($1,true,null)', [LAB_A]), /Add lab values or a patient summary/);
+            await as(db, ADMIN, 'select set_diagnostic_result_portal_release($1,true,$2)', [LAB_A,'Staff summary without structured values']);
+            assert.deepEqual((await portal(ALICE)).labs[0].values, []);
+        });
+
+        await t.test("portal reads and staff sharing are audited without storing health details in the audit entry", async () => {
+            await portal(ALICE);
+            const entries = await as(db, ADMIN, `select * from phi_audit_log where actor_id='${ALICE}' and action='VIEW' and table_name='patient_portal_accounts'`);
+            assert.ok(entries.length > 0);
+            assert.ok(entries.every((entry) => entry.patient_id === PATIENT_A && entry.record_id === ALICE));
+            const sharing = await as(db, ADMIN, `select changed_fields from phi_audit_log where record_id='${LAB_A}' and action='UPDATE'`);
+            assert.ok(sharing.some((entry) => entry.changed_fields.includes('portal_released_at')));
+            assert.equal((await as(db, ALICE, 'select * from phi_audit_log')).length, 0);
         });
 
         await t.test("admin deactivation revokes access immediately and reactivation keeps records", async () => {

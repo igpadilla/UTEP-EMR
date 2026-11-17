@@ -101,7 +101,7 @@ export default function Navbar({
     const isAdmin = accountType === "admin";
     const isInstructor = accountType === "instructor";
     const isStudent = accountType === "student";
-    const canManageStudents = isAdmin || isInstructor;
+    const canManageStudents = isAdmin;
     const showPatients = isAdmin || isInstructor || (isStudent && canUseLivePatients);
 
     const navItems = [
