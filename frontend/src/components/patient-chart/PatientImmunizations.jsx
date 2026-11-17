@@ -46,7 +46,7 @@ export default function PatientImmunizations({ patient, canEdit, editing, onEdit
         if (!canEdit || saving) return;
 
         const hasInvalidEntry = entries.some(
-            (entry) => !entry.vaccine.trim() && (entry.date || entry.dose.trim() || entry.notes.trim())
+            (entry) => !(entry?.vaccine ?? "").trim() && (entry?.date || (entry?.dose ?? "").trim() || (entry?.notes ?? "").trim())
         );
         if (hasInvalidEntry) {
             triggerError("Vaccine name is required for each immunization entry.");
@@ -55,10 +55,10 @@ export default function PatientImmunizations({ patient, canEdit, editing, onEdit
 
         const validEntries = entries
             .map((entry) => ({
-                vaccine: entry.vaccine.trim(),
-                date: entry.date || "",
-                dose: entry.dose.trim(),
-                notes: entry.notes.trim(),
+                vaccine: (entry?.vaccine ?? "").trim(),
+                date: entry?.date || "",
+                dose: (entry?.dose ?? "").trim(),
+                notes: (entry?.notes ?? "").trim(),
             }))
             .filter((entry) => entry.vaccine);
 
@@ -85,13 +85,13 @@ export default function PatientImmunizations({ patient, canEdit, editing, onEdit
                 <form onSubmit={save}>
                     {entries.map((entry, index) => (
                         <div key={index} className="chart-diagnosis-row">
-                            <input aria-label="Vaccine" placeholder="Vaccine" value={entry.vaccine}
+                            <input aria-label="Vaccine" placeholder="Vaccine" value={entry?.vaccine ?? ""}
                                 onChange={(e) => updateEntry(index, "vaccine", e.target.value)} />
-                            <input aria-label="Date given" type="date" value={entry.date}
+                            <input aria-label="Date given" type="date" value={entry?.date ?? ""}
                                 onChange={(e) => updateEntry(index, "date", e.target.value)} />
-                            <input aria-label="Dose" placeholder="Dose" value={entry.dose}
+                            <input aria-label="Dose" placeholder="Dose" value={entry?.dose ?? ""}
                                 onChange={(e) => updateEntry(index, "dose", e.target.value)} />
-                            <input aria-label="Notes" placeholder="Notes" value={entry.notes}
+                            <input aria-label="Notes" placeholder="Notes" value={entry?.notes ?? ""}
                                 onChange={(e) => updateEntry(index, "notes", e.target.value)} />
                             <button type="button" className="secondary-action-button"
                                 onClick={() => setEntries((current) => current.filter((_, i) => i !== index))}>Remove</button>

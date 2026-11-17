@@ -115,7 +115,7 @@ export async function getCourseAssignedCases(courseId) {
             id, encounter_status, assigned_at, due_date, score, max_score,
             encounter_notes, addendums, rubric_scores,
             instructor_feedback, chart_annotations, template_id, patient_snapshot,
-            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
+            patient_templates ( title, target_year, discipline, first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
             profiles!student_id ( user_id, first_name, last_name )
         `)
         .eq("course_id", courseId)
@@ -138,7 +138,7 @@ export async function createCourse({ course_number, crn, discipline }) {
     const { data, error } = await supabase
         .from("courses")
         .insert({ instructor_id: user.id, course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
-        .select()
+        .select("id, course_number, crn, discipline, instructor_id, profiles!instructor_id ( first_name, last_name )")
         .single();
     if (error) throw error;
     return data;
@@ -149,7 +149,7 @@ export async function updateCourse(courseId, { course_number, crn, discipline })
         .from("courses")
         .update({ course_number: course_number.trim(), crn: crn.trim(), discipline: discipline || null })
         .eq("id", courseId)
-        .select()
+        .select("id, course_number, crn, discipline, instructor_id, profiles!instructor_id ( first_name, last_name )")
         .single();
     if (error) throw error;
     return data;
@@ -233,7 +233,7 @@ export async function getMyAssignedCases(includeArchived = false) {
         .from("assigned_cases")
         .select(`
             *,
-            patient_templates ( first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
+            patient_templates ( title, target_year, discipline, first_name, last_name, chief_complaint, traps, rubric_criteria, expectations_rubric, answer_key ),
             profiles!student_id ( first_name, last_name )
         `)
         .order("assigned_at", { ascending: false });

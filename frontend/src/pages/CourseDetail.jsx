@@ -5,6 +5,7 @@ import {
     getCourseById,
     getCourseStudents,
     getCourseAssignedCases,
+    getCourseAnnouncements,
     getClinicalRoles,
     getStudents,
     updateCourse,
@@ -57,7 +58,7 @@ const TABS = [
     { id: "patients",      label: "Patients"      },
     { id: "roster",        label: "Roster"        },
     { id: "gradebook",     label: "Gradebook"     },
-    { id: "announcements", label: "Announcements", disabled: true },
+    { id: "announcements", label: "Announcements" },
     { id: "settings",      label: "Settings"      },
 ];
 
@@ -125,16 +126,18 @@ export default function CourseDetail({ courseId, onNavigate, canManageStudents =
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 setCurrentUserId(user?.id ?? null);
-                const [c, s, ca, r] = await Promise.all([
+                const [c, s, ca, r, ann] = await Promise.all([
                     getCourseById(courseId),
                     getCourseStudents(courseId),
                     getCourseAssignedCases(courseId),
                     getClinicalRoles(),
+                    getCourseAnnouncements(courseId).catch(() => []),
                 ]);
                 setCourse(c);
                 setStudents(s);
                 setCases(ca);
                 setRoles(r);
+                setAnnouncements(ann ?? []);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load course.");
@@ -151,6 +154,15 @@ export default function CourseDetail({ courseId, onNavigate, canManageStudents =
             .catch(() => { if (!cancelled) setRosterError("Could not load students, try again"); });
         return () => { cancelled = true; };
     }, [canManageStudents]);
+
+
+    useEffect(() => {
+        if (!courseId || loading || activeTab === "cases") return;
+        getCourseAssignedCases(courseId)
+            .then((ca) => setCases(ca ?? []))
+            .catch(() => {});
+    }, [activeTab, assignState, courseId]);
+
 
     //-------------------Settings-------------------
     function startEdit() {
@@ -1128,10 +1140,10 @@ export default function CourseDetail({ courseId, onNavigate, canManageStudents =
 
                             {/* Right — rubric */}
                             <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc" }}>
-                                {(reviewCase.patient_snapshot?.expectations_rubric) && (
+                                {(reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric) && (
                                     <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
                                         <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>Expectations & Milestones</p>
-                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_snapshot.expectations_rubric}</p>
+                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}</p>
                                     </div>
                                 )}
 

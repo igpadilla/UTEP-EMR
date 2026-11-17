@@ -68,7 +68,7 @@ export default function PatientMedications({ patient, canEdit, editing, onEdit, 
             <div className="chart-card">
                 {current.length ? (
                     <ul className="chart-saved-list">
-                        {current.map((entry, index) => (
+                        {current.filter(Boolean).map((entry, index) => (
                             <li key={index}>
                                 <strong>{medicationName(entry)}</strong>
                                 {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
