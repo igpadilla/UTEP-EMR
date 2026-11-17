@@ -45,11 +45,11 @@ async function setup() {
         insert into course_enrollments(course_id, student_id, enrolled_by) values
             ('${NURSING_COURSE}','${NURSE_STUDENT}','${ADMIN}'),
             ('${PT_COURSE}','${PT_STUDENT}','${ADMIN}');
-        insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, hidden_diagnosis, traps)
-            values ('${TEMPLATE}','${TEACHER}','Maria','G',58,'chest pain','NSTEMI','[{"t":"trap"}]');
+        insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, hidden_diagnosis, traps, answer_key)
+            values ('${TEMPLATE}','${TEACHER}','Maria','G',58,'chest pain','NSTEMI','[{"t":"trap"}]','Order troponin and ECG');
         -- Cases an admin assigned before admins lost that right; the course instructor manages them through the course.
         insert into assigned_cases(id, template_id, student_id, assigned_by, course_id, patient_snapshot) values
-            ('${NURSE_CASE}','${TEMPLATE}','${NURSE_STUDENT}','${ADMIN}','${NURSING_COURSE}','{"first_name":"Maria","traps":[1],"rubric_criteria":[1]}'),
+            ('${NURSE_CASE}','${TEMPLATE}','${NURSE_STUDENT}','${ADMIN}','${NURSING_COURSE}','{"first_name":"Maria","traps":[1],"rubric_criteria":[1],"answer_key":"secret"}'),
             ('${PT_CASE}','${TEMPLATE}','${PT_STUDENT}','${ADMIN}','${PT_COURSE}','{"first_name":"Maria"}');
         insert into patients(id, first_name, last_name, age) values ('${PATIENT}','John','Doe',45);
     `);
@@ -93,7 +93,9 @@ test("students work only on their own open case and cannot grade it", async () =
 test("students never see the answer key", async () => {
     const db = await setup();
     try {
-        assert.equal((await as(db, NURSE_STUDENT, `select hidden_diagnosis from patient_templates`)).length, 0);
+        assert.equal((await as(db, NURSE_STUDENT, `select hidden_diagnosis, answer_key from patient_templates`)).length, 0);
+        const [tpl] = await as(db, TEACHER, `select answer_key from patient_templates where id = '${TEMPLATE}'`);
+        assert.equal(tpl.answer_key, "Order troponin and ECG");
         const [row] = await as(db, NURSE_STUDENT, `select patient_snapshot from assigned_cases where id = '${NURSE_CASE}'`);
         assert.deepEqual(row.patient_snapshot, { first_name: "Maria" });
     } finally {
@@ -103,6 +105,7 @@ test("students never see the answer key", async () => {
 
 test("cases go only to enrolled students, one open copy per template", async () => {
     const db = await setup();
+    
     try {
         const assign = (student, course) => as(db, TEACHER, `insert into assigned_cases(template_id, student_id, assigned_by, course_id)
             values ('${TEMPLATE}','${student}','${TEACHER}','${course}') returning id`);
@@ -180,7 +183,7 @@ test("clinical notes: student drafts and submits, instructor finalizes", async (
     }
 });
 
-test("enrollments belong to the course owner", async () => {
+test("only admins change enrollments while instructors keep their rosters and grading", async () => {
     const db = await setup();
     try {
         // The admin enrolled these students; the course owner still sees them.
@@ -188,6 +191,26 @@ test("enrollments belong to the course owner", async () => {
         assert.equal((await as(db, OTHER_TEACHER, `select id from course_enrollments`)).length, 0);
         await assert.rejects(as(db, OTHER_TEACHER, `insert into course_enrollments(course_id, student_id, enrolled_by)
             values ('${NURSING_COURSE}','${PT_STUDENT}','${OTHER_TEACHER}')`), /row-level security/);
+        await assert.rejects(as(db, TEACHER, `insert into course_enrollments(course_id, student_id, enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${TEACHER}')`), /row-level security/);
+        assert.equal((await as(db, TEACHER, `delete from course_enrollments where course_id='${NURSING_COURSE}' returning id`)).length, 0);
+        assert.equal((await as(db, TEACHER, `update course_enrollments set course_id='${PT_COURSE}' returning id`)).length, 0);
+        await assert.rejects(as(db, TEACHER, `delete from courses where id='${NURSING_COURSE}'`), /Only admins can delete a course with enrolled students/);
+
+        await as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${ADMIN}')`);
+        assert.equal((await as(db, TEACHER, `select id from course_enrollments where course_id='${NURSING_COURSE}'`)).length, 2);
+        await as(db, ADMIN, `delete from course_enrollments where course_id='${NURSING_COURSE}' and student_id='${NURSE_STUDENT}'`);
+        assert.equal((await as(db, NURSE_STUDENT, `select id from assigned_cases where id='${NURSE_CASE}'`)).length, 1);
+        assert.equal(Number((await as(db, TEACHER, `update assigned_cases set score=80 where id='${NURSE_CASE}' returning score`))[0].score), 80);
+
+        await db.exec(`update profiles set active=false where user_id='${PT_STUDENT}'`);
+        await assert.rejects(as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${PT_STUDENT}','${ADMIN}')`), /row-level security/);
+        await assert.rejects(as(db, ADMIN, `insert into course_enrollments(course_id,student_id,enrolled_by)
+            values ('${NURSING_COURSE}','${OTHER_TEACHER}','${ADMIN}')`), /row-level security/);
+        await db.exec(`update profiles set active=false where user_id='${ADMIN}'`);
+        assert.equal((await as(db, ADMIN, `delete from course_enrollments returning id`)).length, 0);
     } finally {
         await db.close();
     }
@@ -319,10 +342,10 @@ test("a case built from a patient snapshots the whole chart into the student's c
         assert.equal((await db.query(`select 1 from vital_sign_sets where assigned_case_id in ('${NURSE_CASE}','${PT_CASE}')`)).rows.length, 0);
         assert.equal((await db.query(`select patient_snapshot->>'first_name' f from assigned_cases where id = '${PT_CASE}'`)).rows[0].f, "Maria");
 
-        // A patient that a template is built from cannot be deleted out from under it.
+        // Patients are never hard deleted (archived instead), so a template's patient stays in place.
         await db.exec(`insert into patients(id, first_name, last_name, age) values ('40000000-0000-4000-8000-000000000002','Ana','Ruiz',30);
             update patient_templates set patient_id = '40000000-0000-4000-8000-000000000002' where id = '${TEMPLATE}'`);
-        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /patient_templates_patient_id_fkey/);
+        await assert.rejects(db.query(`delete from patients where id = '40000000-0000-4000-8000-000000000002'`), /cannot be deleted/);
     } finally {
         await db.close();
     }
@@ -364,6 +387,8 @@ test("referrals on a patient's chart are copied into a case built from that pati
     }
 });
 
+
+
 test("diagnostic orders and results respect RLS and copy from patient to assigned case", async () => {
     const db = await setup();
     const DIAG_TEMPLATE = "10000000-0000-4000-8000-000000000004";
@@ -376,6 +401,8 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
         await as(db, TEACHER, `insert into diagnostic_results(
             order_id, structured_values, report_impression, overall_flag
         ) values ('${labOrder.id}', '[{"code":"hgb","name":"Hemoglobin","value":9.8,"unit":"g/dL","flag":"low"}]'::jsonb, 'Mild anemia', 'abnormal')`);
+        // The audit log finds a result's patient through its order.
+        assert.equal((await db.query(`select patient_id from phi_audit_log where table_name = 'diagnostic_results' and action = 'INSERT'`)).rows[0].patient_id, PATIENT);
 
         await as(db, TEACHER, `insert into patient_templates(id, instructor_id, first_name, last_name, age, chief_complaint, patient_id)
             values ('${DIAG_TEMPLATE}','${TEACHER}','John','Doe',45,'fatigue','${PATIENT}')`);
@@ -394,6 +421,8 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
         assert.equal((await as(db, PT_STUDENT, `select id from diagnostic_orders where case_id = '${DIAG_CASE}'`)).length, 0);
         assert.equal((await as(db, NURSE_STUDENT, `select id from diagnostic_orders where patient_id = '${PATIENT}'`)).length, 0);
 
+
+
         const [studentOrder] = await as(db, NURSE_STUDENT, `insert into diagnostic_orders(
             case_id, category, test_code, test_name, coding_system, clinical_code, clinical_indication
         ) values ('${DIAG_CASE}', 'imaging', 'cxr_pa_lat', 'Chest X-Ray (PA & Lateral)', 'CPT', '71046', 'dyspnea') returning id`);
@@ -401,6 +430,107 @@ test("diagnostic orders and results respect RLS and copy from patient to assigne
 
         await as(db, NURSE_STUDENT, `insert into audit_logs(case_id, actor_id, action_type, new_value)
             values ('${DIAG_CASE}', '${NURSE_STUDENT}', 'IMAGING_ORDERED', 'Chest X-Ray')`);
+    } finally {
+        await db.close();
+    }
+});
+
+test("patient changes are written to the PHI audit log, which only admins read and nobody edits", async () => {
+    const db = await setup();
+    try {
+        await as(db, TEACHER, `update patients set allergies = array['Penicillin'], age = 46 where id = '${PATIENT}'`);
+        const [entry] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`);
+        assert.equal(entry.actor_id, TEACHER);
+        assert.equal(entry.patient_id, PATIENT);
+        assert.deepEqual([...entry.changed_fields].sort(), ["age", "allergies"]);
+
+        // A save that changes nothing is not logged.
+        await as(db, TEACHER, `update patients set age = 46, updated_at = now() where id = '${PATIENT}'`);
+        assert.equal((await as(db, ADMIN, `select 1 from phi_audit_log where table_name = 'patients' and action = 'UPDATE'`)).length, 1);
+
+        // Opening a chart is logged under the viewer's account.
+        await as(db, TEACHER, `select log_record_view('patients', '${PATIENT}')`);
+        const [view] = await as(db, ADMIN, `select * from phi_audit_log where action = 'VIEW'`);
+        assert.equal(view.actor_id, TEACHER);
+        assert.equal(view.patient_id, PATIENT);
+        await assert.rejects(as(db, TEACHER, `select log_record_view('profiles', '${PATIENT}')`), /Cannot log/);
+        await as(db, TEACHER, `select log_record_view('diagnostic_results', '${PATIENT}')`);
+
+        // Account changes (made through the account edge functions) are logged with the affected account as the record.
+        await db.exec(`update profiles set active = false where user_id = '${OTHER_TEACHER}'`);
+        const [account] = await as(db, ADMIN, `select * from phi_audit_log where table_name = 'profiles' and record_id = '${OTHER_TEACHER}' and action = 'UPDATE' order by id desc limit 1`);
+        assert.deepEqual(account.changed_fields, ["active"]);
+
+        assert.equal((await as(db, TEACHER, `select 1 from phi_audit_log`)).length, 0);
+        // The admin screen reads names, filters by person or patient, and refuses non-admins.
+        const rows = await as(db, ADMIN, `select * from get_phi_audit_log(p_search => 'Doe', p_action => 'UPDATE')`);
+        assert.ok(rows.length > 0 && rows.every((row) => row.patient === "John Doe" && row.action === "UPDATE"));
+        await assert.rejects(as(db, TEACHER, `select * from get_phi_audit_log()`), /Only admins/);
+        await assert.rejects(as(db, ADMIN, `delete from phi_audit_log`), /permission denied/);
+        await assert.rejects(as(db, ADMIN, `update phi_audit_log set actor_id = null`), /permission denied/);
+    } finally {
+        await db.close();
+    }
+});
+
+test("signed clinical notes are immutable; students can only append addendums for review", async () => {
+    const db = await setup();
+    try {
+        // Cannot add an addendum before first sign-off
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set addendums = '[{"id":"1","content":"early"}]'::jsonb where id = '${NURSE_CASE}'`),
+            /Addendums can only be added after a note has been signed off/
+        );
+
+        // Student submits initial note, instructor signs off
+        await as(db, NURSE_STUDENT, `update assigned_cases set encounter_status = 'pending review', encounter_notes = 'Signed SOAP note' where id = '${NURSE_CASE}'`);
+        await as(db, TEACHER, `update assigned_cases set score = 95, encounter_status = 'completed' where id = '${NURSE_CASE}'`);
+
+        // Original encounter_notes cannot be modified once completed
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set encounter_notes = 'tampered note', encounter_status = 'pending review', addendums = '[{"id":"1","content":"a"}]'::jsonb where id = '${NURSE_CASE}'`),
+            /Signed clinical notes are immutable/
+        );
+
+        // Blank addendum content is rejected
+        await assert.rejects(
+            as(db, NURSE_STUDENT, `update assigned_cases set addendums = '[{"id":"a0","content":"   "}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`),
+            /Addendum entry must include non-empty clinical content/
+        );
+
+        // Appending first addendum routes case to pending review
+        await as(
+            db,
+            NURSE_STUDENT,
+            `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"Clarified left knee ROM"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`
+        );
+        await as(
+            db,
+            NURSE_STUDENT,
+            `insert into audit_logs(case_id, actor_id, action_type, old_value, new_value) values ('${NURSE_CASE}', '${NURSE_STUDENT}', 'ADDENDUM_SUBMITTED', 'completed', 'Addendum (clarification)')`
+        );
+
+        // Instructor signs off the addendum
+        await as(db, TEACHER, `update assigned_cases set score = 98, encounter_status = 'completed' where id = '${NURSE_CASE}'`);
+
+        // Student cannot alter or overwrite prior addendum a1 when adding a2
+        await assert.rejects(
+            as(
+                db,
+                NURSE_STUDENT,
+                `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"TAMPERED"},{"id":"a2","content":"new"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}'`
+            ),
+            /Existing addendums are immutable/
+        );
+
+        // Student can append a second addendum while preserving the first
+        const [updated] = await as(
+            db,
+            NURSE_STUDENT,
+            `update assigned_cases set addendums = '[{"id":"a1","reason":"clarification","content":"Clarified left knee ROM"},{"id":"a2","reason":"late_entry","content":"Added afternoon vitals follow-up"}]'::jsonb, encounter_status = 'pending review' where id = '${NURSE_CASE}' returning addendums, encounter_status`
+        );
+        assert.equal(updated.encounter_status, "pending review");
+        assert.equal(updated.addendums.length, 2);
     } finally {
         await db.close();
     }

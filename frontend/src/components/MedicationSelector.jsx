@@ -1,10 +1,12 @@
 import { useState } from "react";
 import medicines from "../data/medicines.json";
+import { medicationName, medicationDetails } from "./medicationDisplay.js";
 
 const FREQUENCIES = [1, 2, 3, 4];
 
-export default function MedicationSelector({ value, onChange }) {
+export default function MedicationSelector({ value = [], onChange }) {
     // value: array of { medicine, dosage, frequency }
+    const safeValue = Array.isArray(value) ? value : [];
     const [selected, setSelected] = useState(null); // medicine object
     const [dosage, setDosage] = useState("");
     const [frequency, setFrequency] = useState(1);
@@ -27,31 +29,32 @@ export default function MedicationSelector({ value, onChange }) {
 
         // TODO: Add drug validation before allowing combinations.
         // For now, any medicine from the approved list can be added and mixed with any other medicine.
-        onChange([...value, { medicine: selected, dosage: d, frequency }]);
+        onChange([...safeValue, { medicine: selected, dosage: d, frequency }]);
         setSelected(null);
         setDosage("");
         setFrequency(1);
         setDosageError("");
     }
 
-    function handleRemove(medId) {
-        onChange(value.filter((v) => v.medicine.id !== medId));
+    function handleRemove(index) {
+        onChange(safeValue.filter((v, itemIndex) => itemIndex !== index));
     }
 
     return (
         <div>
             {/* Added medications */}
-            {value.length > 0 && (
+            {safeValue.length > 0 && (
                 <div style={{ marginBottom: "0.75rem" }}>
-                    {value.map((entry) => (
-                        <div key={entry.medicine.id} style={tagStyle}>
+                    {safeValue.map((entry, index) => (
+                        <div key={index} style={tagStyle}>
                             <span>
-                                <strong>{entry.medicine.name}</strong>
-                                {" — "}{entry.dosage} {entry.medicine.unit}, {entry.frequency}x/day
+                                <strong>{medicationName(entry)}</strong>
+                                {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
                             </span>
                             <button
                                 type="button"
-                                onClick={() => handleRemove(entry.medicine.id)}
+                                onClick={() => handleRemove(index)}
+                                aria-label={`Remove ${medicationName(entry)}`}
                                 style={removeStyle}
                             >
                                 ✕
@@ -78,7 +81,7 @@ export default function MedicationSelector({ value, onChange }) {
             >
                 <option value="">— Select a medication —</option>
                 {medicines
-                    .filter((m) => !value.some((v) => v.medicine.id === m.id))
+                    .filter((m) => !safeValue.some((v) => v?.medicine?.id === m.id || medicationName(v).toLowerCase() === m.name.toLowerCase()))
                     .map((m) => (
                         <option key={m.id} value={m.id}>
                             #{m.id} — {m.name} ({m.min}–{m.max} {m.unit})

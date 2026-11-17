@@ -14,7 +14,13 @@ export async function createPatient(patientData){
 
     // If there are medications, create an initial visit record to store them (as string for visits)
     if (current_medications && current_medications.length > 0) {
-        const medsString = current_medications.map(m => `${m.medicine.name} ${m.dosage}${m.medicine.unit} ${m.frequency}x/day`).join(", ");
+        const medsString = current_medications
+            .map((m) =>
+                typeof m === "string"
+                    ? m
+                    : `${m.medicine?.name ?? m.name ?? "Medication"} ${m.dosage ?? ""}${m.medicine?.unit ?? m.unit ?? ""}${m.frequency ? ` ${m.frequency}x/day` : ""}`.trim()
+            )
+            .join(", ");
         const { error: visitError } = await supabase.from("visits").insert([{
             patient_id: data.id,
             notes: "Initial Patient Registration",

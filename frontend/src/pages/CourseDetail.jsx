@@ -1,24 +1,34 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
+
 import {
     getCourseById,
     getCourseStudents,
     getCourseAssignedCases,
+    getCourseAnnouncements,
     getClinicalRoles,
+    getStudents,
     updateCourse,
     unenrollStudent,
     createAnnouncement,
     deleteAnnouncement,
     gradeCase,
+    getCourseSimulations,
+    gradeSimParticipant,
 } from "../services/instructorService.js";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import InstructorCases from "./InstructorCases.jsx";
 import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
-import PatientDetail from "./PatientDetail.jsx";
+import PatientChart from "./PatientChart.jsx";
 import CaseAssign from "./CaseAssign.jsx";
+import SimulationList from "./SimulationList.jsx";
+import { getSimEvents } from "../services/simulationService.js";
+import BulkStudentImport from "../components/BulkStudentImport.jsx";
+import { enrollStudent } from "../services/students.js";
 
 const DISCIPLINE_BANNERS = {
     pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
@@ -52,7 +62,8 @@ const TABS = [
     { id: "patients",      label: "Patients"      },
     { id: "roster",        label: "Roster"        },
     { id: "gradebook",     label: "Gradebook"     },
-    { id: "announcements", label: "Announcements", disabled: true },
+    { id: "simulations",   label: "Simulations"   },
+    { id: "announcements", label: "Announcements" },
     { id: "settings",      label: "Settings"      },
 ];
 
@@ -60,7 +71,9 @@ function formatDate(iso) {
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function CourseDetail({ courseId, onNavigate }) {
+
+
+export default function CourseDetail({ courseId, onNavigate, canManageStudents = false }) {
     const [course, setCourse] = useState(null);
     const [students, setStudents] = useState([]);
     const [cases, setCases] = useState([]);
@@ -82,6 +95,21 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
     // Roster state
     const [unenrollingId, setUnenrollingId] = useState(null);
+    const [availableStudents, setAvailableStudents] = useState([]);
+    const [studentToEnroll, setStudentToEnroll] = useState("");
+    const [enrolling, setEnrolling] = useState(false);
+    const [rosterError, setRosterError] = useState("");
+    const [showImport, setShowImport] = useState(false);
+
+    // Simulations
+    const [courseSimulations, setCourseSimulations] = useState([]);
+
+    // Sim grading modal
+    const [simGrade, setSimGrade] = useState(null); // { sim, student, events, loading }
+    const [simGradeFeedback, setSimGradeFeedback] = useState("");
+    const [simGradeScore, setSimGradeScore] = useState("");
+    const [simGradeSubmitting, setSimGradeSubmitting] = useState(false);
+    const [simGradeError, setSimGradeError] = useState("");
 
     // Gradebook drill-down
     const [gradebookStudent, setGradebookStudent] = useState(null);
@@ -96,6 +124,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
     const [annotations, setAnnotations] = useState([]);
     const [annotationDraft, setAnnotationDraft] = useState("");
     const [annotationTarget, setAnnotationTarget] = useState("General");
+    const [showAnswerKey, setShowAnswerKey] = useState(true);
 
     // Patient modal
     const [patientModalId, setPatientModalId] = useState(null);
@@ -112,16 +141,20 @@ export default function CourseDetail({ courseId, onNavigate }) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 setCurrentUserId(user?.id ?? null);
-                const [c, s, ca, r] = await Promise.all([
+                const [c, s, ca, r, ann, sims] = await Promise.all([
                     getCourseById(courseId),
                     getCourseStudents(courseId),
                     getCourseAssignedCases(courseId),
                     getClinicalRoles(),
+                    getCourseAnnouncements(courseId).catch(() => []),
+                    getCourseSimulations(courseId),
                 ]);
                 setCourse(c);
                 setStudents(s);
                 setCases(ca);
                 setRoles(r);
+                setAnnouncements(ann ?? []);
+                setCourseSimulations(sims);
             } catch (err) {
                 console.error(err);
                 setError("Failed to load course.");
@@ -131,7 +164,24 @@ export default function CourseDetail({ courseId, onNavigate }) {
         load();
     }, [courseId]);
 
-    // ── Settings ────────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (!canManageStudents) return;
+        let cancelled = false;
+        getStudents().then((rows) => { if (!cancelled) setAvailableStudents(rows); })
+            .catch(() => { if (!cancelled) setRosterError("Could not load students, try again"); });
+        return () => { cancelled = true; };
+    }, [canManageStudents]);
+
+
+    useEffect(() => {
+        if (!courseId || loading || activeTab === "cases") return;
+        getCourseAssignedCases(courseId)
+            .then((ca) => setCases(ca ?? []))
+            .catch(() => {});
+    }, [activeTab, assignState, courseId]);
+
+
+    //-------------------Settings-------------------
     function startEdit() {
         setEditForm({
             course_number: course.course_number,
@@ -160,20 +210,49 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setSaving(false);
     }
 
-    // ── Roster ───────────────────────────────────────────────────────────────
+    // ------------------- Roster -------------------
     async function handleUnenroll(studentId) {
+        if (!canManageStudents) return;
         setUnenrollingId(studentId);
+        setRosterError("");
         try {
             await unenrollStudent(courseId, studentId);
             setStudents((prev) => prev.filter((s) => s.user_id !== studentId));
         } catch (err) {
             console.error(err);
-            setError("Failed to unenroll student.");
+            setRosterError("Failed to unenroll student.");
         }
         setUnenrollingId(null);
     }
 
-    // ── Announcements ────────────────────────────────────────────────────────
+    async function reloadRoster() {
+        try {
+            const [roster, activeStudents] = await Promise.all([getCourseStudents(courseId), getStudents()]);
+            setStudents(roster);
+            setAvailableStudents(activeStudents);
+        } catch {
+            setRosterError("Could not refresh the roster, try again");
+        }
+    }
+
+    async function handleEnroll(event) {
+        event.preventDefault();
+        if (!canManageStudents || !studentToEnroll) return;
+        setEnrolling(true);
+        setRosterError("");
+        try {
+            //     Use this course id so we do not enroll them into another class
+            await enrollStudent(studentToEnroll, course.course_number, course.crn, course.id);
+            setStudentToEnroll("");
+            await reloadRoster();
+        } catch (err) {
+            setRosterError(err.message);
+        } finally {
+            setEnrolling(false);
+        }
+    }
+
+    // ------------------- Announcements-------------------
     async function handlePostAnnouncement(e) {
         e.preventDefault();
         if (!annForm.title.trim() || !annForm.body.trim()) {
@@ -209,6 +288,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
     function openReview(c) {
         setReviewCase(c);
         setReviewError("");
+        setReviewEditing(false);
         setFeedback(c.instructor_feedback ?? "");
         setAnnotations(c.chart_annotations ?? []);
         const criteria = getCaseCriteria(c);
@@ -218,6 +298,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setRubricScores(initial);
         setAnnotationDraft("");
         setAnnotationTarget("General");
+        setShowAnswerKey(true);
     }
 
     function closeReview() {
@@ -269,6 +350,68 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setReviewSubmitting(false);
     }
 
+    // ── Sim grading ──────────────────────────────────────────────────────────
+    async function handleSimGradeSubmit() {
+        setSimGradeSubmitting(true);
+        setSimGradeError("");
+        try {
+            const updated = await gradeSimParticipant(simGrade.sim.id, simGrade.student.user_id, {
+                score: simGradeScore,
+                feedback: simGradeFeedback,
+            });
+            // Update local courseSimulations state so the card reflects the new grade
+            setCourseSimulations((prev) => prev.map((s) => {
+                if (s.id !== simGrade.sim.id) return s;
+                return {
+                    ...s,
+                    simulation_participants: s.simulation_participants.map((p) =>
+                        p.user_id === simGrade.student.user_id ? { ...p, ...updated } : p
+                    ),
+                };
+            }));
+            setSimGrade(null);
+        } catch (e) {
+            setSimGradeError(e.message || "Failed to save grade.");
+        }
+        setSimGradeSubmitting(false);
+    }
+
+    async function openSimGrade(sim, student) {
+        const participation = sim.simulation_participants?.find(p => p.user_id === student.user_id);
+        setSimGrade({ sim, student, participation, events: null, assignedCase: null, loading: true });
+        setSimGradeFeedback(participation?.instructor_feedback ?? "");
+        setSimGradeScore(participation?.rubric_scores?.score != null ? String(participation.rubric_scores.score) : "");
+        try {
+            const [all, encounterRow] = await Promise.all([
+                getSimEvents(sim.id),
+                participation?.sim_role === "med"
+                    ? supabase
+                        .from("simulation_encounters")
+                        .select("assigned_case_id")
+                        .eq("simulation_id", sim.id)
+                        .eq("assigned_med_id", student.user_id)
+                        .maybeSingle()
+                        .then(({ data }) => data)
+                    : Promise.resolve(null),
+            ]);
+            const studentEvents = all.filter(e => e.actor_id === student.user_id);
+
+            let assignedCase = null;
+            if (encounterRow?.assigned_case_id) {
+                const { data: caseData } = await supabase
+                    .from("assigned_cases")
+                    .select("id, encounter_notes, patient_snapshot, encounter_status")
+                    .eq("id", encounterRow.assigned_case_id)
+                    .single();
+                assignedCase = caseData ?? null;
+            }
+
+            setSimGrade({ sim, student, participation, events: studentEvents, assignedCase, loading: false });
+        } catch (e) {
+            setSimGrade(prev => ({ ...prev, loading: false, error: e.message }));
+        }
+    }
+
     // ── Render ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
@@ -309,30 +452,28 @@ export default function CourseDetail({ courseId, onNavigate }) {
     return (
         <main style={{ paddingBottom: "2rem" }}>
             {/* ── Banner ──────────────────────────────────────── */}
-            <div className="course-detail-banner" style={{ background: banner }}>
-                <div style={{ maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
+            <div className="course-detail-banner" style={{ background: banner, minHeight: 0, padding: "1rem 2rem" }}>
+                <div style={{ maxWidth: "1400px", margin: "0 auto", width: "100%", display: "flex", alignItems: "center", gap: "1.5rem" }}>
                     <button
-                        className="secondary-action-button"
                         type="button"
                         onClick={() => onNavigate("courses")}
-                        style={{ marginBottom: "1rem", background: "rgba(0,0,0,0.2)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}
+                        style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "6px", padding: "0.3rem 0.75rem", fontSize: "0.8rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
                     >
                         ← Courses
                     </button>
-                    {course.discipline && (
-                        <p className="course-detail-crn" style={{ opacity: 0.85 }}>
-                            {DISCIPLINE_ABBR[course.discipline] ?? disciplineLabel}
+                    <div style={{ borderLeft: "1px solid rgba(255,255,255,0.25)", paddingLeft: "1.5rem" }}>
+                        <p className="course-detail-crn" style={{ margin: 0, marginBottom: "0.15rem" }}>
+                            {course.discipline ? `${DISCIPLINE_ABBR[course.discipline] ?? disciplineLabel} · ` : ""}CRN {course.crn}
                         </p>
-                    )}
-                    <p className="course-detail-crn">CRN {course.crn}</p>
-                    <h2 className="course-detail-title">{course.course_number}</h2>
+                        <h2 className="course-detail-title" style={{ fontSize: "1.35rem", margin: 0 }}>{course.course_number}</h2>
+                    </div>
                 </div>
             </div>
 
-            {/* ── Layout: side nav + content ───────────────────── */}
+            {/*------------------- Layout: side nav + content -------------------*/}
             <div className="course-layout">
 
-                {/* ── Side Nav ──────────────────────────────────── */}
+                {/* -------------------Side Nav -------------------*/}
                 <nav className="course-sidenav" aria-label="Course sections">
                     {/* Instructor card */}
                     <div className="course-sidenav-faculty">
@@ -354,12 +495,18 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     {/* Tab links */}
                     {TABS.filter((tab) => tab.id !== "cases" || isOwner).map((tab) => (
                         <button
+                        
                             key={tab.id}
                             className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""} ${tab.disabled ? "course-sidenav-item-disabled" : ""}`}
                             type="button"
                             disabled={tab.disabled}
                             title={tab.disabled ? "Coming soon" : undefined}
-                            onClick={() => { if (!tab.disabled) { setActiveTab(tab.id); setBuilderState(null); setAssignState(null); } }}
+                            onClick={() => {
+                                if (tab.disabled) return;
+                                setActiveTab(tab.id);
+                                setBuilderState(null);
+                                setAssignState(null);
+                            }}
                         >
                             {tab.label}
                             {tab.id === "cases" && uniqueCaseGroups > 0 && (
@@ -369,49 +516,93 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                 <span className="course-sidenav-badge">{students.length}</span>
                             )}
                             {tab.id === "gradebook" && cases.some((c) => c.encounter_status === "pending review") && (
-                                <span className="course-sidenav-badge" style={{ background: "#b45309", color: "#fff" }}>!</span>
+                                <span className="course-sidenav-badge" style={{ background: "#b45309", color: "#fff" }}>
+                                    {cases.filter((c) => c.encounter_status === "pending review").length}
+                                </span>
+                            )}
+                            {tab.id === "simulations" && courseSimulations.length > 0 && (
+                                <span className="course-sidenav-badge">{courseSimulations.length}</span>
                             )}
                         </button>
                     ))}
                 </nav>
 
-                {/* ── Tab Content ───────────────────────────────── */}
+                {/* ----------- Tab Content ---------------------- */}
                 <div className="course-tab-content">
 
                     {/* ── HOME ── */}
-                    {activeTab === "home" && (
-                        <div>
-                            <div className="course-tab-header">
-                                <div>
-                                    <h3 className="course-tab-title">Course Overview</h3>
-                                    <p className="course-tab-subtitle">At-a-glance summary of your course</p>
+                    {activeTab === "home" && (() => {
+                        const pendingCases = cases.filter((c) => c.encounter_status === "pending review");
+                        const completedCases = cases.filter((c) => c.encounter_status === "completed");
+                        const activeSims = courseSimulations.filter((s) => s.status === "active");
+                        return (
+                            <div>
+                                {/* Stats row */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", padding: "1.25rem 1.25rem 0" }}>
+                                    {[
+                                        { value: students.length,          label: "Students",       sub: "enrolled"                                                                  },
+                                        { value: cases.length,             label: "Cases",          sub: `${completedCases.length} completed`                                        },
+                                        { value: pendingCases.length,      label: "Pending Review", sub: pendingCases.length > 0 ? "need grading" : "all caught up", urgent: pendingCases.length > 0 },
+                                        { value: courseSimulations.length, label: "Simulations",    sub: activeSims.length > 0 ? `${activeSims.length} active` : "none active"       },
+                                    ].map(({ value, label, sub, urgent }) => (
+                                        <div key={label} className="course-home-stat-card" style={{ borderTop: urgent ? "3px solid #b45309" : "3px solid transparent" }}>
+                                            <div className="course-home-stat-value" style={{ fontSize: "1.5rem", color: urgent ? "#b45309" : "var(--text)" }}>{value}</div>
+                                            <div className="course-home-stat-label" style={{ fontWeight: 600 }}>{label}</div>
+                                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>{sub}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Pending review list */}
+                                <div style={{ margin: "1rem 1.25rem 0" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                                        <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>
+                                            {pendingCases.length > 0 ? "Needs Grading" : "Recent Submissions"}
+                                        </p>
+                                        {pendingCases.length > 0 && (
+                                            <button type="button" className="secondary-action-button" style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem" }}
+                                                onClick={() => setActiveTab("gradebook")}>
+                                                Go to Gradebook →
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="course-detail-section" style={{ padding: 0 }}>
+                                        {pendingCases.length === 0 && completedCases.length === 0 ? (
+                                            <p style={{ padding: "1.5rem 1.25rem", color: "var(--text-muted)", fontSize: "0.875rem", margin: 0 }}>
+                                                No submissions yet.
+                                            </p>
+                                        ) : (pendingCases.length > 0 ? pendingCases : completedCases.slice(0, 5)).map((c) => {
+                                            const snap = c.patient_snapshot ?? c.patient_templates ?? {};
+                                            const student = c.profiles;
+                                            return (
+                                                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", gap: "1rem" }}>
+                                                    <div>
+                                                        <div style={{ fontWeight: 500, fontSize: "0.875rem" }}>
+                                                            {snap.first_name} {snap.last_name}
+                                                            {snap.chief_complaint && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> — {snap.chief_complaint}</span>}
+                                                        </div>
+                                                        {student && (
+                                                            <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                                                                {student.first_name} {student.last_name}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {c.encounter_status === "pending review" && (
+                                                        <button type="button" className="instructor-action-btn instructor-action-edit"
+                                                            onClick={() => openReview(c)}>
+                                                            Grade
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
+                        );
+                    })()}
 
-                            {/* Quick stats row */}
-                            <div className="course-home-stats">
-                                <div className="course-home-stat-card">
-                                    <div className="course-home-stat-value">{students.length}</div>
-                                    <div className="course-home-stat-label">Students Enrolled</div>
-                                </div>
-                                <div className="course-home-stat-card">
-                                    <div className="course-home-stat-value">{cases.length}</div>
-                                    <div className="course-home-stat-label">Cases Assigned</div>
-                                </div>
-                                <div className="course-home-stat-card">
-                                    <div className="course-home-stat-value">{announcements.length}</div>
-                                    <div className="course-home-stat-label">Announcements</div>
-                                </div>
-                            </div>
-
-                            {/* Analytics placeholder */}
-                            <div className="course-home-analytics-placeholder">
-                                <p className="course-home-analytics-label">Analytics dashboard coming soon</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── CASES ── */}
+                    {/* -------------------CASES -------------------*/}
                     {activeTab === "cases" && (
                         assignState !== null ? (
                             <CaseAssign
@@ -443,12 +634,13 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         )
                     )}
 
-                    {/* ── PATIENTS ── */}
+                    {/* ------------------- PATIENTS-------------------*/}
                     {activeTab === "patients" && (
+                    
                         <PatientManager
                             embedded
                             onNavigate={(page, id) => {
-                                if (page === "patientDetail") {
+                                if (page === "patientChart") {
                                     setPatientModalId(id);
                                 } else {
                                     onNavigate(page, id);
@@ -457,39 +649,65 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         />
                     )}
 
-                    {/* ── ROSTER ── */}
+                    {/* ------------------- ROSTER ------------------- */}
                     {activeTab === "roster" && (
+                    
                         <div>
                             <div className="course-tab-header">
                                 <div>
                                     <h3 className="course-tab-title">Roster</h3>
                                     <p className="course-tab-subtitle">{students.length} student{students.length !== 1 ? "s" : ""} enrolled</p>
                                 </div>
+                                
                             </div>
+
+                            {rosterError && <p className="form-message form-message-error" role="alert">{rosterError}
+                                {canManageStudents && <button type="button" onClick={() => { setRosterError(""); reloadRoster(); }}>Refresh roster</button>}</p>}
+                            {canManageStudents && <div className="student-form-panel">
+                                <form className="student-form" onSubmit={handleEnroll}>
+                                    <div className="student-form-field">
+                                        <label htmlFor="roster-student">Student to enroll</label>
+                                        <select id="roster-student" required value={studentToEnroll} disabled={enrolling}
+                                            onChange={(event) => setStudentToEnroll(event.target.value)}>
+                                            <option value="">Choose a student</option>
+                                            {availableStudents.filter((student) => !students.some((enrolled) => enrolled.user_id === student.user_id))
+                                                .map((student) => <option key={student.user_id} value={student.user_id}>{student.last_name}, {student.first_name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="student-form-actions">
+                                        <button className="primary-action-button" type="submit" disabled={enrolling}>{enrolling ? "Enrolling…" : "Enroll student"}</button>
+                                        <button className="secondary-action-button" type="button" disabled={enrolling} onClick={() => setShowImport((value) => !value)}>
+                                            {showImport ? "Hide Roster Import" : "Import Roster as CSV"}</button>
+                                    </div>
+                                </form>
+                                {showImport && <BulkStudentImport course={course} onImported={reloadRoster} />}
+                            </div>}
 
                             <div className="course-detail-section">
                                 {students.length === 0 ? (
                                     <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
                                         <div className="patients-empty-icon" aria-hidden="true">👥</div>
                                         <strong>No students enrolled</strong>
-                                        <p>Import a roster CSV from the Courses page to enroll students.</p>
+                                        <p>{canManageStudents ? "Choose a student or import a roster above" : "An admin can add students to this course"}</p>
                                     </div>
                                 ) : (
                                     <>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", gap: "1rem", padding: "0.6rem 1.25rem", background: "#f8fafc", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: canManageStudents ? "1fr 1fr 120px 80px" : "1fr 1fr 120px", gap: "1rem", padding: "0.6rem 1.25rem", background: "#f8fafc", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                                             <span>Student</span>
+                                            <span>Email</span>
                                             <span>Cases Assigned</span>
-                                            {isOwner && <span />}
+                                            {canManageStudents && <span />}
                                         </div>
                                         {students.map((s) => {
                                             const studentCases = cases.filter((c) => c.profiles?.user_id === s.user_id);
                                             return (
-                                                <div key={s.user_id} style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", gap: "1rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center" }}>
+                                                <div key={s.user_id} style={{ display: "grid", gridTemplateColumns: canManageStudents ? "1fr 1fr 120px 80px" : "1fr 1fr 120px", gap: "1rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center" }}>
                                                     <span style={{ fontWeight: 500, color: "var(--text)" }}>
                                                         {s.last_name}, {s.first_name}
                                                     </span>
+                                                    <span style={{ color: "var(--text-muted)" }}>{s.email ?? "—"}</span>
                                                     <span style={{ color: "var(--text-muted)" }}>{studentCases.length}</span>
-                                                    {isOwner && (
+                                                    {canManageStudents && (
                                                         <button
                                                             className="secondary-action-button"
                                                             type="button"
@@ -530,19 +748,23 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     </div>
                                 ) : (
                                     <>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px", gap: "1rem", padding: "0.6rem 1.25rem", background: "#f8fafc", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 56px 56px 120px 90px", gap: "0.75rem", padding: "0.6rem 1.25rem", background: "#f8fafc", fontWeight: 600, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                                             <span>Student</span>
                                             <span>Cases</span>
+                                            <span>Sims</span>
                                             <span>Completed</span>
-                                            <span>Avg Score</span>
+                                            <span style={{ textAlign: "right" }}>Avg</span>
                                         </div>
                                         {gradebook.map(({ student, cases: sc, avg }) => {
                                             const completed = sc.filter((c) => c.encounter_status === "completed").length;
                                             const pct = sc.length > 0 ? Math.round((completed / sc.length) * 100) : 0;
+                                            const simCount = courseSimulations.filter(sim =>
+                                                sim.simulation_participants?.some(p => p.user_id === student.user_id)
+                                            ).length;
                                             return (
                                                 <div
                                                     key={student.user_id}
-                                                    style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 100px", gap: "1rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center", cursor: "pointer" }}
+                                                    style={{ display: "grid", gridTemplateColumns: "1fr 56px 56px 120px 90px", gap: "0.75rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.875rem", alignItems: "center", cursor: "pointer" }}
                                                     onClick={() => setGradebookStudent(student)}
                                                     role="button"
                                                     tabIndex={0}
@@ -552,15 +774,21 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                         {student.last_name}, {student.first_name}
                                                     </span>
                                                     <span style={{ color: "var(--text-muted)" }}>{sc.length}</span>
+                                                    <span>
+                                                        {simCount > 0
+                                                            ? <span style={{ background: "#fef3c7", color: "#b45309", borderRadius: 4, padding: "0.1rem 0.4rem", fontSize: "0.75rem", fontWeight: 600 }}>{simCount}</span>
+                                                            : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                                                    </span>
                                                     <div>
                                                         <div style={{ fontSize: "0.8rem", color: completed === sc.length && sc.length > 0 ? "#047857" : "var(--text-muted)", marginBottom: "0.2rem" }}>
                                                             {completed}/{sc.length}
                                                         </div>
                                                         <div style={{ height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+                                                        
                                                             <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? "#047857" : "#0284c7", borderRadius: 2, transition: "width 0.3s" }} />
                                                         </div>
                                                     </div>
-                                                    <span style={{ fontWeight: avg !== null ? 600 : 400, color: avg !== null ? "var(--text)" : "var(--text-muted)" }}>
+                                                    <span style={{ fontWeight: avg !== null ? 600 : 400, color: avg !== null ? "var(--text)" : "var(--text-muted)", textAlign: "right" }}>
                                                         {avg !== null ? avg : "—"}
                                                     </span>
                                                 </div>
@@ -571,8 +799,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             </div>
                         </div>
                     )}
+                    
+                    
 
-                    {/* ── ANNOUNCEMENTS ── */}
+                    {/* ------------------- ANNOUNCEMENTS ------------------- */}
                     {activeTab === "announcements" && (
                         <div>
                             <div className="course-tab-header">
@@ -593,6 +823,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                             {/* Compose form */}
                             {annComposing && (
+                            
                                 <div className="course-detail-section" style={{ marginBottom: "1rem", padding: "1.25rem" }}>
                                     <h4 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 600 }}>New Announcement</h4>
                                     <form onSubmit={handlePostAnnouncement} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -674,6 +905,15 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         </div>
                     )}
 
+                    {/* ── SIMULATIONS ── */}
+                    {activeTab === "simulations" && (
+                        <SimulationList
+                            courseId={courseId}
+                            courseName={course?.course_number}
+                            onNavigate={onNavigate}
+                        />
+                    )}
+
                     {/* ── SETTINGS ── */}
                     {activeTab === "settings" && (
                         <div>
@@ -683,6 +923,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     <p className="course-tab-subtitle">Manage course details and configuration</p>
                                 </div>
                             </div>
+                            
+                            
 
                             {/* Course details card */}
                             <div className="course-detail-section" style={{ marginBottom: "1rem" }}>
@@ -820,8 +1062,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
                 };
 
                 return (
-                    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setGradebookStudent(null)}>
-                        <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 20px 60px rgba(15,23,42,0.18)", width: "100%", maxWidth: 680, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "1rem" }} onClick={() => setGradebookStudent(null)}>
+                        <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 20px 60px rgba(15,23,42,0.18)", width: "100%", maxWidth: 640, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
 
                             {/* Modal header */}
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
@@ -832,6 +1074,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     </h3>
                                     <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
                                         {studentCases.length} case{studentCases.length !== 1 ? "s" : ""}
+                                        {" · "}{courseSimulations.filter(s => s.simulation_participants?.some(p => p.user_id === gradebookStudent.user_id)).length} sim{courseSimulations.filter(s => s.simulation_participants?.some(p => p.user_id === gradebookStudent.user_id)).length !== 1 ? "s" : ""}
                                         {avg !== null ? ` · Avg score: ${avg}` : ""}
                                     </p>
                                 </div>
@@ -845,24 +1088,30 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             </div>
 
                             {/* Modal body */}
-                            <div style={{ overflowY: "auto", padding: "1rem 1.5rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-                                {studentCases.length === 0 ? (
-                                    <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "2rem 0" }}>No cases assigned to this student.</p>
-                                ) : studentCases.map((c) => {
+                            <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "1rem 1.5rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+                                {studentCases.length === 0 && courseSimulations.filter(sim => sim.simulation_participants?.some(p => p.user_id === gradebookStudent.user_id)).length === 0 ? (
+                                    <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "2rem 0" }}>No cases or simulations assigned to this student.</p>
+                                ) : null}
+
+                                {studentCases.length > 0 && (
+                                    <>
+                                        <p style={{ margin: "0 0 0.5rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Cases</p>
+                                        {studentCases.map((c) => {
                                     const snap = c.patient_snapshot ?? c.patient_templates ?? {};
                                     const hasGrade = c.score != null;
                                     const hasFeedback = c.instructor_feedback || c.chart_annotations?.length > 0;
                                     const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
 
                                     return (
-                                        <div key={c.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0.875rem 1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                                                <div>
+                                        <div key={c.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                                            {/* Main row */}
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0.875rem 1rem", gap: "0.75rem" }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
                                                     <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>
                                                         {snap.first_name} {snap.last_name}
                                                     </div>
                                                     {snap.chief_complaint && (
-                                                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                                                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                             {snap.chief_complaint}
                                                         </div>
                                                     )}
@@ -872,7 +1121,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+                                                <div style={{ flexShrink: 0, textAlign: "right" }}>
                                                     {hasGrade ? (
                                                         <>
                                                             <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
@@ -887,52 +1136,101 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                             {c.encounter_status === "completed" ? "No score recorded" : "Not graded yet"}
                                                         </span>
                                                     )}
+                                                </div>
+                                            </div>
+
+                                            {/* Footer: feedback + grade button */}
+                                            {(hasFeedback || ["pending review", "completed"].includes(c.encounter_status)) && (
+                                                <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.65rem 1rem", background: "#f8fafc", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                                    {c.instructor_feedback && (
+                                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{c.instructor_feedback}</p>
+                                                    )}
                                                     {(c.encounter_status === "pending review" || c.encounter_status === "completed") && (
                                                         <button
                                                             type="button"
                                                             className="instructor-action-btn instructor-action-edit"
-                                                            onClick={() => openReview(c)}
+                                                            style={{ alignSelf: "flex-start" }}
+                                                            onClick={(e) => { e.stopPropagation(); setGradebookStudent(null); openReview(c); }}
                                                         >
                                                             {c.encounter_status === "pending review" ? "Grade" : "View"}
                                                         </button>
                                                     )}
                                                 </div>
-                                            </div>
-
-                                            {hasFeedback && (
-                                                <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1rem", background: "#f8fafc", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                                                    {c.instructor_feedback && (
-                                                        <div>
-                                                            <div style={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Instructor Feedback</div>
-                                                            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{c.instructor_feedback}</p>
-                                                        </div>
-                                                    )}
-                                                    {c.chart_annotations?.length > 0 && (
-                                                        <div>
-                                                            <div style={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>Chart Annotations</div>
-                                                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                                                                {c.chart_annotations.map((a, i) => (
-                                                                    <div key={i} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "0.4rem 0.7rem", fontSize: "0.84rem" }}>
-                                                                        <strong style={{ fontSize: "0.72rem", textTransform: "uppercase", color: "#64748b" }}>{a.section}: </strong>
-                                                                        {a.comment}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {!hasFeedback && ["pending review", "completed"].includes(c.encounter_status) && (
-                                                <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.6rem 1rem", background: "#f8fafc" }}>
-                                                    <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                                                        {c.encounter_status === "pending review" ? "Awaiting review." : "No feedback recorded."}
-                                                    </p>
-                                                </div>
                                             )}
                                         </div>
                                     );
                                 })}
+                                    </>
+                                )}
+
+                                {/* ── Simulations section ── */}
+                                {(() => {
+                                    const studentSims = courseSimulations.filter(sim =>
+                                        sim.simulation_participants?.some(p => p.user_id === gradebookStudent.user_id)
+                                    );
+                                    if (studentSims.length === 0) return null;
+                                    const SIM_ROLE_LABEL = {
+                                        front_desk:    "Front Desk",
+                                        med:           "Med Student",
+                                        patient_actor: "Patient Actor",
+                                        observer:      "Observer",
+                                    };
+                                    return (
+                                        <>
+                                            <p style={{ margin: "0.5rem 0 0.5rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Simulations</p>
+                                            {studentSims.map((sim) => {
+                                                const participation = sim.simulation_participants?.find(p => p.user_id === gradebookStudent.user_id);
+                                                const roleLabel = SIM_ROLE_LABEL[participation?.sim_role] ?? participation?.sim_role ?? "Participant";
+                                                const graded = !!participation?.reviewed_at;
+                                                const score = participation?.rubric_scores?.score;
+                                                return (
+                                                    <div key={sim.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                                                        {/* Main row */}
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0.875rem 1rem", gap: "0.75rem" }}>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>{sim.title}</div>
+                                                                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                                                                    Role: {roleLabel}
+                                                                    {sim.ended_at && ` · ${formatDate(sim.ended_at)}`}
+                                                                </div>
+                                                                <div style={{ marginTop: "0.35rem" }}>
+                                                                    <span className="instructor-status-badge" style={graded
+                                                                        ? { background: "#ecfdf5", color: "#047857" }
+                                                                        : { background: "#fef3c7", color: "#b45309" }}>
+                                                                        {graded ? "Graded" : "Pending Grade"}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            {graded && score != null && (
+                                                                <div style={{ flexShrink: 0, textAlign: "right" }}>
+                                                                    <div style={{ fontSize: "1.4rem", fontWeight: 700, lineHeight: 1 }}>
+                                                                        {score}<span style={{ fontSize: "0.9rem", fontWeight: 400, color: "var(--text-muted)" }}>/100</span>
+                                                                    </div>
+                                                                    <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{score}%</div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Footer: feedback + grade button */}
+                                                        <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.65rem 1rem", background: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                                                            <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                {graded && participation?.instructor_feedback ? participation.instructor_feedback : (graded ? "No feedback recorded." : "Not graded yet")}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                className="instructor-action-btn instructor-action-edit"
+                                                                style={{ flexShrink: 0 }}
+                                                                onClick={(e) => { e.stopPropagation(); setGradebookStudent(null); openSimGrade(sim, gradebookStudent); }}
+                                                            >
+                                                                {graded ? "Edit Grade" : "Grade"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -979,7 +1277,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                         <p className="case-modal-section-label">Clinical Baseline</p>
                                         <div className="case-baseline-grid">
                                             {Object.entries(reviewCase.patient_snapshot.clinical_baseline).map(([k, v]) => (
-                                                <div key={k} className="case-baseline-item"><span className="case-info-label">{k}</span><span>{v}</span></div>
+                                                <div key={k} className="case-baseline-item">
+                                                    <span className="case-info-label">{k}</span>
+                                                    <span>{v !== null && typeof v === "object" ? Object.entries(v).map(([k2, v2]) => `${k2}: ${v2}`).join(", ") : String(v ?? "")}</span>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
@@ -1004,6 +1305,12 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                         return <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
                                     })()}
                                 </div>
+
+                                <ClinicalNoteAddendums
+                                    addendums={reviewCase.addendums ?? []}
+                                    canAdd={false}
+                                    encounterStatus={reviewCase.encounter_status}
+                                />
 
                                 {annotations.length > 0 && (
                                     <div style={{ marginTop: "1.25rem" }}>
@@ -1038,10 +1345,32 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                             {/* Right — rubric */}
                             <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc" }}>
-                                {(reviewCase.patient_snapshot?.expectations_rubric) && (
+                                {(reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric) && (
                                     <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
                                         <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>Expectations & Milestones</p>
-                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_snapshot.expectations_rubric}</p>
+                                        <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}</p>
+                                    </div>
+                                )}
+
+                                {reviewCase.patient_templates?.answer_key?.trim() && (
+                                    <div className="mb-5 rounded-md border border-slate-200 bg-white p-3.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
+                                                Instructor Answer Key · Staff Only
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAnswerKey((prev) => !prev)}
+                                                className="font-mono text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-800 cursor-pointer bg-transparent border-0 p-0"
+                                            >
+                                                {showAnswerKey ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                        {showAnswerKey && (
+                                            <p className="mt-2 mb-0 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                                {reviewCase.patient_templates.answer_key}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -1122,23 +1451,171 @@ export default function CourseDetail({ courseId, onNavigate }) {
                 </div>
             )}
 
+            {/* ── SIM GRADING MODAL ── */}
+            {simGrade && (() => {
+                const isMed = simGrade.participation?.sim_role === "med";
+                const ac = simGrade.assignedCase;
+
+                const eventLog = (
+                    <div>
+                        <p className="case-modal-section-label">Student Activity Log</p>
+                        {simGrade.loading ? (
+                            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading…</p>
+                        ) : simGrade.error ? (
+                            <p style={{ color: "#dc2626", fontSize: "0.875rem" }}>{simGrade.error}</p>
+                        ) : simGrade.events?.length === 0 ? (
+                            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>No recorded actions for this student.</p>
+                        ) : (
+                            <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", fontSize: "0.82rem" }}>
+                                {simGrade.events.map((evt) => {
+                                    const pt = evt.encounter?.patient_templates;
+                                    const patName = pt ? `${pt.first_name} ${pt.last_name}` : null;
+                                    return (
+                                        <div key={evt.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.55rem 0.85rem", borderBottom: "1px solid var(--border)", background: evt.event_type === "wrong_record_selected" ? "#fef9c3" : "#fff" }}>
+                                            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                                                <span style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                                                    {new Date(evt.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                                </span>
+                                                <span style={{ fontWeight: 500 }}>{evt.event_type.replace(/_/g, " ")}</span>
+                                                {patName && <span style={{ color: "var(--text-muted)" }}>— {patName}</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                );
+
+                const gradePanel = (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                        <p className="case-modal-section-label">Grade</p>
+                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
+                            <div className="student-form-field" style={{ width: 120, flexShrink: 0 }}>
+                                <label>Score (0–100)</label>
+                                <input
+                                    type="number" min={0} max={100} placeholder="—"
+                                    value={simGradeScore}
+                                    onChange={(e) => setSimGradeScore(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="student-form-field">
+                            <label>Feedback</label>
+                            <textarea
+                                rows={4}
+                                placeholder="Write feedback for this student's simulation performance…"
+                                value={simGradeFeedback}
+                                onChange={(e) => setSimGradeFeedback(e.target.value)}
+                                style={{ resize: "vertical", fontFamily: "inherit", fontSize: "0.875rem", padding: "0.5rem 0.75rem", border: "1px solid var(--border)", borderRadius: "0.375rem", width: "100%", boxSizing: "border-box" }}
+                            />
+                        </div>
+                        {simGradeError && <p className="form-message form-message--error" style={{ margin: 0 }}>{simGradeError}</p>}
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                            <button type="button" className="secondary-action-button" onClick={() => setSimGrade(null)} disabled={simGradeSubmitting}>Cancel</button>
+                            <button type="button" className="primary-action-button" onClick={handleSimGradeSubmit} disabled={simGradeSubmitting}>
+                                {simGradeSubmitting ? "Saving…" : "Save Grade"}
+                            </button>
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 210, padding: "1rem" }} onClick={() => setSimGrade(null)}>
+                        <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 20px 60px rgba(15,23,42,0.18)", width: "100%", maxWidth: isMed ? 1080 : 720, height: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+
+                            {/* Header */}
+                            <div className="case-modal-header">
+                                <div>
+                                    <p className="section-title" style={{ margin: 0 }}>Simulation Grade</p>
+                                    <h3 style={{ margin: "0.2rem 0 0" }}>{simGrade.sim.title}</h3>
+                                    <p style={{ margin: "0.15rem 0 0", fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                                        {simGrade.student.first_name} {simGrade.student.last_name}
+                                        {simGrade.sim.ended_at && ` · ${formatDate(simGrade.sim.ended_at)}`}
+                                    </p>
+                                </div>
+                                <button type="button" className="instructor-baseline-remove" onClick={() => setSimGrade(null)} aria-label="Close" style={{ width: 32, height: 32, fontSize: "1.2rem" }}>×</button>
+                            </div>
+
+                            {isMed ? (
+                                /* Two-column layout for med students */
+                                <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+                                    {/* Left — encounter notes */}
+                                    <div style={{ flex: "0 0 58%", overflowY: "auto", padding: "1.25rem", borderRight: "1px solid #e2e8f0" }}>
+                                        {ac ? (
+                                            <>
+                                                {ac.patient_snapshot && (
+                                                    <>
+                                                        <p className="case-modal-section-label">Patient Info</p>
+                                                        <div className="case-info-grid" style={{ marginBottom: "1rem" }}>
+                                                            {ac.patient_snapshot.age && <div className="case-info-item"><span className="case-info-label">Age</span><span>{ac.patient_snapshot.age}</span></div>}
+                                                            {ac.patient_snapshot.sex && <div className="case-info-item"><span className="case-info-label">Sex</span><span>{ac.patient_snapshot.sex}</span></div>}
+                                                            {ac.patient_snapshot.occupation && <div className="case-info-item"><span className="case-info-label">Occupation</span><span>{ac.patient_snapshot.occupation}</span></div>}
+                                                        </div>
+                                                        {ac.patient_snapshot.chief_complaint && (
+                                                            <div className="case-complaint-box" style={{ marginBottom: "1rem" }}>
+                                                                <span className="case-info-label">Chief Complaint</span>
+                                                                <p>{ac.patient_snapshot.chief_complaint}</p>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                                <p className="case-modal-section-label">Student Encounter Notes</p>
+                                                <div className="case-notes-readonly">
+                                                    {(() => {
+                                                        const parsed = parseEncounterNotes(ac.encounter_notes);
+                                                        if (parsed?.format === "clinical-note-v1") {
+                                                            if (!parsed.template || !Array.isArray(parsed.template.fields) || !parsed.data) {
+                                                                return <p className="form-message form-message-error">Saved data is incomplete or invalid.</p>;
+                                                            }
+                                                            return <DynamicClinicalNoteForm template={parsed.template} value={parsed.data} readOnly={true} />;
+                                                        }
+                                                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && ("subjective" in parsed || "objective" in parsed || "assessment" in parsed || "plan" in parsed)) {
+                                                            return <PTSoapNote value={parsed} readOnly={true} />;
+                                                        }
+                                                        if (typeof ac.encounter_notes === "string") {
+                                                            return ac.encounter_notes || <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
+                                                        }
+                                                        return <em style={{ color: "var(--text-muted)" }}>No notes recorded.</em>;
+                                                    })()}
+                                                </div>
+                                            </>
+                                        ) : simGrade.loading ? (
+                                            <p style={{ color: "var(--text-muted)" }}>Loading notes…</p>
+                                        ) : (
+                                            <p style={{ color: "var(--text-muted)" }}>No case notes found for this encounter.</p>
+                                        )}
+                                    </div>
+
+                                    {/* Right — activity log + grade */}
+                                    <div style={{ flex: "0 0 42%", overflowY: "auto", padding: "1.25rem", background: "#f8fafc", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                                        {eventLog}
+                                        {gradePanel}
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Single-column for non-med roles */
+                                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                                    {eventLog}
+                                    {gradePanel}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* ── PATIENT DETAIL MODAL ── */}
             {patientModalId && (
                 <div className="patient-modal-overlay" onClick={() => setPatientModalId(null)}>
                     <div className="patient-modal-panel" onClick={(e) => e.stopPropagation()}>
-                        <PatientDetail
-                            id={patientModalId}
-                            onNavigate={(page) => {
-                                if (page === "patientManager") {
-                                    setPatientModalId(null);
-                                } else {
-                                    onNavigate(page);
-                                }
-                            }}
-                        />
+                        <PatientChart id={patientModalId} embedded canEditPatient onNavigate={onNavigate}
+                            onArchived={() => setPatientModalId(null)} />
                     </div>
                 </div>
             )}
         </main>
+        
+        
     );
 }

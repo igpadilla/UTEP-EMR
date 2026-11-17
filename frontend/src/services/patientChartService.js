@@ -1,7 +1,8 @@
 import { supabase } from "../supabase.js";
 import { demographicsToUpdate, historyToUpdate } from "../components/patient-chart/patientChartForm.js";
+import { logRecordView } from "./auditService.js";
 
-const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, current_medications, updated_at";
+const PATIENT_FIELDS = "id, first_name, last_name, age, sex, date_of_birth, occupation, phone_number, email, address, emergency_contacts, allergies, medical_history, diagnoses, immunizations, current_medications, last_visit, last_visit_notes, updated_at";
 
 
 export async function loadPatientChart({ patientId, caseId }) {
@@ -11,12 +12,14 @@ export async function loadPatientChart({ patientId, caseId }) {
         if (error || !data?.patient_snapshot || typeof data.patient_snapshot !== "object" || Array.isArray(data.patient_snapshot)) {
             throw new Error("Could not load this case chart. Try again or go back to the case list.");
         }
+        logRecordView("assigned_cases", caseId);
         return { patient: data.patient_snapshot, caseStatus: data.encounter_status };
     }
 
     if (!patientId) throw new Error("Choose a patient before opening the chart.");
     const { data, error } = await supabase.from("patients").select(PATIENT_FIELDS).eq("id", patientId).single();
     if (error || !data) throw new Error("Could not load this patient chart. Try again or go back to the patient list.");
+    logRecordView("patients", patientId);
     return { patient: data, caseStatus: null };
 }
 
@@ -62,7 +65,23 @@ export function saveDiagnoses(patient, diagnoses) {
     return saveSection(patient, { diagnoses });
 }
 
+// Patients are never deleted; archiving hides them from patient lists and searches.
+export function archivePatient(patient) {
+    return saveSection(patient, { archived_at: new Date().toISOString() });
+}
+
+export function saveImmunizations(patient, immunizations) {
+    return saveSection(patient, { immunizations });
+}
+
 
 export function saveMedications(patient, medications) {
     return saveSection(patient, { current_medications: medications });
+}
+
+
+export async function getPatientVisits(patientId) {
+    const { data, error } = await supabase.from("visits").select("*").eq("patient_id", patientId).order("created_at", { ascending: false });
+    if (error) throw new Error("Could not load visits.");
+    return data ?? [];
 }

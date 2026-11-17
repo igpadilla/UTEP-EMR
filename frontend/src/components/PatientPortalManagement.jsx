@@ -43,7 +43,7 @@ export default function PatientPortalManagement({ patient, visits, canManageAcco
 
     return <section className="portal-management" aria-label="Patient portal management">
         <h2>Patient portal</h2>
-        <p>Patients can view their recorded medications and visit summaries.</p>
+        <p>Patients can view recorded medications, shared lab results, and visit summaries.</p>
         {error && <p className="form-message form-message-error" role="alert">{error}</p>}
         {notice && <p className="form-message form-message-success" role="status">{notice}</p>}
         {canManageAccounts && <>

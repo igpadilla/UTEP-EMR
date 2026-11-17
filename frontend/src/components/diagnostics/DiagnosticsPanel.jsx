@@ -10,6 +10,7 @@ import {
     getAttachmentUrl,
 } from "../../services/diagnosticsService.js";
 import "./DiagnosticsPanel.css";
+import DiagnosticPortalRelease from "./DiagnosticPortalRelease.jsx";
 
 const FLAG_LABELS = {
     normal: "Normal",
@@ -21,7 +22,7 @@ const FLAG_LABELS = {
     critical: "◆ Critical",
 };
 
-export default function DiagnosticsPanel({ patientId, caseId, locked = false }) {
+export default function DiagnosticsPanel({ patientId, caseId, locked = false, canReleaseToPortal = false }) {
     const [orders, setOrders] = useState([]);
     const [catalog, setCatalog] = useState([]);
     const [filter, setFilter] = useState("all");
@@ -165,9 +166,9 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
         }
     }
 
-    async function handleOpenAttachment(filePath) {
+    async function handleOpenAttachment(filePath, resultId) {
         try {
-            const url = await getAttachmentUrl(filePath);
+            const url = await getAttachmentUrl(filePath, resultId);
             if (url) window.open(url, "_blank", "noopener,noreferrer");
         } catch (err) {
             setError(err.message || "Could not open attachment.");
@@ -438,7 +439,8 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                 <p className="vitals-empty">No diagnostic orders recorded.</p>
             ) : (
                 filteredOrders.map((order) => {
-                    const latestResult = order.diagnostic_results?.[0] || null;
+                    const latestResult = [...(order.diagnostic_results ?? [])]
+                        .sort((a, b) => (b.resulted_at ?? "").localeCompare(a.resulted_at ?? "") || b.id.localeCompare(a.id))[0] || null;
                     const cardClass = [
                         "diagnostics-card",
                         latestResult?.overall_flag === "critical" ? "diagnostics-card-critical" : "",
@@ -465,7 +467,7 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                         {order.priority}
                                     </span>
                                     <span className={`diag-badge diag-badge-status-${order.status}`}>
-                                        {order.status.replace("_", " ")}
+                                        {(order.status || "ordered").replace("_", " ")}
                                     </span>
                                     {latestResult && (
                                         <span className={`diag-flag-${latestResult.overall_flag}`}>
@@ -530,7 +532,7 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                                     <button
                                                         type="button"
                                                         className="secondary-action-button"
-                                                        onClick={() => handleOpenAttachment(latestResult.file_path)}
+                                                        onClick={() => handleOpenAttachment(latestResult.file_path, latestResult.id)}
                                                     >
                                                         📎 View Attachment ({latestResult.file_name || "File"})
                                                     </button>
@@ -541,6 +543,11 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                 </>
                             )}
 
+                            {canReleaseToPortal && !caseId && !locked && order.category === "lab" && order.status === "completed"
+                                && [...(order.diagnostic_results ?? [])]
+                                    .sort((a, b) => (b.resulted_at ?? "").localeCompare(a.resulted_at ?? ""))
+                                    .map((result) => <DiagnosticPortalRelease key={`${result.id}-${result.portal_released_at || 'private'}`}
+                                        result={result} onChanged={loadAll} />)}
                             {!locked && order.status !== "cancelled" && order.status !== "completed" && (
                                 <div className="diagnostics-actions">
                                     <button

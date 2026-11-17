@@ -16,6 +16,7 @@ export const ACTION_TYPES = {
     IMAGING_ORDERED:             "IMAGING_ORDERED",
     DIAGNOSTIC_RESULT_ADDED:     "DIAGNOSTIC_RESULT_ADDED",
     DIAGNOSTIC_ORDER_CANCELLED:  "DIAGNOSTIC_ORDER_CANCELLED",
+    ADDENDUM_SUBMITTED:          "ADDENDUM_SUBMITTED",
 };
 
 export async function logCaseAction(caseId, actorId, actionType, oldValue = null, newValue = null) {
@@ -31,6 +32,7 @@ export async function getCaseAuditLogs(caseId) {
         .from("audit_logs")
         .select(`
             id,
+            actor_id,
             action_type,
             old_value,
             new_value,
@@ -42,4 +44,22 @@ export async function getCaseAuditLogs(caseId) {
 
     if (error) throw error;
     return data;
+}
+
+// HIPAA: record that the signed-in user opened a patient record or case chart.
+// Runs in the background so a logging hiccup never blocks the chart.
+export function logRecordView(table, id) {
+    if (!id) return;
+    supabase.rpc("log_record_view", { record_table: table, record_id: id })
+        .then(({ error }) => { if (error) console.error("Could not log record view"); });
+}
+
+// Admin screen: one page (50 rows) of the HIPAA audit log, with names filled in.
+export async function getPhiAuditLog({ search = "", action = "", from = "", to = "", page = 1 }) {
+    const { data, error } = await supabase.rpc("get_phi_audit_log", {
+        p_search: search.trim() || null, p_action: action || null,
+        p_from: from || null, p_to: to || null, p_page: page,
+    });
+    if (error) throw new Error("Could not load the audit log.");
+    return { rows: data ?? [], total: data?.[0]?.total_count ?? 0 };
 }

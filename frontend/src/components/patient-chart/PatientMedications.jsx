@@ -1,5 +1,6 @@
 import { useState } from "react";
 import MedicationSelector from "../MedicationSelector.jsx";
+import { medicationName, medicationDetails } from "../medicationDisplay.js";
 import { saveMedications } from "../../services/patientChartService.js";
 
 
@@ -67,10 +68,10 @@ export default function PatientMedications({ patient, canEdit, editing, onEdit, 
             <div className="chart-card">
                 {current.length ? (
                     <ul className="chart-saved-list">
-                        {current.map((entry) => (
-                            <li key={entry.medicine.id}>
-                                <strong>{entry.medicine.name}</strong>
-                                {" — "}{entry.dosage} {entry.medicine.unit}, {entry.frequency}x/day
+                        {current.filter(Boolean).map((entry, index) => (
+                            <li key={index}>
+                                <strong>{medicationName(entry)}</strong>
+                                {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
                             </li>
                         ))}
                     </ul>

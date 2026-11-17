@@ -1,11 +1,13 @@
 import { supabase } from "../supabase.js";
 import { validateStudentAccount, validateStudentEmail, validateStudentIdentity } from "../../../supabase/functions/_shared/student-validation.mjs";
 
-// ask the create student edge function to create a new student account
+// ------------------- ask the create student edge function to create a new student account -------------------
 export async function createStudent(student) {
     const clean = validateStudentAccount(student);
     const { data, error } = await supabase.functions.invoke("create-student",
         {
+        
+        
             body: {
                 firstName: clean.firstName,
                 lastName: clean.lastName,
@@ -30,17 +32,23 @@ export async function createStudent(student) {
         throw new Error(message);
     }
 
+
     // Any unexpected successful response will be treated as an error
     if (!data?.student?.id) {
         throw new Error("The student account was created without a valid response.");
     }
 
     return data.student;
+    
+    
+    
 }
 
-export async function enrollStudent(studentId, courseNumber, crn) {
+export async function enrollStudent(studentId, courseNumber, crn, courseId = null) {
     const { data, error } = await supabase.functions.invoke("enroll-in-course", {
-        body: { studentId, courseNumber, crn },
+        body: { studentId, courseNumber, crn, ...(courseId ? { courseId } : {}) },
+    
+    
     });
 
     if (error) {

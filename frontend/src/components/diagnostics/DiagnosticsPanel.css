@@ -193,3 +193,6 @@
     flex-wrap: wrap;
 }
 
+.diagnostics-portal-release { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.diagnostics-portal-release label { display: block; font-weight: 600; margin-bottom: .4rem; }
+.diagnostics-portal-release textarea { display: block; width: 100%; padding: .65rem; border: 1px solid var(--border); border-radius: 4px; }

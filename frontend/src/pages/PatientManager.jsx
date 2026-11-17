@@ -11,10 +11,10 @@ export default function PatientManager({ onNavigate, embedded = false }) {
     const filtered = patients.filter((p) => {
         const q = search.toLowerCase();
         return (
-            p.first_name.toLowerCase().includes(q) ||
-            p.last_name.toLowerCase().includes(q) ||
-            String(p.age).includes(q) ||
-            p.id.toLowerCase().includes(q)
+            (p.first_name ?? "").toLowerCase().includes(q) ||
+            (p.last_name ?? "").toLowerCase().includes(q) ||
+            String(p.age ?? "").includes(q) ||
+            (p.id ?? "").toLowerCase().includes(q)
         );
     });
 
@@ -27,8 +27,9 @@ export default function PatientManager({ onNavigate, embedded = false }) {
         const { data, error } = await supabase
             .from("patients")
             .select("*")
+            .is("archived_at", null)
             .order("created_at", { ascending: false });
-        if (!error) setPatients(data);
+        if (!error) setPatients(data ?? []);
         setLoading(false);
     }
 
@@ -129,7 +130,7 @@ export default function PatientManager({ onNavigate, embedded = false }) {
                                         <tr
                                             key={p.id}
                                             className="instructor-table-row"
-                                            onClick={() => onNavigate("patientDetail", p.id)}
+                                            onClick={() => onNavigate("patientChart", p.id, { backTo: "patientManager" })}
                                             style={{ cursor: "pointer" }}
                                         >
                                             <td style={{ fontWeight: 500 }}>{p.first_name} {p.last_name}</td>
