@@ -10,6 +10,7 @@ import {
     getAttachmentUrl,
 } from "../../services/diagnosticsService.js";
 import "./DiagnosticsPanel.css";
+import DiagnosticPortalRelease from "./DiagnosticPortalRelease.jsx";
 
 const FLAG_LABELS = {
     normal: "Normal",
@@ -21,7 +22,7 @@ const FLAG_LABELS = {
     critical: "◆ Critical",
 };
 
-export default function DiagnosticsPanel({ patientId, caseId, locked = false }) {
+export default function DiagnosticsPanel({ patientId, caseId, locked = false, canReleaseToPortal = false }) {
     const [orders, setOrders] = useState([]);
     const [catalog, setCatalog] = useState([]);
     const [filter, setFilter] = useState("all");
@@ -438,7 +439,8 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                 <p className="vitals-empty">No diagnostic orders recorded.</p>
             ) : (
                 filteredOrders.map((order) => {
-                    const latestResult = order.diagnostic_results?.[0] || null;
+                    const latestResult = [...(order.diagnostic_results ?? [])]
+                        .sort((a, b) => (b.resulted_at ?? "").localeCompare(a.resulted_at ?? "") || b.id.localeCompare(a.id))[0] || null;
                     const cardClass = [
                         "diagnostics-card",
                         latestResult?.overall_flag === "critical" ? "diagnostics-card-critical" : "",
@@ -541,6 +543,11 @@ export default function DiagnosticsPanel({ patientId, caseId, locked = false }) 
                                 </>
                             )}
 
+                            {canReleaseToPortal && !caseId && !locked && order.category === "lab" && order.status === "completed"
+                                && [...(order.diagnostic_results ?? [])]
+                                    .sort((a, b) => (b.resulted_at ?? "").localeCompare(a.resulted_at ?? ""))
+                                    .map((result) => <DiagnosticPortalRelease key={`${result.id}-${result.portal_released_at || 'private'}`}
+                                        result={result} onChanged={loadAll} />)}
                             {!locked && order.status !== "cancelled" && order.status !== "completed" && (
                                 <div className="diagnostics-actions">
                                     <button

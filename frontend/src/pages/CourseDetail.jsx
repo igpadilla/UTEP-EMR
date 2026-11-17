@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
+
 import {
     getCourseById,
     getCourseStudents,
     getCourseAssignedCases,
     getCourseAnnouncements,
     getClinicalRoles,
+    getStudents,
     updateCourse,
     unenrollStudent,
     createAnnouncement,
@@ -15,11 +17,14 @@ import {
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import InstructorCases from "./InstructorCases.jsx";
 import TemplateBuilder from "./TemplateBuilder.jsx";
 import PatientManager from "./PatientManager.jsx";
 import PatientChart from "./PatientChart.jsx";
 import CaseAssign from "./CaseAssign.jsx";
+import BulkStudentImport from "../components/BulkStudentImport.jsx";
+import { enrollStudent } from "../services/students.js";
 
 const DISCIPLINE_BANNERS = {
     pharmacy:                  "linear-gradient(135deg, #0369a1 0%, #0891b2 100%)",
@@ -61,7 +66,9 @@ function formatDate(iso) {
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function CourseDetail({ courseId, onNavigate }) {
+
+
+export default function CourseDetail({ courseId, onNavigate, canManageStudents = false }) {
     const [course, setCourse] = useState(null);
     const [students, setStudents] = useState([]);
     const [cases, setCases] = useState([]);
@@ -83,6 +90,11 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
     // Roster state
     const [unenrollingId, setUnenrollingId] = useState(null);
+    const [availableStudents, setAvailableStudents] = useState([]);
+    const [studentToEnroll, setStudentToEnroll] = useState("");
+    const [enrolling, setEnrolling] = useState(false);
+    const [rosterError, setRosterError] = useState("");
+    const [showImport, setShowImport] = useState(false);
 
     // Gradebook drill-down
     const [gradebookStudent, setGradebookStudent] = useState(null);
@@ -97,6 +109,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
     const [annotations, setAnnotations] = useState([]);
     const [annotationDraft, setAnnotationDraft] = useState("");
     const [annotationTarget, setAnnotationTarget] = useState("General");
+    const [showAnswerKey, setShowAnswerKey] = useState(true);
 
     // Patient modal
     const [patientModalId, setPatientModalId] = useState(null);
@@ -135,13 +148,23 @@ export default function CourseDetail({ courseId, onNavigate }) {
     }, [courseId]);
 
     useEffect(() => {
+        if (!canManageStudents) return;
+        let cancelled = false;
+        getStudents().then((rows) => { if (!cancelled) setAvailableStudents(rows); })
+            .catch(() => { if (!cancelled) setRosterError("Could not load students, try again"); });
+        return () => { cancelled = true; };
+    }, [canManageStudents]);
+
+
+    useEffect(() => {
         if (!courseId || loading || activeTab === "cases") return;
         getCourseAssignedCases(courseId)
             .then((ca) => setCases(ca ?? []))
             .catch(() => {});
     }, [activeTab, assignState, courseId]);
 
-    // ── Settings ────────────────────────────────────────────────────────────
+
+    //-------------------Settings-------------------
     function startEdit() {
         setEditForm({
             course_number: course.course_number,
@@ -170,20 +193,49 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setSaving(false);
     }
 
-    // ── Roster ───────────────────────────────────────────────────────────────
+    // ------------------- Roster -------------------
     async function handleUnenroll(studentId) {
+        if (!canManageStudents) return;
         setUnenrollingId(studentId);
+        setRosterError("");
         try {
             await unenrollStudent(courseId, studentId);
             setStudents((prev) => prev.filter((s) => s.user_id !== studentId));
         } catch (err) {
             console.error(err);
-            setError("Failed to unenroll student.");
+            setRosterError("Failed to unenroll student.");
         }
         setUnenrollingId(null);
     }
 
-    // ── Announcements ────────────────────────────────────────────────────────
+    async function reloadRoster() {
+        try {
+            const [roster, activeStudents] = await Promise.all([getCourseStudents(courseId), getStudents()]);
+            setStudents(roster);
+            setAvailableStudents(activeStudents);
+        } catch {
+            setRosterError("Could not refresh the roster, try again");
+        }
+    }
+
+    async function handleEnroll(event) {
+        event.preventDefault();
+        if (!canManageStudents || !studentToEnroll) return;
+        setEnrolling(true);
+        setRosterError("");
+        try {
+            //     Use this course id so we do not enroll them into another class
+            await enrollStudent(studentToEnroll, course.course_number, course.crn, course.id);
+            setStudentToEnroll("");
+            await reloadRoster();
+        } catch (err) {
+            setRosterError(err.message);
+        } finally {
+            setEnrolling(false);
+        }
+    }
+
+    // ------------------- Announcements-------------------
     async function handlePostAnnouncement(e) {
         e.preventDefault();
         if (!annForm.title.trim() || !annForm.body.trim()) {
@@ -228,6 +280,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
         setRubricScores(initial);
         setAnnotationDraft("");
         setAnnotationTarget("General");
+        setShowAnswerKey(true);
     }
 
     function closeReview() {
@@ -318,7 +371,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
     return (
         <main style={{ paddingBottom: "2rem" }}>
-            {/* ── Banner ──────────────────────────────────────── */}
+            {/* ------------------- Banner -------------------*/}
             <div className="course-detail-banner" style={{ background: banner }}>
                 <div style={{ maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
                     <button
@@ -339,10 +392,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
                 </div>
             </div>
 
-            {/* ── Layout: side nav + content ───────────────────── */}
+            {/*------------------- Layout: side nav + content -------------------*/}
             <div className="course-layout">
 
-                {/* ── Side Nav ──────────────────────────────────── */}
+                {/* -------------------Side Nav -------------------*/}
                 <nav className="course-sidenav" aria-label="Course sections">
                     {/* Instructor card */}
                     <div className="course-sidenav-faculty">
@@ -364,6 +417,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     {/* Tab links */}
                     {TABS.filter((tab) => tab.id !== "cases" || isOwner).map((tab) => (
                         <button
+                        
                             key={tab.id}
                             className={`course-sidenav-item ${activeTab === tab.id ? "active" : ""} ${tab.disabled ? "course-sidenav-item-disabled" : ""}`}
                             type="button"
@@ -385,10 +439,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
                     ))}
                 </nav>
 
-                {/* ── Tab Content ───────────────────────────────── */}
+                {/* ----------- Tab Content ---------------------- */}
                 <div className="course-tab-content">
 
-                    {/* ── HOME ── */}
+                    {/* ------------- HOME ---------------------*/}
                     {activeTab === "home" && (
                         <div>
                             <div className="course-tab-header">
@@ -397,6 +451,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     <p className="course-tab-subtitle">At-a-glance summary of your course</p>
                                 </div>
                             </div>
+
 
                             {/* Quick stats row */}
                             <div className="course-home-stats">
@@ -421,7 +476,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         </div>
                     )}
 
-                    {/* ── CASES ── */}
+                    {/* -------------------CASES -------------------*/}
                     {activeTab === "cases" && (
                         assignState !== null ? (
                             <CaseAssign
@@ -453,8 +508,9 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         )
                     )}
 
-                    {/* ── PATIENTS ── */}
+                    {/* ------------------- PATIENTS-------------------*/}
                     {activeTab === "patients" && (
+                    
                         <PatientManager
                             embedded
                             onNavigate={(page, id) => {
@@ -467,29 +523,53 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         />
                     )}
 
-                    {/* ── ROSTER ── */}
+                    {/* ------------------- ROSTER ------------------- */}
                     {activeTab === "roster" && (
+                    
                         <div>
                             <div className="course-tab-header">
                                 <div>
                                     <h3 className="course-tab-title">Roster</h3>
                                     <p className="course-tab-subtitle">{students.length} student{students.length !== 1 ? "s" : ""} enrolled</p>
                                 </div>
+                                
                             </div>
+
+                            {rosterError && <p className="form-message form-message-error" role="alert">{rosterError}
+                                {canManageStudents && <button type="button" onClick={() => { setRosterError(""); reloadRoster(); }}>Refresh roster</button>}</p>}
+                            {canManageStudents && <div className="student-form-panel">
+                                <form className="student-form" onSubmit={handleEnroll}>
+                                    <div className="student-form-field">
+                                        <label htmlFor="roster-student">Student to enroll</label>
+                                        <select id="roster-student" required value={studentToEnroll} disabled={enrolling}
+                                            onChange={(event) => setStudentToEnroll(event.target.value)}>
+                                            <option value="">Choose a student</option>
+                                            {availableStudents.filter((student) => !students.some((enrolled) => enrolled.user_id === student.user_id))
+                                                .map((student) => <option key={student.user_id} value={student.user_id}>{student.last_name}, {student.first_name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="student-form-actions">
+                                        <button className="primary-action-button" type="submit" disabled={enrolling}>{enrolling ? "Enrolling…" : "Enroll student"}</button>
+                                        <button className="secondary-action-button" type="button" disabled={enrolling} onClick={() => setShowImport((value) => !value)}>
+                                            {showImport ? "Hide Roster Import" : "Import Roster as CSV"}</button>
+                                    </div>
+                                </form>
+                                {showImport && <BulkStudentImport course={course} onImported={reloadRoster} />}
+                            </div>}
 
                             <div className="course-detail-section">
                                 {students.length === 0 ? (
                                     <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
                                         <div className="patients-empty-icon" aria-hidden="true">👥</div>
                                         <strong>No students enrolled</strong>
-                                        <p>Import a roster CSV from the Courses page to enroll students.</p>
+                                        <p>{canManageStudents ? "Choose a student or import a roster above" : "An admin can add students to this course"}</p>
                                     </div>
                                 ) : (
                                     <>
                                         <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", gap: "1rem", padding: "0.6rem 1.25rem", background: "#f8fafc", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                                             <span>Student</span>
                                             <span>Cases Assigned</span>
-                                            {isOwner && <span />}
+                                            {canManageStudents && <span />}
                                         </div>
                                         {students.map((s) => {
                                             const studentCases = cases.filter((c) => c.profiles?.user_id === s.user_id);
@@ -499,7 +579,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                         {s.last_name}, {s.first_name}
                                                     </span>
                                                     <span style={{ color: "var(--text-muted)" }}>{studentCases.length}</span>
-                                                    {isOwner && (
+                                                    {canManageStudents && (
                                                         <button
                                                             className="secondary-action-button"
                                                             type="button"
@@ -567,6 +647,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                             {completed}/{sc.length}
                                                         </div>
                                                         <div style={{ height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+                                                        
                                                             <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? "#047857" : "#0284c7", borderRadius: 2, transition: "width 0.3s" }} />
                                                         </div>
                                                     </div>
@@ -581,8 +662,10 @@ export default function CourseDetail({ courseId, onNavigate }) {
                             </div>
                         </div>
                     )}
+                    
+                    
 
-                    {/* ── ANNOUNCEMENTS ── */}
+                    {/* ------------------- ANNOUNCEMENTS ------------------- */}
                     {activeTab === "announcements" && (
                         <div>
                             <div className="course-tab-header">
@@ -603,6 +686,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
 
                             {/* Compose form */}
                             {annComposing && (
+                            
                                 <div className="course-detail-section" style={{ marginBottom: "1rem", padding: "1.25rem" }}>
                                     <h4 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 600 }}>New Announcement</h4>
                                     <form onSubmit={handlePostAnnouncement} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -684,7 +768,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                         </div>
                     )}
 
-                    {/* ── SETTINGS ── */}
+                    {/* ------------------- SETTINGS ------------------- */}
                     {activeTab === "settings" && (
                         <div>
                             <div className="course-tab-header">
@@ -693,6 +777,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     <p className="course-tab-subtitle">Manage course details and configuration</p>
                                 </div>
                             </div>
+                            
+                            
 
                             {/* Course details card */}
                             <div className="course-detail-section" style={{ marginBottom: "1rem" }}>
@@ -1015,6 +1101,12 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     })()}
                                 </div>
 
+                                <ClinicalNoteAddendums
+                                    addendums={reviewCase.addendums ?? []}
+                                    canAdd={false}
+                                    encounterStatus={reviewCase.encounter_status}
+                                />
+
                                 {annotations.length > 0 && (
                                     <div style={{ marginTop: "1.25rem" }}>
                                         <p className="case-modal-section-label">Chart Annotations</p>
@@ -1052,6 +1144,28 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                     <div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
                                         <p className="case-modal-section-label" style={{ color: "#0369a1", marginBottom: "0.3rem" }}>Expectations & Milestones</p>
                                         <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>{reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}</p>
+                                    </div>
+                                )}
+
+                                {reviewCase.patient_templates?.answer_key?.trim() && (
+                                    <div className="mb-5 rounded-md border border-slate-200 bg-white p-3.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
+                                                Instructor Answer Key · Staff Only
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAnswerKey((prev) => !prev)}
+                                                className="font-mono text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-800 cursor-pointer bg-transparent border-0 p-0"
+                                            >
+                                                {showAnswerKey ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                        {showAnswerKey && (
+                                            <p className="mt-2 mb-0 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                                {reviewCase.patient_templates.answer_key}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -1142,5 +1256,7 @@ export default function CourseDetail({ courseId, onNavigate }) {
                 </div>
             )}
         </main>
+        
+        
     );
 }

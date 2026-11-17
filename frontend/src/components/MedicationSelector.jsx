@@ -1,5 +1,6 @@
 import { useState } from "react";
 import medicines from "../data/medicines.json";
+import { medicationName, medicationDetails } from "./medicationDisplay.js";
 
 const FREQUENCIES = [1, 2, 3, 4];
 
@@ -35,8 +36,8 @@ export default function MedicationSelector({ value = [], onChange }) {
         setDosageError("");
     }
 
-    function handleRemove(indexToRemove) {
-        onChange(safeValue.filter((_, index) => index !== indexToRemove));
+    function handleRemove(index) {
+        onChange(safeValue.filter((v, itemIndex) => itemIndex !== index));
     }
 
     return (
@@ -44,31 +45,22 @@ export default function MedicationSelector({ value = [], onChange }) {
             {/* Added medications */}
             {safeValue.length > 0 && (
                 <div style={{ marginBottom: "0.75rem" }}>
-                    {safeValue.map((entry, index) => {
-                        const name = typeof entry === "string" ? entry : (entry?.medicine?.name ?? entry?.name ?? "Medication");
-                        const unit = typeof entry === "string" ? "" : (entry?.medicine?.unit ?? entry?.unit ?? "");
-                        const entryDosage = typeof entry === "string" ? "" : entry?.dosage;
-                        const entryFreq = typeof entry === "string" ? "" : entry?.frequency;
-                        const details = [
-                            entryDosage != null && entryDosage !== "" ? `${entryDosage}${unit ? ` ${unit}` : ""}` : "",
-                            entryFreq ? `${entryFreq}x/day` : "",
-                        ].filter(Boolean).join(", ");
-                        return (
-                            <div key={entry?.medicine?.id ?? `${name}-${index}`} style={tagStyle}>
-                                <span>
-                                    <strong>{name}</strong>
-                                    {details ? ` — ${details}` : ""}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleRemove(index)}
-                                    style={removeStyle}
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        );
-                    })}
+                    {safeValue.map((entry, index) => (
+                        <div key={index} style={tagStyle}>
+                            <span>
+                                <strong>{medicationName(entry)}</strong>
+                                {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => handleRemove(index)}
+                                aria-label={`Remove ${medicationName(entry)}`}
+                                style={removeStyle}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -89,7 +81,7 @@ export default function MedicationSelector({ value = [], onChange }) {
             >
                 <option value="">— Select a medication —</option>
                 {medicines
-                    .filter((m) => !safeValue.some((v) => (v?.medicine?.id ?? v?.id) === m.id || (v?.medicine?.name ?? v?.name) === m.name))
+                    .filter((m) => !safeValue.some((v) => v?.medicine?.id === m.id || medicationName(v).toLowerCase() === m.name.toLowerCase()))
                     .map((m) => (
                         <option key={m.id} value={m.id}>
                             #{m.id} — {m.name} ({m.min}–{m.max} {m.unit})

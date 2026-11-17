@@ -1,5 +1,6 @@
 import { useState } from "react";
 import MedicationSelector from "../MedicationSelector.jsx";
+import { medicationName, medicationDetails } from "../medicationDisplay.js";
 import { saveMedications } from "../../services/patientChartService.js";
 
 
@@ -67,22 +68,12 @@ export default function PatientMedications({ patient, canEdit, editing, onEdit, 
             <div className="chart-card">
                 {current.length ? (
                     <ul className="chart-saved-list">
-                        {current.filter(Boolean).map((entry, index) => {
-                            if (typeof entry === "string") {
-                                return <li key={index}>{entry}</li>;
-                            }
-                            const name = entry.medicine?.name ?? entry.name ?? "Medication";
-                            const unit = entry.medicine?.unit ?? entry.unit ?? "";
-                            const dosage = entry.dosage != null && entry.dosage !== "" ? `${entry.dosage}${unit ? ` ${unit}` : ""}` : "";
-                            const freq = entry.frequency ? `${entry.frequency}x/day` : "";
-                            const details = [dosage, freq].filter(Boolean).join(", ");
-                            return (
-                                <li key={entry.medicine?.id ?? `${name}-${index}`}>
-                                    <strong>{name}</strong>
-                                    {details ? ` — ${details}` : ""}
-                                </li>
-                            );
-                        })}
+                        {current.filter(Boolean).map((entry, index) => (
+                            <li key={index}>
+                                <strong>{medicationName(entry)}</strong>
+                                {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
+                            </li>
+                        ))}
                     </ul>
                 ) : (
                     <p className="chart-muted">No medications recorded.</p>

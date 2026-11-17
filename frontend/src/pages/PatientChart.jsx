@@ -213,7 +213,7 @@ export default function PatientChart({
                     : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
-                    : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} canReleaseToPortal={canEdit} />
                     : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
                         onEdit={() => setEditingSection("medications")} />
                     : activeTab === "Visits" ? <PatientVisits {...sectionProps} caseId={caseId} canManagePortal={canManagePortal} />

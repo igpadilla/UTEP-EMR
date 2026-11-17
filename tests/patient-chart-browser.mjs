@@ -4,13 +4,17 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "../frontend/node_modules/vite/dist/node/index.js";
 
+
+
 const root = fileURLToPath(new URL("../frontend", import.meta.url));
 const output = fileURLToPath(new URL("../.cache/patient-chart/", import.meta.url));
+
 await mkdir(output, { recursive: true });
 
 //     Show the real chart on a small test page, without signing into a live project
 const fixture = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div>
 <script type="module" src="/__chart-entry.js"></script></body></html>`;
+
 const fixtureScript = `
 import React from 'react';
 import {createRoot} from 'react-dom/client';
@@ -76,6 +80,7 @@ try {
         const request = route.request(), url = new URL(request.url());
         const reply = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
         reads.push({ path: url.pathname, method: request.method(), search: url.search });
+        if (url.pathname.endsWith("/rpc/log_record_view")) return reply(null);
         if (url.pathname.endsWith("/patients")) {
             if (request.method() === "PATCH") {
                 patches.push(request.postDataJSON());
@@ -111,6 +116,7 @@ try {
     assert.equal(patches.length, 0);
     await page.getByLabel("First name", { exact: false }).fill("Ana Maria");
     await page.getByLabel("Phone", { exact: true }).fill("555-0199");
+    
     assert.ok(await page.getByRole("tab", { name: "Vitals", exact: true }).isDisabled());
     failSave = true;
     await page.getByRole("button", { name: "Save demographics", exact: true }).click();
@@ -160,6 +166,16 @@ try {
     await page.screenshot({ path: `${output}/allergies-mobile.png`, fullPage: true });
     console.log("PASS: allergies/history save independently, banner updates, conflicts are shown, and mobile layout fits");
 
+    await page.getByRole("tab", { name: "Medications", exact: true }).click();
+    await page.getByText("Existing medicine", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Edit medications", exact: true }).click();
+    await page.getByRole("button", { name: "Remove Existing medicine", exact: true }).click();
+    await page.getByText("Existing medicine", { exact: true }).waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByText("Existing medicine", { exact: true }).waitFor();
+    assert.deepEqual(patient.current_medications, [{ name: "Existing medicine" }]);
+    console.log("PASS: saved flat medication records display and edit without crashing or changing data on cancel");
+
     await page.getByRole("tab", { name: "Diagnoses", exact: true }).click();
     await page.getByRole("button", { name: "Edit diagnoses", exact: true }).click();
     await page.getByPlaceholder("Search diagnosis code or description…").fill("I10");
@@ -178,7 +194,7 @@ try {
     await page.getByRole("tab", { name: "Referrals", exact: true }).click();
     await page.getByRole("heading", { name: "Specialty Referrals", exact: true }).waitFor();
     await page.getByRole("button", { name: "← Back", exact: true }).click();
-    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientManager", "patient-one"]);
+    assert.deepEqual(await page.evaluate(() => window.lastNavigation), ["patientManager", "patient-one", {}]);
     console.log("PASS: keyboard tab navigation, Vitals, Referrals, and back navigation still work");
 
     await visit("role=instructor");

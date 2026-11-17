@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js";
+import { logCaseAction, ACTION_TYPES } from "./auditService.js";
 
 export async function getMyAssignedCases() {
     const { data, error } = await supabase
@@ -48,6 +49,56 @@ export async function submitCase(caseId, notes) {
         .select()
         .single();
     if (error) throw error;
+    return data;
+}
+
+// HIPAA-compliant append-only clinical note addendum for signed-off cases.
+// Never mutates encounter_notes or prior addendums; appends a timestamped entry and routes for review.
+export async function submitCaseAddendum(caseId, existingAddendums = [], { reason = "clarification", content = "" } = {}) {
+    const trimmed = content.trim();
+    if (!trimmed) {
+        throw new Error("Addendum narrative cannot be empty.");
+    }
+
+    const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: null }));
+    const userId = authData?.user?.id ?? null;
+
+    const newEntry = {
+        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `add-${Date.now()}`,
+        reason,
+        content: trimmed,
+        created_at: new Date().toISOString(),
+        author_id: userId,
+    };
+
+    const nextAddendums = [
+        ...(Array.isArray(existingAddendums) ? existingAddendums : []),
+        newEntry,
+    ];
+
+    const { data, error } = await supabase
+        .from("assigned_cases")
+        .update({
+            addendums: nextAddendums,
+            encounter_status: "pending review",
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", caseId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    if (userId) {
+        await logCaseAction(
+            caseId,
+            userId,
+            ACTION_TYPES.ADDENDUM_SUBMITTED,
+            "completed",
+            `Addendum (${reason.replace(/_/g, " ")})`
+        ).catch(() => {});
+    }
+
     return data;
 }
 

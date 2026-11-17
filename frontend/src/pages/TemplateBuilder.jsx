@@ -32,6 +32,7 @@ const EMPTY_FORM = {
     chief_complaint: "",
     student_instructions: "",
     hidden_diagnosis: "",
+    answer_key: "",
 };
 
 const DEFAULT_RUBRIC_CRITERIA = [
@@ -160,6 +161,7 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
                         chief_complaint: t.chief_complaint ?? "",
                         student_instructions: t.student_instructions ?? "",
                         hidden_diagnosis: t.hidden_diagnosis ?? "",
+                        answer_key: t.answer_key ?? "",
                     });
                     
                     if (t.current_medications) {
@@ -362,6 +364,7 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
             rubric_criteria: rubricCriteria,
             student_instructions: form.student_instructions.trim() || null,
             hidden_diagnosis: form.hidden_diagnosis.trim() || null,
+            answer_key: form.answer_key.trim() || null,
             expectations_rubric: expectationsRubric.trim() || null,
             initial_referral: isTypedPatient && initialReferral.target_discipline ? initialReferral : null,
             patient_id: linkedPatientId,
@@ -1042,6 +1045,25 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
                             disabled={submitting}
                             className="instructor-textarea"
                             placeholder="Add reference notes, ideal differential diagnoses, or specific instructions for this scenario..."
+                        />
+                    </div>
+                </div>
+
+                <div className="instructor-form-section">
+                    <h3 className="instructor-form-section-title">Instructor Answer Key (Hidden from Students)</h3>
+                    <p className="instructor-baseline-hint">
+                        Shared reference answer key for instructors grading this case. Never shown to students.
+                    </p>
+                    <div className="student-form-field instructor-form-wide">
+                        <textarea
+                            id="answer_key"
+                            name="answer_key"
+                            rows={4}
+                            value={form.answer_key}
+                            onChange={handleChange}
+                            disabled={submitting}
+                            className="instructor-textarea"
+                            placeholder="Add ideal SOAP note responses, expected clinical reasoning, or grading benchmarks..."
                         />
                     </div>
                 </div>
