@@ -1,5 +1,6 @@
 import { useState } from "react";
 import medicines from "../data/medicines.json";
+import { medicationName, medicationDetails } from "./medicationDisplay.js";
 
 const FREQUENCIES = [1, 2, 3, 4];
 
@@ -34,8 +35,8 @@ export default function MedicationSelector({ value, onChange }) {
         setDosageError("");
     }
 
-    function handleRemove(medId) {
-        onChange(value.filter((v) => v.medicine.id !== medId));
+    function handleRemove(index) {
+        onChange(value.filter((v, itemIndex) => itemIndex !== index));
     }
 
     return (
@@ -43,15 +44,16 @@ export default function MedicationSelector({ value, onChange }) {
             {/* Added medications */}
             {value.length > 0 && (
                 <div style={{ marginBottom: "0.75rem" }}>
-                    {value.map((entry) => (
-                        <div key={entry.medicine.id} style={tagStyle}>
+                    {value.map((entry, index) => (
+                        <div key={index} style={tagStyle}>
                             <span>
-                                <strong>{entry.medicine.name}</strong>
-                                {" — "}{entry.dosage} {entry.medicine.unit}, {entry.frequency}x/day
+                                <strong>{medicationName(entry)}</strong>
+                                {medicationDetails(entry) && <> — {medicationDetails(entry)}</>}
                             </span>
                             <button
                                 type="button"
-                                onClick={() => handleRemove(entry.medicine.id)}
+                                onClick={() => handleRemove(index)}
+                                aria-label={`Remove ${medicationName(entry)}`}
                                 style={removeStyle}
                             >
                                 ✕
@@ -78,7 +80,7 @@ export default function MedicationSelector({ value, onChange }) {
             >
                 <option value="">— Select a medication —</option>
                 {medicines
-                    .filter((m) => !value.some((v) => v.medicine.id === m.id))
+                    .filter((m) => !value.some((v) => v?.medicine?.id === m.id || medicationName(v).toLowerCase() === m.name.toLowerCase()))
                     .map((m) => (
                         <option key={m.id} value={m.id}>
                             #{m.id} — {m.name} ({m.min}–{m.max} {m.unit})

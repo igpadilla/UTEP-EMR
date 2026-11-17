@@ -6,6 +6,7 @@ import {
     overrideLobbyAssignment,
     startLobbySimulation,
     switchSimRound,
+    cancelSimLobby,
     subscribeToSimulation,
 } from "../services/simulationService.js";
 import { getMyTemplates } from "../services/instructorService.js";
@@ -29,6 +30,7 @@ export default function SimulationLobbyManager({ simId, courseId, courseName, on
     const [assigning, setAssigning] = useState(false);
     const [starting, setStarting] = useState(false);
     const [switching, setSwitching] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
     const [error, setError] = useState("");
     const unsubRef = useRef(null);
 
@@ -98,6 +100,19 @@ export default function SimulationLobbyManager({ simId, courseId, courseName, on
         } catch (e) {
             setError(e.message);
             setStarting(false);
+        }
+    }
+
+    async function handleCancel() {
+        if (!window.confirm("Cancel this lobby? All waiting students will be notified and removed.")) return;
+        setCancelling(true);
+        setError("");
+        try {
+            await cancelSimLobby(simId);
+            onNavigate("simulationList", null, { courseId, courseName });
+        } catch (e) {
+            setError(e.message);
+            setCancelling(false);
         }
     }
 
@@ -300,6 +315,15 @@ export default function SimulationLobbyManager({ simId, courseId, courseName, on
                                     disabled={!canStart || starting}
                                 >
                                     {starting ? "Starting…" : "Start Simulation →"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="secondary-button"
+                                    style={{ width: "100%", marginTop: "0.5rem", color: "#dc2626", borderColor: "#fca5a5" }}
+                                    onClick={handleCancel}
+                                    disabled={cancelling}
+                                >
+                                    {cancelling ? "Cancelling…" : "Cancel lobby"}
                                 </button>
                             </section>
                         )}

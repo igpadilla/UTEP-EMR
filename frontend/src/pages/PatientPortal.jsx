@@ -4,6 +4,7 @@ import { logout } from "../services/auth.js";
 import "./PatientPortal.css";
 
 const PAGES = ["My Health", "Medications & Prescriptions", "Lab Results", "Last Visit Summary", "My Profile"];
+const FLAG_LABELS = { normal: "Normal", low: "Low", high: "High", abnormal: "Abnormal", critical: "Critical", critical_low: "Critical low", critical_high: "Critical high" };
 
 export function portalDate(value) {
     if (!value) return "Not recorded";
@@ -25,6 +26,31 @@ function MedicationList({ medications }) {
             </dl>
         </article>)}
     </>;
+}
+
+function LabResults({ labs }) {
+    if (!labs.length) return <p className="portal-empty">No lab results yet</p>;
+    return labs.map((lab) => <article className="portal-record" key={lab.id}>
+        <div className="portal-record-heading"><h3>{lab.test_name}</h3>
+            <span>{portalDate(lab.resulted_at || lab.collected_at)}</span></div>
+        {lab.overall_flag && <p className="portal-result-flag">Reported flag: {FLAG_LABELS[lab.overall_flag] || lab.overall_flag}</p>}
+        {Array.isArray(lab.values) && lab.values.length > 0 ? <div className="portal-table-wrapper">
+            <table className="portal-results-table">
+                <caption className="portal-sr-only">{lab.test_name} results</caption>
+                <thead><tr><th>Test</th><th>Result</th><th>Reference range</th><th>Reported flag</th></tr></thead>
+                <tbody>{lab.values.map((value, index) => <tr key={`${value.code}-${index}`}>
+                    <th scope="row">{value.name || value.code || "Test"}</th>
+                    <td>{[value.value, value.unit].filter((part) => part != null && part !== "").join(" ") || "Not recorded"}</td>
+                    <td>{value.reference_range || "Not recorded"}</td>
+                    <td>{FLAG_LABELS[value.flag] || value.flag || "Not recorded"}</td>
+                </tr>)}</tbody>
+            </table>
+        </div> : lab.result_value != null && <dl className="portal-details">
+            <div><dt>Result</dt><dd>{[lab.result_value, lab.unit].filter((part) => part != null && part !== "").join(" ")}</dd></div>
+            <div><dt>Reference range</dt><dd>{lab.reference_range || "Not recorded"}</dd></div>
+        </dl>}
+        {lab.result_note && <p className="portal-text">{lab.result_note}</p>}
+    </article>);
 }
 
 export default function PatientPortal({ user, accountWarning, idleWarning }) {
@@ -65,21 +91,21 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
 
     return <div className="patient-portal">
         <header className="portal-header">
-            <div className="portal-brand"><span aria-hidden="true">+</span><div><strong>UTEP EMR</strong><span>Patient Portal</span></div></div>
+            <div className="portal-brand"><span aria-hidden="true">EMR</span><div><strong>UTEP EMR</strong><span>Patient Portal</span></div></div>
             <div className="portal-account"><span className="portal-avatar" aria-hidden="true">{initials}</span>
                 <div><strong>{name}</strong><span>Patient</span></div>
                 <button type="button" className="secondary-action-button" disabled={signingOut} onClick={signOut}>{signingOut ? "Signing out…" : "Sign out"}</button></div>
         </header>
 
         <div className="portal-layout">
-            <aside className="portal-sidebar"><nav aria-label="Patient portal">
+            <aside className="portal-sidebar"><p className="portal-sidebar-label">Navigation</p><nav aria-label="Patient portal">
                 {PAGES.map((item) => <button key={item} type="button" aria-current={page === item ? "page" : undefined}
                     className={page === item ? "portal-nav-active" : ""} onClick={() => setPage(item)}>{item}</button>)}
             </nav></aside>
 
             <main className="portal-main" id="portal-content">
                 <div className="portal-page-heading"><div><p className="portal-eyebrow">Patient records</p><h1>{page === "My Health" ? `${greeting}, ${firstName}` : page}</h1>
-                    <p>Testing portal - the care team records can be shown here</p></div>
+                    <p>View health records shared by your care team.</p></div>
                     <button type="button" className="secondary-action-button" disabled={loading} onClick={() => setReload((value) => value + 1)}>Refresh records</button></div>
                 {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
                 {error && <div className="form-message form-message-error" role="alert">{error}
@@ -96,11 +122,7 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
                     </>}
                     {page === PAGES[1] && <section className="portal-card"><h2>Medication list</h2><MedicationList medications={medications} /></section>}
                     {page === PAGES[2] && <section className="portal-card"><h2>Lab results</h2>
-                        {!labs.length && <p className="portal-empty">No lab results yet</p>}
-                        {labs.map((lab) => <article className="portal-record" key={lab.id}><div className="portal-record-heading"><h3>{lab.test_name}</h3><span>{portalDate(lab.collected_at)}</span></div>
-                            <dl className="portal-details"><div><dt>Result</dt><dd>{[lab.result_value, lab.unit].filter(Boolean).join(" ")}</dd></div>
-                                <div><dt>Reference range</dt><dd>{lab.reference_range || "Not recorded"}</dd></div></dl>
-                            {lab.result_note && <p className="portal-text">{lab.result_note}</p>}</article>)}
+                        <LabResults labs={labs} />
                     </section>}
                     {page === PAGES[3] && <section className="portal-card"><h2>Last visit</h2>
                         {records.last_visit ? <><p>{records.last_visit.visit_type || "Visit"} · {portalDate(records.last_visit.date)}</p>

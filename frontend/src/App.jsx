@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Rooms from "./pages/Rooms.jsx";
 import Header from "./components/Header.jsx";
 import Navbar from "./components/Navbar.jsx";
 import PatientManager from "./pages/PatientManager.jsx";
@@ -40,16 +41,22 @@ import {
 } from "./services/auth.js";
 
 import { getCurrentUserWithProfile } from "./services/profile.js";
+import { hasPermission } from "./services/permissionService.js";
 import { getLivePatientAccess, NO_LIVE_PATIENT_ACCESS, FULL_LIVE_PATIENT_ACCESS } from "./services/clinicalRoleService.js";
 
 export default function App() {
+
+
+
     const [session, setSession] = useState(null);
+    
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [accountWarning, setAccountWarning] = useState("");
     const [showIdleWarning, setShowIdleWarning] = useState(false);
     const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
+    const [canReadRooms, setCanReadRooms] = useState(false);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
@@ -88,12 +95,13 @@ export default function App() {
                 signedInUserId.current = newSession?.user.id ?? null;
                 setNav({ page: "dashboard", id: null });
                 setLiveAccess(NO_LIVE_PATIENT_ACCESS);
+                setCanReadRooms(false);
             }
             setSession(newSession);
             clearTimeout(authTimer);
             if (newSession) {
                 setUser((current) => current?.id === newSession.user.id ? current : null);
-                // Supabase auth callbacks must finish before making another auth request.
+                // HERE supabase auth callbacks must finish before making another auth request.
                 authTimer = setTimeout(() => { if (!disposed) loadUser({ background: true }); }, 0);
             } else {
                 setUser(null);
@@ -201,12 +209,20 @@ export default function App() {
             const livePatients = currentUser.profile.account_type === "patient" ? NO_LIVE_PATIENT_ACCESS : currentUser.profile.account_type === "student"
                 ? await getLivePatientAccess().catch(() => NO_LIVE_PATIENT_ACCESS)
                 : FULL_LIVE_PATIENT_ACCESS;
+            const roomsAllowed = await hasPermission("room.read").catch((error) => {
+                console.error("Unable to check Rooms permission:", error);
+                return false;
+            });
+
             if (request !== accountRequest.current) return;
+
             setLiveAccess(livePatients);
+            setCanReadRooms(roomsAllowed);
             setUser(currentUser);
             setError("");
             setAccountWarning("");
         } catch (error) {
+        
             if (request !== accountRequest.current) return;
             console.error(error);
             if (background) {
@@ -242,21 +258,22 @@ export default function App() {
         return <ChangePassword onDone={() => loadUser()} />;
     }
 
-    //     Patient logins go straight to their own view, with no staff navigation
+    //     Patient logins go straight to their own view with no staff navigation
     if (user.profile.account_type === "patient") {
         return <PatientPortal key={user.id} user={user} accountWarning={accountWarning}
             idleWarning={showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />} />;
     }
 
     const isAdmin = user.profile.account_type === "admin";
+    
     const isInstructor = user.profile.account_type === "instructor";
+    
     const isStudent = user.profile.account_type === "student";
-    const canManageStudents = ["admin", "instructor"].includes(
-        user.profile.account_type,
-    );
-    // Only instructors create and manage cases and templates; admins manage accounts
+    
+    const canManageStudents = isAdmin;
+    // Only instructors create and manage cases and templates, then admins manage accounts
     const canManageCases = isInstructor;
-    // Admins manage all courses and enrollments, so they keep the Courses pages
+    // Admins manage all courses and enrollments, so they keep the courses pages
     const canManageCourses = isAdmin || isInstructor;
 
     const navbarPage =
@@ -272,30 +289,38 @@ export default function App() {
         : nav.page === "simulationLobby" || nav.page === "simulationLobbyWaiting" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
         : nav.page === "simulationLobbyManager" ? "courses"
         : nav.page === "auditLog" ? "auditLog"
+        : nav.page === "rooms" ? "rooms"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
         if (page === "students" && canManageStudents) {
+        
             navigate("studentManagement");
-        } else if (page === "courses" && canManageCourses) {
+        } 
+         else if (page === "courses" && canManageCourses) {
             navigate("courses");
-        } else if (page === "myCourses") {
+        
+        } 
+        else if (page === "myCourses") {
             navigate("studentCourses");
         } else if (page === "studentCases") {
             navigate("studentCases");
         } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
-        } else if (page === "appointments") {
+        } 
+        else if (page === "appointments") {
             navigate("appointments");
         } else if (page === "auditLog" && isAdmin) {
             navigate("auditLog");
+        } else if (page === "rooms" && canReadRooms) {
+            navigate("rooms");
         } else {
             navigate("dashboard");
         }
     }
 
-    // Live patient pages are for staff and non-clinical roles; other students are sent to their courses
+    // Live patient pages are for staff and non clinical roles, then all other students are sent to their courses
     const livePatientPage = ["patientLookup", "studentPatientDetail", "appointments"].includes(nav.page)
         || (nav.page === "patientChart" && !nav.caseId);
     const page = isStudent && !liveAccess.read && livePatientPage ? "studentCourses" : nav.page;
@@ -308,9 +333,11 @@ export default function App() {
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
+            
         case "studentPatientDetail":
             pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} access={liveAccess} />;
             break;
+            
         case "patientChart":
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
                 id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
@@ -320,6 +347,7 @@ export default function App() {
                 fromCourse={nav.fromCourse ?? null}
                 simMode={nav.backTo === "medSim"} />;
             break;
+            
         case "studentManagement":
             pageContent = canManageStudents
                 ? <StudentManagement onNavigate={navigate} canManageAccounts={isAdmin} />
@@ -354,11 +382,13 @@ export default function App() {
             break;
         case "courses":
             pageContent = canManageCourses
-                ? <CourseForm onNavigate={navigate} />
+                ? <CourseForm onNavigate={navigate} canManageStudents={canManageStudents} />
                 : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "courseDetail":
-            pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
+            pageContent = canManageCourses
+                ? <CourseDetail key={nav.id} courseId={nav.id} onNavigate={navigate} canManageStudents={canManageStudents} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "simulationList":
             pageContent = canManageCourses
@@ -399,12 +429,17 @@ export default function App() {
         case "auditLog":
             pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
+        case "rooms":
+            pageContent = canReadRooms
+                ? <Rooms />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
         case "dashboard":
         default:
             pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
     }
 
-    // The template builder uses the whole screen for the case form and the patient chart.
+    // Now, the template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
 
     if (isTemplateBuilder) {
@@ -424,6 +459,7 @@ export default function App() {
                 currentPage={navbarPage}
                 onNavigate={handleNavbarNavigate}
                 canUseLivePatients={liveAccess.read}
+                canReadRooms={canReadRooms}
             />
             <div className="flex-1 flex flex-col min-w-0 bg-white">
                 <Header
@@ -446,5 +482,6 @@ export default function App() {
                 </footer>
             </div>
         </div>
+        
     );
 }

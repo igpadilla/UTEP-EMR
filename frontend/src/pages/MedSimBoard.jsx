@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js";
 import {
     getSimulation,
     getSimEncounters,
+    getMySimRole,
     openSimCase,
     completeMedEncounter,
     subscribeToSimulation,
@@ -32,6 +33,7 @@ export default function MedSimBoard({ simId, onNavigate }) {
     const prevRef = useRef([]);
     const toastTimer = useRef(null);
     const unsubRef = useRef(null);
+    const roundRef = useRef(null);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
@@ -81,6 +83,16 @@ export default function MedSimBoard({ simId, onNavigate }) {
             ]);
             setSim(simData);
             setEncounters(encData);
+
+            // Round switched — navigate to whichever board matches the new role.
+            if (roundRef.current !== null && simData.current_round !== roundRef.current) {
+                const newRole = await getMySimRole(simId);
+                if (newRole === "front_desk") onNavigate("frontDeskSim", simId);
+                else if (newRole === "patient_actor") onNavigate("patientActorSim", simId);
+                else if (newRole === "observer") onNavigate("simulationMonitor", simId);
+                // "med" stays on this board — no navigation needed
+            }
+            roundRef.current = simData.current_round;
         } catch (e) {
             setError(e.message);
         }

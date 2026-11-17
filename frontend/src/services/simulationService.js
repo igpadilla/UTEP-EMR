@@ -151,6 +151,30 @@ export async function getMySimSummary(simId) {
     };
 }
 
+// Returns the calling student's participation rows (with grade data) for all sims in a course.
+// Deduplicates by simulation_id — takes round 1 row (grade is written to all rounds).
+export async function getMySimGradesForCourse(courseId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data, error } = await supabase
+        .from("simulation_participants")
+        .select(`
+            simulation_id, sim_role, round, rubric_scores, instructor_feedback, reviewed_at,
+            simulations!inner ( id, title, status, course_id, started_at, ended_at )
+        `)
+        .eq("user_id", user.id)
+        .eq("simulations.course_id", courseId)
+        .order("round", { ascending: true });
+    if (error) return [];
+    // One entry per simulation (round 1 carries the grade)
+    const seen = new Set();
+    return (data || []).filter(p => {
+        if (seen.has(p.simulation_id)) return false;
+        seen.add(p.simulation_id);
+        return true;
+    });
+}
+
 // Returns lobby-status simulations for a course that the student can join.
 export async function getOpenLobbiesForCourse(courseId) {
     const { data, error } = await supabase
@@ -223,6 +247,11 @@ export async function startLobbySimulation(simId) {
 
 export async function switchSimRound(simId) {
     const { error } = await supabase.rpc("switch_sim_round", { p_sim_id: simId });
+    if (error) throw error;
+}
+
+export async function cancelSimLobby(simId) {
+    const { error } = await supabase.rpc("cancel_sim_lobby", { p_sim_id: simId });
     if (error) throw error;
 }
 

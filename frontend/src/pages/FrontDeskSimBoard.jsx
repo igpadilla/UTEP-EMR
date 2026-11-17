@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
     getSimulation,
     getSimEncounters,
+    getMySimRole,
     checkInEncounter,
     dischargeEncounter,
     subscribeToSimulation,
@@ -31,6 +32,7 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
     const [discharging, setDischarging] = useState(false);
     const [error, setError] = useState("");
     const unsubRef = useRef(null);
+    const roundRef = useRef(null);
 
     async function load() {
         try {
@@ -40,6 +42,16 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
             ]);
             setSim(simData);
             setEncounters(encData);
+
+            // Round switched — navigate to whichever board matches the new role.
+            if (roundRef.current !== null && simData.current_round !== roundRef.current) {
+                const newRole = await getMySimRole(simId);
+                if (newRole === "med") onNavigate("medSim", simId);
+                else if (newRole === "patient_actor") onNavigate("patientActorSim", simId);
+                else if (newRole === "observer") onNavigate("simulationMonitor", simId);
+                // "front_desk" stays on this board — no navigation needed
+            }
+            roundRef.current = simData.current_round;
         } catch (e) {
             setError(e.message);
         }

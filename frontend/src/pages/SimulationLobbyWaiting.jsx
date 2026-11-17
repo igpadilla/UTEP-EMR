@@ -55,6 +55,11 @@ export default function SimulationLobbyWaiting({ simId, onNavigate }) {
                 const role = await getMySimRole(simId);
                 navigateToRole(role);
             }
+            // Lobby was cancelled by instructor
+            if (simData?.status === "ended" && !navigatedRef.current) {
+                navigatedRef.current = true;
+                onNavigate("studentCourses");
+            }
         } catch (e) {
             setError(e.message);
         }

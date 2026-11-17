@@ -16,6 +16,7 @@ export const ACTION_TYPES = {
     IMAGING_ORDERED:             "IMAGING_ORDERED",
     DIAGNOSTIC_RESULT_ADDED:     "DIAGNOSTIC_RESULT_ADDED",
     DIAGNOSTIC_ORDER_CANCELLED:  "DIAGNOSTIC_ORDER_CANCELLED",
+    ADDENDUM_SUBMITTED:          "ADDENDUM_SUBMITTED",
 };
 
 export async function logCaseAction(caseId, actorId, actionType, oldValue = null, newValue = null) {

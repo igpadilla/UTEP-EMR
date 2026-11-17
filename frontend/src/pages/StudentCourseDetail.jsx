@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getMyCourseCases } from "../services/instructorService.js";
-import { getMyActiveSimulations, getOpenLobbiesForCourse, getMyLobbyMembership, joinSimLobby, getMySimsForCourse, getMySimSummary } from "../services/simulationService.js";
+import { getMyActiveSimulations, getOpenLobbiesForCourse, getMyLobbyMembership, joinSimLobby, getMySimsForCourse, getMySimSummary, getMySimGradesForCourse } from "../services/simulationService.js";
 import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
@@ -91,6 +91,7 @@ export default function StudentCourseDetail({ course, onNavigate }) {
     const [openLobbies, setOpenLobbies] = useState([]);
     const [joiningLobby, setJoiningLobby] = useState(null);
     const [mySims, setMySims] = useState([]);
+    const [mySimGrades, setMySimGrades] = useState([]);
     const [expandedSimId, setExpandedSimId] = useState(null);
     const [simSummaries, setSimSummaries] = useState({});
 
@@ -112,6 +113,9 @@ export default function StudentCourseDetail({ course, onNavigate }) {
             .catch(() => {});
         getMySimsForCourse(course.id)
             .then(setMySims)
+            .catch(() => {});
+        getMySimGradesForCourse(course.id)
+            .then(setMySimGrades)
             .catch(() => {});
     }, [course.id]);
 
@@ -365,101 +369,149 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                 </div>
                             </div>
 
-                            {cases.length === 0 ? (
+                            {cases.length === 0 && mySimGrades.length === 0 ? (
                                 <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
-                                    <strong>No cases yet.</strong>
-                                    <p>Your instructor hasn't assigned any cases to this course.</p>
+                                    <strong>No grades yet.</strong>
+                                    <p>Your instructor hasn't assigned any cases or simulations to this course.</p>
                                 </div>
                             ) : (
                                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0 1.25rem 1.25rem" }}>
-                                    {cases.map((c) => {
-                                        const snap = c.patient_snapshot ?? {};
-                                        const hasGrade = c.score != null;
-                                        const hasFeedback = c.instructor_feedback || c.chart_annotations?.length > 0;
-                                        const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
 
-                                        return (
-                                            <div key={c.id} className="course-detail-section">
-                                                {/* Case header row */}
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
-                                                            {snap.first_name} {snap.last_name}
-                                                        </div>
-                                                        {snap.chief_complaint && (
-                                                            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
-                                                                {snap.chief_complaint}
-                                                            </div>
-                                                        )}
-                                                        <div style={{ marginTop: "0.4rem" }}>
-                                                            <span className="instructor-status-badge" style={statusStyle}>
-                                                                {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ textAlign: "right" }}>
-                                                        {hasGrade ? (
-                                                            <>
-                                                                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
-                                                                    {c.score}
-                                                                    <span style={{ fontSize: "1rem", fontWeight: 400, color: "var(--text-muted)" }}>
-                                                                        /{c.max_score ?? 100}
+                                    {/* ── Cases ── */}
+                                    {cases.length > 0 && (
+                                        <>
+                                            <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Cases</p>
+                                            {cases.map((c) => {
+                                                const snap = c.patient_snapshot ?? {};
+                                                const hasGrade = c.score != null;
+                                                const hasFeedback = c.instructor_feedback || c.chart_annotations?.length > 0;
+                                                const statusStyle = STATUS_STYLES[c.encounter_status] ?? STATUS_STYLES["not started"];
+                                                return (
+                                                    <div key={c.id} className="course-detail-section">
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.25rem", gap: "0.75rem" }}>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
+                                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", padding: "0.1rem 0.45rem", borderRadius: "4px", background: "#e0f2fe", color: "#0369a1" }}>Case</span>
+                                                                </div>
+                                                                <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
+                                                                    {snap.first_name} {snap.last_name}
+                                                                </div>
+                                                                {snap.chief_complaint && (
+                                                                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.15rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                        {snap.chief_complaint}
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ marginTop: "0.4rem" }}>
+                                                                    <span className="instructor-status-badge" style={statusStyle}>
+                                                                        {STATUS_LABELS[c.encounter_status] ?? c.encounter_status}
                                                                     </span>
                                                                 </div>
-                                                                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                                                                    {Math.round((c.score / (c.max_score ?? 100)) * 100)}%
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                                                                {c.encounter_status === "completed" ? "No score recorded" : "Not graded yet"}
-                                                            </span>
+                                                            </div>
+                                                            <div style={{ flexShrink: 0, textAlign: "right" }}>
+                                                                {hasGrade ? (
+                                                                    <>
+                                                                        <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
+                                                                            {c.score}<span style={{ fontSize: "1rem", fontWeight: 400, color: "var(--text-muted)" }}>/{c.max_score ?? 100}</span>
+                                                                        </div>
+                                                                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                                                                            {Math.round((c.score / (c.max_score ?? 100)) * 100)}%
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                                                        {c.encounter_status === "completed" ? "No score recorded" : "Not graded yet"}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {hasFeedback && (
+                                                            <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.875rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                                                {c.instructor_feedback && (
+                                                                    <div>
+                                                                        <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>Instructor Feedback</div>
+                                                                        <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{c.instructor_feedback}</p>
+                                                                    </div>
+                                                                )}
+                                                                {c.chart_annotations?.length > 0 && (
+                                                                    <div>
+                                                                        <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.4rem" }}>Chart Annotations</div>
+                                                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                                                            {c.chart_annotations.map((a, i) => (
+                                                                                <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "0.5rem 0.75rem", fontSize: "0.875rem" }}>
+                                                                                    <strong style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#64748b" }}>{a.section}: </strong>
+                                                                                    {a.comment}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Feedback + annotations */}
-                                                {hasFeedback && (
-                                                    <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.875rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                                                        {c.instructor_feedback && (
-                                                            <div>
-                                                                <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>
-                                                                    Instructor Feedback
-                                                                </div>
-                                                                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                                                                    {c.instructor_feedback}
+                                                        {!hasFeedback && ["pending review", "completed"].includes(c.encounter_status) && (
+                                                            <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1.25rem" }}>
+                                                                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                                                                    {c.encounter_status === "pending review" ? "Awaiting instructor review." : "No feedback recorded."}
                                                                 </p>
                                                             </div>
                                                         )}
-                                                        {c.chart_annotations?.length > 0 && (
-                                                            <div>
-                                                                <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.4rem" }}>
-                                                                    Chart Annotations
+                                                    </div>
+                                                );
+                                            })}
+                                        </>
+                                    )}
+
+                                    {/* ── Simulations ── */}
+                                    {mySimGrades.length > 0 && (
+                                        <>
+                                            <p style={{ margin: cases.length > 0 ? "0.5rem 0 0" : "0.25rem 0 0", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Simulations</p>
+                                            {mySimGrades.map((p) => {
+                                                const sim = p.simulations;
+                                                const graded = !!p.reviewed_at;
+                                                const score = p.rubric_scores?.score;
+                                                const SIM_ROLE_LABEL = { med: "Med Student", front_desk: "Front Desk", patient_actor: "Patient Actor", observer: "Observer" };
+                                                return (
+                                                    <div key={p.simulation_id} className="course-detail-section">
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.25rem", gap: "0.75rem" }}>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
+                                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", padding: "0.1rem 0.45rem", borderRadius: "4px", background: "#ede9fe", color: "#7c3aed" }}>Simulation</span>
                                                                 </div>
-                                                                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                                                                    {c.chart_annotations.map((a, i) => (
-                                                                        <div key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "0.5rem 0.75rem", fontSize: "0.875rem" }}>
-                                                                            <strong style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#64748b" }}>{a.section}: </strong>
-                                                                            {a.comment}
-                                                                        </div>
-                                                                    ))}
+                                                                <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>{sim?.title ?? "Simulation"}</div>
+                                                                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                                                                    {SIM_ROLE_LABEL[p.sim_role] ?? p.sim_role}
+                                                                    {sim?.ended_at ? ` · ${formatSimDate(sim.ended_at)}` : ""}
                                                                 </div>
+                                                                <div style={{ marginTop: "0.4rem" }}>
+                                                                    <span className="instructor-status-badge" style={graded ? { background: "#ecfdf5", color: "#047857" } : { background: "#fef3c7", color: "#b45309" }}>
+                                                                        {graded ? "Graded" : "Pending Grade"}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            {graded && score != null && (
+                                                                <div style={{ flexShrink: 0, textAlign: "right" }}>
+                                                                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
+                                                                        {score}<span style={{ fontSize: "1rem", fontWeight: 400, color: "var(--text-muted)" }}>/100</span>
+                                                                    </div>
+                                                                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>{score}%</div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {graded && p.instructor_feedback && (
+                                                            <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.875rem 1.25rem" }}>
+                                                                <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.3rem" }}>Instructor Feedback</div>
+                                                                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{p.instructor_feedback}</p>
+                                                            </div>
+                                                        )}
+                                                        {graded && !p.instructor_feedback && (
+                                                            <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1.25rem" }}>
+                                                                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>No feedback recorded.</p>
                                                             </div>
                                                         )}
                                                     </div>
-                                                )}
-
-                                                {/* No feedback yet placeholder */}
-                                                {!hasFeedback && ["pending review", "completed"].includes(c.encounter_status) && (
-                                                    <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1.25rem" }}>
-                                                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                                                            {c.encounter_status === "pending review" ? "Awaiting instructor review." : "No feedback recorded."}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                                );
+                                            })}
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>

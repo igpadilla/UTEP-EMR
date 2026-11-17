@@ -5,8 +5,8 @@
 -- ── Schema changes ─────────────────────────────────────────────────────────────
 
 alter table public.simulation_encounters
-    add column script          jsonb null,
-    add column script_progress jsonb not null default '[]'::jsonb;
+    add column if not exists script          jsonb null,
+    add column if not exists script_progress jsonb not null default '[]'::jsonb;
 -- script format:          { narrative: text, checks: [{id: text, text: text}] }
 -- script_progress format: ["check-id-1", "check-id-2"]  (array of checked item IDs)
 
@@ -107,7 +107,7 @@ $$;
 -- ── update_script_progress ─────────────────────────────────────────────────────
 -- The assigned patient actor or a sim manager can check off items during active sim.
 
-create function public.update_script_progress(
+create or replace function public.update_script_progress(
     p_encounter_id uuid,
     p_checked_ids  jsonb   -- JSON array of check-item ID strings
 )
