@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { getSimulation, getMySimRole } from "../services/simulationService.js";
 
 const ROLE_INFO = {
-    front_desk: { label: "Front Desk", icon: "📋", desc: "Find and check in patients. Use the front desk board to manage arrivals." },
-    med: { label: "Med Student", icon: "💊", desc: "Wait for your assigned patient to be checked in, then open their case." },
-    patient_actor: { label: "Patient Actor", icon: "🎭", desc: "Walk up to the front desk and play your assigned patient." },
-    observer: { label: "Observer", icon: "👁", desc: "Watch the simulation in progress from the monitor view." },
+    front_desk:    { label: "Front Desk",    desc: "Find and check in patients. Use the front desk board to manage arrivals." },
+    med:           { label: "Med Student",   desc: "Wait for your assigned patient to be checked in, then open their case." },
+    patient_actor: { label: "Patient Actor", desc: "Walk up to the front desk and play your assigned patient." },
+    observer:      { label: "Observer",      desc: "Watch the simulation in progress from the monitor view." },
 };
 
-export default function SimulationLobby({ simId, onNavigate }) {
+export default function SimulationLobby({ simId, onNavigate, isStaff = false }) {
     const [sim, setSim] = useState(null);
     const [role, setRole] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ export default function SimulationLobby({ simId, onNavigate }) {
     if (loading) return <p className="form-message">Loading simulation…</p>;
     if (error) return <p className="form-message form-message--error">{error}</p>;
 
-    const info = ROLE_INFO[role] ?? { label: role ?? "Participant", icon: "👤", desc: "You are assigned to this simulation." };
+    const info = ROLE_INFO[role] ?? { label: role ?? "Participant", desc: "You are assigned to this simulation." };
     const isEnded = sim?.status === "ended";
 
     return (
@@ -56,15 +56,28 @@ export default function SimulationLobby({ simId, onNavigate }) {
                     background: "#fff", border: "1px solid var(--border)", borderRadius: "12px",
                     padding: "1.5rem", marginBottom: "1.5rem", textAlign: "center"
                 }}>
-                    <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>{info.icon}</div>
                     <h3 style={{ margin: "0 0 0.5rem" }}>Your role: {info.label}</h3>
                     <p style={{ color: "var(--text-muted)", margin: 0 }}>{info.desc}</p>
                 </div>
 
                 {!isEnded && (
-                    <button type="button" className="primary-button" style={{ width: "100%" }}
-                        onClick={handleJoin}>
-                        Join simulation →
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                        <button type="button" className="primary-button" style={{ width: "100%" }}
+                            onClick={handleJoin}>
+                            Join as {info.label} →
+                        </button>
+                        {isStaff && (
+                            <button type="button" className="secondary-button" style={{ width: "100%" }}
+                                onClick={() => onNavigate("simulationMonitor", simId)}>
+                                Open simulation monitor
+                            </button>
+                        )}
+                    </div>
+                )}
+                {isEnded && isStaff && (
+                    <button type="button" className="secondary-button" style={{ width: "100%", marginTop: "0.75rem" }}
+                        onClick={() => onNavigate("simulationMonitor", simId)}>
+                        View simulation log
                     </button>
                 )}
             </main>

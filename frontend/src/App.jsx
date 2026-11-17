@@ -24,9 +24,12 @@ import SimulationList from "./pages/SimulationList.jsx";
 import SimulationBuilder from "./pages/SimulationBuilder.jsx";
 import SimulationMonitor from "./pages/SimulationMonitor.jsx";
 import SimulationLobby from "./pages/SimulationLobby.jsx";
+import SimulationLobbyManager from "./pages/SimulationLobbyManager.jsx";
+import SimulationLobbyWaiting from "./pages/SimulationLobbyWaiting.jsx";
 import FrontDeskSimBoard from "./pages/FrontDeskSimBoard.jsx";
 import MedSimBoard from "./pages/MedSimBoard.jsx";
 import SimulationPatientView from "./pages/SimulationPatientView.jsx";
+import PatientActorSim from "./pages/PatientActorSim.jsx";
 import AuditLog from "./pages/AuditLog.jsx";
 import { stopSimulation } from "./services/simulationService.js";
 
@@ -266,7 +269,8 @@ export default function App() {
         : nav.page === "studentCases" ? "studentCases"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
         : nav.page === "simulationList" || nav.page === "simulationBuilder" || nav.page === "simulationMonitor" ? "courses"
-        : nav.page === "simulationLobby" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
+        : nav.page === "simulationLobby" || nav.page === "simulationLobbyWaiting" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
+        : nav.page === "simulationLobbyManager" ? "courses"
         : nav.page === "auditLog" ? "auditLog"
         : "dashboard";
 
@@ -370,7 +374,15 @@ export default function App() {
             pageContent = <SimulationMonitor simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />;
             break;
         case "simulationLobby":
-            pageContent = <SimulationLobby simId={nav.id} onNavigate={navigate} />;
+            pageContent = <SimulationLobby simId={nav.id} onNavigate={navigate} isStaff={isAdmin || isInstructor} />;
+            break;
+        case "simulationLobbyManager":
+            pageContent = canManageCourses
+                ? <SimulationLobbyManager simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationLobbyWaiting":
+            pageContent = <SimulationLobbyWaiting simId={nav.id} onNavigate={navigate} />;
             break;
         case "frontDeskSim":
             pageContent = <FrontDeskSimBoard simId={nav.id} onNavigate={navigate} />;
@@ -382,41 +394,7 @@ export default function App() {
             pageContent = <SimulationPatientView encounterId={nav.id} simId={nav.simId} onNavigate={navigate} />;
             break;
         case "patientActorSim":
-            pageContent = (
-                <div className="emr-app">
-                    <main className="dashboard-main" style={{ maxWidth: "520px" }}>
-                        <section className="welcome-section">
-                            <p className="section-title">Active Simulation</p>
-                            <h2>Patient Actor</h2>
-                        </section>
-                        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
-                            <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🎭</div>
-                            <h3 style={{ marginTop: 0 }}>You are the patient actor</h3>
-                            <p style={{ color: "var(--text-muted)" }}>The full actor script view is coming in the next update. Walk up to the front desk when instructed.</p>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem", flexWrap: "wrap" }}>
-                            <button type="button" className="secondary-button"
-                                onClick={() => navigate("simulationLobby", nav.id)}>← Back to lobby</button>
-                            {(isAdmin || isInstructor) && (
-                                <button type="button"
-                                    style={{
-                                        background: "#dc2626", color: "#fff", border: "none",
-                                        borderRadius: "6px", padding: "0.5rem 1rem", fontWeight: 600,
-                                        cursor: "pointer", fontSize: "0.875rem"
-                                    }}
-                                    onClick={() => {
-                                        if (!confirm("End the simulation for all participants? This cannot be undone.")) return;
-                                        stopSimulation(nav.id)
-                                            .then(() => navigate("simulationList", null, { courseId: nav.courseId, courseName: nav.courseName }))
-                                            .catch((e) => alert(e.message));
-                                    }}>
-                                    End Simulation
-                                </button>
-                            )}
-                        </div>
-                    </main>
-                </div>
-            );
+            pageContent = <PatientActorSim simId={nav.id} onNavigate={navigate} />;
             break;
         case "auditLog":
             pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;

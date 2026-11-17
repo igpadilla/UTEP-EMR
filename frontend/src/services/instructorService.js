@@ -373,13 +373,31 @@ export async function getCourseSimulations(courseId) {
         .from("simulations")
         .select(`
             id, title, status, mode, started_at, ended_at, created_at,
-            simulation_participants ( user_id, sim_role )
+            simulation_participants ( user_id, sim_role, instructor_feedback, rubric_scores, reviewed_at, reviewed_by )
         `)
         .eq("course_id", courseId)
         .neq("status", "draft")
         .order("created_at", { ascending: false });
     if (error) throw error;
     return data || [];
+}
+
+export async function gradeSimParticipant(simId, userId, { score, feedback }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+        .from("simulation_participants")
+        .update({
+            rubric_scores: { score: score !== "" && score !== null ? Number(score) : null },
+            instructor_feedback: feedback?.trim() || null,
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+        })
+        .eq("simulation_id", simId)
+        .eq("user_id", userId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 }
 
 // ── Course Announcements ──────────────────────────────────────────────────────

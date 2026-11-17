@@ -28,6 +28,8 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
     const [title, setTitle] = useState("");
     const [endMode, setEndMode] = useState("workflow");
     const [duration, setDuration] = useState(30);
+    const [simType, setSimType] = useState("assigned"); // "assigned" | "lobby"
+    const [lobbyTemplateIds, setLobbyTemplateIds] = useState([]); // for lobby mode
 
     // [{userId, simRole, discipline}]
     const [participants, setParticipants] = useState([]);
@@ -63,6 +65,12 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
                     setTitle(sim.title);
                     setEndMode(sim.end_mode);
                     setDuration(sim.duration_minutes ?? 30);
+                    if (sim.sim_type) setSimType(sim.sim_type);
+                    if (sim.lobby_template_ids) {
+                        setLobbyTemplateIds(Array.isArray(sim.lobby_template_ids)
+                            ? sim.lobby_template_ids
+                            : JSON.parse(sim.lobby_template_ids));
+                    }
                     setParticipants(parts.map(p => ({
                         userId: p.participant?.user_id ?? p.user_id,
                         simRole: p.sim_role,
@@ -74,6 +82,7 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
                         medId: e.med_student?.user_id ?? "",
                         arrivalType: e.arrival_type,
                         scheduledTime: e.scheduled_time ? e.scheduled_time.slice(0, 5) : "",
+                        script: e.script ?? { narrative: "", checks: [] },
                     })));
                 }
             } catch (e) {
@@ -96,7 +105,7 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
     }
 
     function addEncounter() {
-        setEncounters(prev => [...prev, { templateId: "", actorId: "", medId: "", arrivalType: "scheduled", scheduledTime: "" }]);
+        setEncounters(prev => [...prev, { templateId: "", actorId: "", medId: "", arrivalType: "scheduled", scheduledTime: "", script: { narrative: "", checks: [] } }]);
     }
     function updateEncounter(i, field, value) {
         setEncounters(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
@@ -108,6 +117,11 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
     function validate() {
         if (!title.trim()) return "Title is required.";
         if (endMode === "timer" && (!duration || duration <= 0)) return "Duration must be a positive number.";
+        if (simType === "lobby") {
+            if (lobbyTemplateIds.length < 2) return "Lobby simulations need at least 2 templates (one per round).";
+            return null;
+        }
+        // Assigned mode validations
         const userIds = participants.map(p => p.userId).filter(Boolean);
         if (new Set(userIds).size < userIds.length) return "Each person can have only one role.";
         for (const p of participants) {
@@ -120,10 +134,22 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
             if (!e.medId) return "All encounters must have a med student assigned.";
             if (e.arrivalType === "scheduled" && !e.scheduledTime) return "Scheduled encounters require a time.";
             const actorIsParticipant = participants.some(p => p.userId === e.actorId && p.simRole === "patient_actor")
-                || (currentUser && e.actorId === currentUser.id); // instructor auto-added
+                || (currentUser && e.actorId === currentUser.id);
             if (!actorIsParticipant) return "Patient actor must be assigned the patient_actor role in Participants.";
             const medIsParticipant = participants.some(p => p.userId === e.medId && p.simRole === "med");
             if (!medIsParticipant) return "Med student must be assigned the med role in Participants.";
+        }
+        const actorCounts = {};
+        for (const e of encounters) {
+            if (!e.actorId) continue;
+            actorCounts[e.actorId] = (actorCounts[e.actorId] || 0) + 1;
+        }
+        for (const [userId, count] of Object.entries(actorCounts)) {
+            if (count > 1 && userId !== currentUser?.id) {
+                const s = allPeopleById[userId];
+                const name = s ? `${s.first_name} ${s.last_name}` : "A student";
+                return `${name} is assigned as patient actor in multiple encounters. Only the instructor can play more than one patient.`;
+            }
         }
         return null;
     }
@@ -154,13 +180,17 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
             sim_role: p.simRole,
             discipline: p.discipline || undefined,
         })));
-        await setSimEncounters(id, encounters.map(e => ({
-            template_id: e.templateId,
-            patient_actor_id: e.actorId,
-            assigned_med_id: e.medId,
-            arrival_type: e.arrivalType,
-            scheduled_time: e.arrivalType === "scheduled" ? e.scheduledTime : undefined,
-        })));
+        await setSimEncounters(id, encounters.map(e => {
+            const hasScript = e.script?.narrative?.trim() || e.script?.checks?.some(c => c.text?.trim());
+            return {
+                template_id: e.templateId,
+                patient_actor_id: e.actorId,
+                assigned_med_id: e.medId,
+                arrival_type: e.arrivalType,
+                scheduled_time: e.arrivalType === "scheduled" ? e.scheduledTime : undefined,
+                script: hasScript ? e.script : null,
+            };
+        }));
         return id;
     }
 
@@ -192,6 +222,34 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
         } finally {
             setStarting(false);
         }
+    }
+
+    async function handleOpenLobby() {
+        const err = validate();
+        if (err) { setError(err); return; }
+        setError(""); setStarting(true);
+        try {
+            const id = await createSimulation({
+                courseId,
+                title: title.trim(),
+                mode: "standard",
+                endMode,
+                durationMinutes: endMode === "timer" ? Number(duration) : null,
+                simType: "lobby",
+                lobbyTemplateIds: lobbyTemplateIds,
+            });
+            onNavigate("simulationLobbyManager", id, { courseId, courseName });
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setStarting(false);
+        }
+    }
+
+    function toggleLobbyTemplate(id) {
+        setLobbyTemplateIds(prev =>
+            prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+        );
     }
 
     const actorParticipants = participants.filter(p => p.simRole === "patient_actor" && p.userId);
@@ -256,14 +314,64 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
                             </div>
                         )}
                     </div>
-                    <div className="form-group" style={{ opacity: 0.5 }}>
-                        <label className="form-label">Mode</label>
-                        <select className="form-input" disabled>
-                            <option>Standard (pre-assigned encounters)</option>
-                            <option disabled>Chaos — coming soon</option>
+                    <div className="form-group">
+                        <label className="form-label" htmlFor="sim-type">Simulation type</label>
+                        <select id="sim-type" className="form-input"
+                            value={simType} onChange={e => setSimType(e.target.value)}
+                            disabled={!!simId}>
+                            <option value="assigned">Assigned — instructor sets roles and encounters</option>
+                            <option value="lobby">Lobby — students join and are randomly assigned roles</option>
                         </select>
+                        {!!simId && simType === "lobby" && (
+                            <p style={{ margin: "0.3rem 0 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                                Type cannot be changed after creation.
+                            </p>
+                        )}
                     </div>
                 </section>
+
+                {/* ── Lobby: template selection ── */}
+                {simType === "lobby" && (
+                    <section className="course-detail-section" style={{ marginBottom: "1.5rem", padding: "1.25rem" }}>
+                        <h4 style={{ marginTop: 0 }}>Patient Templates</h4>
+                        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                            Select the templates students will encounter. You need at least 2× as many templates
+                            as med students to support a role switch (round 2).
+                        </p>
+                        {templates.length === 0 ? (
+                            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                                No templates available for this course.
+                            </p>
+                        ) : (
+                            templates.map(t => (
+                                <label key={t.id} style={{
+                                    display: "flex", alignItems: "center", gap: "0.75rem",
+                                    padding: "0.6rem 0", borderBottom: "1px solid var(--border)",
+                                    cursor: "pointer", fontSize: "0.875rem"
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={lobbyTemplateIds.includes(t.id)}
+                                        onChange={() => toggleLobbyTemplate(t.id)}
+                                        style={{ width: "16px", height: "16px" }}
+                                    />
+                                    <span>
+                                        <strong>{t.last_name}, {t.first_name}</strong>
+                                        {" — "}{t.chief_complaint}
+                                    </span>
+                                </label>
+                            ))
+                        )}
+                        {lobbyTemplateIds.length > 0 && (
+                            <p style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "#0369a1", fontWeight: 600 }}>
+                                {lobbyTemplateIds.length} template{lobbyTemplateIds.length !== 1 ? "s" : ""} selected
+                                {lobbyTemplateIds.length >= 2
+                                    ? ` — supports up to ${Math.floor(lobbyTemplateIds.length / 2)} med students per round`
+                                    : " — select at least 2"}
+                            </p>
+                        )}
+                    </section>
+                )}
 
                 {/* ── Participants ── */}
                 <section className="course-detail-section" style={{ marginBottom: "1.5rem", padding: "1.25rem" }}>
@@ -390,18 +498,82 @@ export default function SimulationBuilder({ simId: initialSimId, courseId, cours
                                     </select>
                                 </div>
                             </div>
+
+                            {/* ── Script ── */}
+                            <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+                                <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Patient Script
+                                </p>
+                                <div className="form-group" style={{ marginBottom: "0.5rem" }}>
+                                    <label className="form-label">Narrative</label>
+                                    <textarea
+                                        className="form-input"
+                                        rows={3}
+                                        placeholder="Who is this patient? What should the actor say and do when approaching the front desk?"
+                                        value={e.script?.narrative ?? ""}
+                                        onChange={ev => updateEncounter(i, "script", { ...e.script, narrative: ev.target.value })}
+                                        style={{ resize: "vertical", fontFamily: "inherit" }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ marginBottom: "0.4rem", display: "block" }}>Checklist</label>
+                                    {(e.script?.checks ?? []).map((check, ci) => (
+                                        <div key={check.id} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.4rem" }}>
+                                            <input
+                                                className="form-input"
+                                                type="text"
+                                                placeholder={`Step ${ci + 1}`}
+                                                value={check.text}
+                                                onChange={ev => {
+                                                    const checks = e.script.checks.map((c, j) => j === ci ? { ...c, text: ev.target.value } : c);
+                                                    updateEncounter(i, "script", { ...e.script, checks });
+                                                }}
+                                                style={{ flex: 1 }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const checks = e.script.checks.filter((_, j) => j !== ci);
+                                                    updateEncounter(i, "script", { ...e.script, checks });
+                                                }}
+                                                style={{ color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 0.25rem" }}
+                                                aria-label="Remove check"
+                                            >✕</button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="secondary-button"
+                                        style={{ fontSize: "0.8rem", padding: "0.3rem 0.75rem", marginTop: "0.25rem" }}
+                                        onClick={() => {
+                                            const checks = [...(e.script?.checks ?? []), { id: `c${Date.now()}`, text: "" }];
+                                            updateEncounter(i, "script", { ...(e.script ?? { narrative: "" }), checks });
+                                        }}
+                                    >
+                                        + Add step
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </section>
 
                 {/* ── Actions ── */}
                 <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                    <button type="button" className="secondary-button" onClick={handleSaveDraft} disabled={saving || starting}>
-                        {saving ? "Saving…" : "Save draft"}
-                    </button>
-                    <button type="button" className="primary-button" onClick={handleStart} disabled={saving || starting}>
-                        {starting ? "Starting…" : "Start simulation"}
-                    </button>
+                    {simType === "assigned" && (
+                        <button type="button" className="secondary-button" onClick={handleSaveDraft} disabled={saving || starting}>
+                            {saving ? "Saving…" : "Save draft"}
+                        </button>
+                    )}
+                    {simType === "assigned" ? (
+                        <button type="button" className="primary-button" onClick={handleStart} disabled={saving || starting}>
+                            {starting ? "Starting…" : "Start simulation"}
+                        </button>
+                    ) : (
+                        <button type="button" className="primary-button" onClick={handleOpenLobby} disabled={starting}>
+                            {starting ? "Opening…" : "Open lobby →"}
+                        </button>
+                    )}
                 </div>
             </main>
         </div>

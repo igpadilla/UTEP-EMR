@@ -11,6 +11,7 @@ import {
     deleteAnnouncement,
     gradeCase,
     getCourseSimulations,
+    gradeSimParticipant,
 } from "../services/instructorService.js";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
@@ -93,6 +94,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
     const [simGrade, setSimGrade] = useState(null); // { sim, student, events, loading }
     const [simGradeFeedback, setSimGradeFeedback] = useState("");
     const [simGradeScore, setSimGradeScore] = useState("");
+    const [simGradeSubmitting, setSimGradeSubmitting] = useState(false);
+    const [simGradeError, setSimGradeError] = useState("");
 
     // Gradebook drill-down
     const [gradebookStudent, setGradebookStudent] = useState(null);
@@ -284,6 +287,31 @@ export default function CourseDetail({ courseId, onNavigate }) {
     }
 
     // ── Sim grading ──────────────────────────────────────────────────────────
+    async function handleSimGradeSubmit() {
+        setSimGradeSubmitting(true);
+        setSimGradeError("");
+        try {
+            const updated = await gradeSimParticipant(simGrade.sim.id, simGrade.student.user_id, {
+                score: simGradeScore,
+                feedback: simGradeFeedback,
+            });
+            // Update local courseSimulations state so the card reflects the new grade
+            setCourseSimulations((prev) => prev.map((s) => {
+                if (s.id !== simGrade.sim.id) return s;
+                return {
+                    ...s,
+                    simulation_participants: s.simulation_participants.map((p) =>
+                        p.user_id === simGrade.student.user_id ? { ...p, ...updated } : p
+                    ),
+                };
+            }));
+            setSimGrade(null);
+        } catch (e) {
+            setSimGradeError(e.message || "Failed to save grade.");
+        }
+        setSimGradeSubmitting(false);
+    }
+
     async function openSimGrade(sim, student) {
         const participation = sim.simulation_participants?.find(p => p.user_id === student.user_id);
         setSimGrade({ sim, student, participation, events: null, assignedCase: null, loading: true });
@@ -1066,6 +1094,8 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                             {studentSims.map((sim) => {
                                                 const participation = sim.simulation_participants?.find(p => p.user_id === gradebookStudent.user_id);
                                                 const roleLabel = SIM_ROLE_LABEL[participation?.sim_role] ?? participation?.sim_role ?? "Participant";
+                                                const graded = !!participation?.reviewed_at;
+                                                const score = participation?.rubric_scores?.score;
                                                 return (
                                                     <div key={sim.id} style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.875rem 1rem", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -1076,22 +1106,39 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                                                     {sim.ended_at && ` · ${formatDate(sim.ended_at)}`}
                                                                 </div>
                                                                 <div style={{ marginTop: "0.35rem" }}>
-                                                                    <span className="instructor-status-badge" style={{ background: "#fef3c7", color: "#b45309" }}>
-                                                                        Pending Grade
+                                                                    <span className="instructor-status-badge" style={graded
+                                                                        ? { background: "#ecfdf5", color: "#047857" }
+                                                                        : { background: "#fef3c7", color: "#b45309" }}>
+                                                                        {graded ? "Graded" : "Pending Grade"}
                                                                     </span>
                                                                 </div>
                                                             </div>
-                                                            <div style={{ textAlign: "right" }}>
-                                                                <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "0.4rem" }}>Not graded yet</span>
+                                                            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.4rem" }}>
+                                                                {graded && score != null ? (
+                                                                    <>
+                                                                        <div style={{ fontSize: "1.4rem", fontWeight: 700, lineHeight: 1 }}>
+                                                                            {score}<span style={{ fontSize: "0.9rem", fontWeight: 400, color: "var(--text-muted)" }}>/100</span>
+                                                                        </div>
+                                                                        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{score}%</div>
+                                                                    </>
+                                                                ) : (
+                                                                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Not graded yet</span>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     className="instructor-action-btn instructor-action-edit"
                                                                     onClick={() => { setGradebookStudent(null); openSimGrade(sim, gradebookStudent); }}
                                                                 >
-                                                                    Grade
+                                                                    {graded ? "Edit Grade" : "Grade"}
                                                                 </button>
                                                             </div>
                                                         </div>
+                                                        {graded && participation?.instructor_feedback && (
+                                                            <div style={{ borderTop: "1px solid #e2e8f0", padding: "0.75rem 1rem", background: "#f8fafc" }}>
+                                                                <div style={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Instructor Feedback</div>
+                                                                <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{participation.instructor_feedback}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -1349,10 +1396,11 @@ export default function CourseDetail({ courseId, onNavigate }) {
                                 style={{ resize: "vertical", fontFamily: "inherit", fontSize: "0.875rem", padding: "0.5rem 0.75rem", border: "1px solid var(--border)", borderRadius: "0.375rem", width: "100%", boxSizing: "border-box" }}
                             />
                         </div>
+                        {simGradeError && <p className="form-message form-message--error" style={{ margin: 0 }}>{simGradeError}</p>}
                         <div style={{ display: "flex", gap: "0.75rem" }}>
-                            <button type="button" className="secondary-action-button" onClick={() => setSimGrade(null)}>Cancel</button>
-                            <button type="button" className="primary-action-button" disabled style={{ opacity: 0.5, cursor: "not-allowed" }}>
-                                Save Grade (coming soon)
+                            <button type="button" className="secondary-action-button" onClick={() => setSimGrade(null)} disabled={simGradeSubmitting}>Cancel</button>
+                            <button type="button" className="primary-action-button" onClick={handleSimGradeSubmit} disabled={simGradeSubmitting}>
+                                {simGradeSubmitting ? "Saving…" : "Save Grade"}
                             </button>
                         </div>
                     </div>

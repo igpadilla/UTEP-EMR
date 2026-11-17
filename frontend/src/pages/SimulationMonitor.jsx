@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { supabase } from "../supabase.js";
 import {
     getSimulation,
     getSimEncounters,
     getSimEvents,
     stopSimulation,
+    switchSimRound,
+    updateScriptProgress,
     subscribeToSimulation,
 } from "../services/simulationService.js";
 
@@ -43,8 +46,11 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
     const [encounters, setEncounters] = useState([]);
     const [events, setEvents] = useState([]);
     const [now, setNow] = useState(Date.now());
+    const [currentUserId, setCurrentUserId] = useState(null);
+    const [scriptSaving, setScriptSaving] = useState({});
     const [confirmStop, setConfirmStop] = useState(false);
     const [stopping, setStopping] = useState(false);
+    const [switching, setSwitching] = useState(false);
     const [error, setError] = useState("");
     const unsubRef = useRef(null);
 
@@ -64,6 +70,9 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
     }
 
     useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            if (user) setCurrentUserId(user.id);
+        });
         load();
         unsubRef.current = subscribeToSimulation(simId, load);
         const ticker = setInterval(() => setNow(Date.now()), 1000);
@@ -72,6 +81,24 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
             clearInterval(ticker);
         };
     }, [simId]);
+
+    async function handleToggleCheck(encounterId, checkId, currentProgress) {
+        const checked = Array.isArray(currentProgress) ? currentProgress : [];
+        const next = checked.includes(checkId)
+            ? checked.filter(id => id !== checkId)
+            : [...checked, checkId];
+        setScriptSaving(s => ({ ...s, [encounterId]: true }));
+        try {
+            await updateScriptProgress(encounterId, next);
+            setEncounters(prev => prev.map(e =>
+                e.id === encounterId ? { ...e, script_progress: next } : e
+            ));
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setScriptSaving(s => ({ ...s, [encounterId]: false }));
+        }
+    }
 
     async function handleStop() {
         setStopping(true);
@@ -82,6 +109,18 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
             setError(e.message);
         } finally {
             setStopping(false);
+        }
+    }
+
+    async function handleSwitchRound() {
+        setSwitching(true);
+        setError("");
+        try {
+            await switchSimRound(simId);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setSwitching(false);
         }
     }
 
@@ -97,6 +136,10 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
         acc[s] = encounters.filter(e => e.status === s);
         return acc;
     }, {});
+
+    const myActorEncounters = currentUserId
+        ? encounters.filter(e => e.actor?.user_id === currentUserId)
+        : [];
 
     return (
         <div className="emr-app">
@@ -119,6 +162,23 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                                 fontSize: "1.25rem"
                             }}>
                                 ⏱ {timeLeftLabel}
+                            </span>
+                        )}
+                        {isActive && sim?.sim_type === "lobby" && sim?.current_round === 1 && (
+                            <button type="button"
+                                style={{
+                                    background: "#2563eb", color: "#fff", border: "none",
+                                    borderRadius: "6px", padding: "0.5rem 1rem", fontWeight: 600,
+                                    cursor: "pointer", fontSize: "0.875rem"
+                                }}
+                                onClick={handleSwitchRound}
+                                disabled={switching}>
+                                {switching ? "Switching…" : "Switch Roles →"}
+                            </button>
+                        )}
+                        {isActive && sim?.sim_type === "lobby" && sim?.current_round > 1 && (
+                            <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "0.4rem 0.9rem", borderRadius: "6px", fontWeight: 600, fontSize: "0.875rem" }}>
+                                Round {sim.current_round}
                             </span>
                         )}
                         {isActive && (
@@ -177,6 +237,10 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                         </div>
                     </div>
                 )}
+
+                {/* ── Main content + script sidebar ── */}
+                <div style={{ display: "grid", gridTemplateColumns: myActorEncounters.length > 0 ? "1fr 280px" : "1fr", gap: "1.25rem", alignItems: "start" }}>
+                <div>
 
                 {/* ── Kanban board ── */}
                 <div style={{ display: "flex", gap: "0.75rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
@@ -280,6 +344,91 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                         })}
                     </div>
                 </section>
+
+                </div>{/* end left column */}
+
+                {/* ── Script sidebar (instructor as patient actor) ── */}
+                {myActorEncounters.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        <h4 style={{ margin: 0 }}>Your script</h4>
+                        {myActorEncounters.map((enc, idx) => {
+                            const script = enc.script ?? {};
+                            const checks = script.checks ?? [];
+                            const progress = Array.isArray(enc.script_progress) ? enc.script_progress : [];
+                            const doneCount = checks.filter(c => progress.includes(c.id)).length;
+                            const pt = enc.patient_templates;
+                            return (
+                                <section key={enc.id} className="course-detail-section">
+                                    <div style={{ padding: "0.6rem 1rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                                {myActorEncounters.length > 1 ? `Patient ${idx + 1}` : "Your patient"}
+                                            </p>
+                                            <strong style={{ fontSize: "0.9rem" }}>{pt ? `${pt.first_name} ${pt.last_name}` : "—"}</strong>
+                                        </div>
+                                        {checks.length > 0 && (
+                                            <span style={{
+                                                fontSize: "0.75rem", fontWeight: 600,
+                                                padding: "0.15rem 0.5rem", borderRadius: "999px",
+                                                background: doneCount === checks.length ? "#dcfce7" : "#fef9c3",
+                                                color: doneCount === checks.length ? "#15803d" : "#854d0e",
+                                            }}>
+                                                {doneCount}/{checks.length}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ padding: "0.75rem 1rem" }}>
+                                        {script.narrative?.trim() && (
+                                            <p style={{
+                                                margin: "0 0 0.75rem", fontSize: "0.8rem", lineHeight: 1.5,
+                                                whiteSpace: "pre-wrap", color: "var(--text)"
+                                            }}>
+                                                {script.narrative}
+                                            </p>
+                                        )}
+                                        {checks.length > 0 && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                                                {checks.map(check => {
+                                                    const checked = progress.includes(check.id);
+                                                    return (
+                                                        <label key={check.id} style={{
+                                                            display: "flex", alignItems: "center", gap: "0.6rem",
+                                                            padding: "0.4rem 0.5rem", borderRadius: "6px",
+                                                            background: checked ? "#f0fdf4" : "#fff",
+                                                            border: `1px solid ${checked ? "#bbf7d0" : "var(--border)"}`,
+                                                            cursor: isEnded ? "default" : "pointer",
+                                                            opacity: scriptSaving[enc.id] ? 0.6 : 1,
+                                                            fontSize: "0.8rem",
+                                                        }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                disabled={isEnded || scriptSaving[enc.id]}
+                                                                onChange={() => handleToggleCheck(enc.id, check.id, progress)}
+                                                                style={{ width: "0.875rem", height: "0.875rem", accentColor: "#16a34a", flexShrink: 0 }}
+                                                            />
+                                                            <span style={{
+                                                                textDecoration: checked ? "line-through" : "none",
+                                                                color: checked ? "var(--text-muted)" : "var(--text)",
+                                                            }}>
+                                                                {check.text}
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                        {!script.narrative?.trim() && checks.length === 0 && (
+                                            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)" }}>No script provided.</p>
+                                        )}
+                                    </div>
+                                </section>
+                            );
+                        })}
+                    </div>
+                )}
+
+                </div>{/* end grid */}
             </main>
         </div>
     );

@@ -3,6 +3,7 @@ import { getSimulationsForCourse } from "../services/simulationService.js";
 
 const STATUS_BADGE = {
     draft:  { label: "Draft",  background: "#e0f2fe", color: "#0369a1" },
+    lobby:  { label: "Lobby",  background: "#fef9c3", color: "#854d0e" },
     active: { label: "Active", background: "#dcfce7", color: "#15803d" },
     ended:  { label: "Ended",  background: "#f1f5f9", color: "#64748b" },
 };
@@ -26,6 +27,8 @@ export default function SimulationList({ courseId, courseName, onNavigate }) {
     function openSim(sim) {
         if (sim.status === "draft") {
             onNavigate("simulationBuilder", sim.id, { courseId, courseName });
+        } else if (sim.status === "lobby") {
+            onNavigate("simulationLobbyManager", sim.id, { courseId, courseName });
         } else {
             onNavigate("simulationMonitor", sim.id, { courseId, courseName });
         }
@@ -54,8 +57,7 @@ export default function SimulationList({ courseId, courseName, onNavigate }) {
 
             {sims.length === 0 ? (
                 <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
-                    <div className="patients-empty-icon" aria-hidden="true">🎬</div>
-                    <strong>No simulations yet</strong>
+                        <strong>No simulations yet</strong>
                     <p>Create a simulation to run a live front-desk workflow exercise in class.</p>
                     <button
                         type="button"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getMyCourseCases } from "../services/instructorService.js";
-import { getMyActiveSimulations } from "../services/simulationService.js";
+import { getMyActiveSimulations, getOpenLobbiesForCourse, getMyLobbyMembership, joinSimLobby, getMySimsForCourse, getMySimSummary } from "../services/simulationService.js";
 import StudentCases from "./StudentCases.jsx";
 
 const DISCIPLINE_BANNERS = {
@@ -49,8 +49,20 @@ const TABS = [
     { id: "home", label: "Home" },
     { id: "cases", label: "Cases" },
     { id: "gradebook", label: "Gradebook" },
+    { id: "simulations", label: "Simulations" },
     { id: "announcements", label: "Announcements", disabled: true },
 ];
+
+const SIM_STATUS_BADGE = {
+    lobby:  { label: "Lobby",  background: "#fef9c3", color: "#854d0e" },
+    active: { label: "Active", background: "#dcfce7", color: "#15803d" },
+    ended:  { label: "Ended",  background: "#f1f5f9", color: "#64748b" },
+};
+
+function formatSimDate(iso) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 function formatDate(iso) {
     if (!iso) return null;
@@ -76,12 +88,42 @@ export default function StudentCourseDetail({ course, onNavigate }) {
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState("home");
     const [activeSims, setActiveSims] = useState([]);
+    const [openLobbies, setOpenLobbies] = useState([]);
+    const [joiningLobby, setJoiningLobby] = useState(null);
+    const [mySims, setMySims] = useState([]);
+    const [expandedSimId, setExpandedSimId] = useState(null);
+    const [simSummaries, setSimSummaries] = useState({});
+
+    async function handleExpandSim(simId) {
+        if (expandedSimId === simId) { setExpandedSimId(null); return; }
+        setExpandedSimId(simId);
+        if (!simSummaries[simId]) {
+            const summary = await getMySimSummary(simId).catch(() => null);
+            if (summary) setSimSummaries(prev => ({ ...prev, [simId]: summary }));
+        }
+    }
 
     useEffect(() => {
         getMyActiveSimulations()
             .then(sims => setActiveSims(sims.filter(s => s.simulations?.course_id === course.id)))
             .catch(() => {});
+        getOpenLobbiesForCourse(course.id)
+            .then(setOpenLobbies)
+            .catch(() => {});
+        getMySimsForCourse(course.id)
+            .then(setMySims)
+            .catch(() => {});
     }, [course.id]);
+
+    async function handleJoinLobby(simId) {
+        setJoiningLobby(simId);
+        try {
+            await joinSimLobby(simId);
+            onNavigate("simulationLobbyWaiting", simId);
+        } catch (e) {
+            setJoiningLobby(null);
+        }
+    }
 
     useEffect(() => {
         getMyCourseCases(course.id)
@@ -138,6 +180,22 @@ export default function StudentCourseDetail({ course, onNavigate }) {
 
             {error && <p className="form-message form-message-error" style={{ margin: "1rem 2rem" }}>{error}</p>}
 
+            {openLobbies.map(sim => (
+                <div key={sim.id}
+                    style={{ background: "#fefce8", border: "1px solid #fde68a", borderRadius: "8px",
+                        padding: "0.75rem 1.25rem", margin: "1rem 2rem 0",
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                    <span style={{ fontWeight: 600, color: "#854d0e" }}>
+                        Lobby open: {sim.title}
+                    </span>
+                    <button type="button" className="primary-button"
+                        style={{ padding: "0.35rem 0.9rem", fontSize: "0.875rem", background: "#d97706" }}
+                        disabled={joiningLobby === sim.id}
+                        onClick={() => handleJoinLobby(sim.id)}>
+                        {joiningLobby === sim.id ? "Joining…" : "Join lobby →"}
+                    </button>
+                </div>
+            ))}
             {activeSims.map(p => (
                 <div key={p.simulation_id}
                     style={{ background: "#dcfce7", border: "1px solid #86efac", borderRadius: "8px",
@@ -397,6 +455,189 @@ export default function StudentCourseDetail({ course, onNavigate }) {
                                                         <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
                                                             {c.encounter_status === "pending review" ? "Awaiting instructor review." : "No feedback recorded."}
                                                         </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── SIMULATIONS ── */}
+                    {activeTab === "simulations" && (
+                        <div>
+                            <div className="course-tab-header">
+                                <div>
+                                    <h3 className="course-tab-title">Simulations</h3>
+                                    <p className="course-tab-subtitle">Simulations you have participated in</p>
+                                </div>
+                            </div>
+
+                            {mySims.length === 0 ? (
+                                <div className="patients-empty-state" style={{ padding: "3rem 1.25rem" }}>
+                                    <strong>No simulations yet.</strong>
+                                    <p>You haven't participated in any simulations for this course.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "0 1.25rem 1.25rem" }}>
+                                    {mySims.map(sim => {
+                                        const badge = SIM_STATUS_BADGE[sim.status] ?? SIM_STATUS_BADGE.ended;
+                                        const isOpen = expandedSimId === sim.id;
+                                        const summary = simSummaries[sim.id];
+
+                                        // Build per-round activity from summary
+                                        const rounds = summary
+                                            ? summary.participants.map(p => {
+                                                const medEncs = summary.medEncounters.filter(e => e.round === p.round);
+                                                const fdEncs  = summary.frontDeskEncounters.filter(e => e.round === p.round);
+                                                const actEncs = summary.actorEncounters.filter(e => e.round === p.round);
+                                                return { ...p, medEncs, fdEncs, actEncs };
+                                            })
+                                            : [];
+
+                                        return (
+                                            <div key={sim.id} className="course-detail-section">
+                                                {/* Header row — click to expand */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleExpandSim(sim.id)}
+                                                    style={{
+                                                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                                                        padding: "0.875rem 1.25rem", width: "100%", textAlign: "left",
+                                                        background: "none", border: "none", cursor: "pointer", gap: "1rem"
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--text)" }}>
+                                                            {sim.title}
+                                                        </div>
+                                                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                                                            {sim.started_at ? `Started ${formatSimDate(sim.started_at)}` : `Created ${formatSimDate(sim.created_at)}`}
+                                                            {sim.ended_at ? ` · Ended ${formatSimDate(sim.ended_at)}` : ""}
+                                                            {sim.current_round > 1 ? ` · ${sim.current_round} rounds` : ""}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+                                                        <span style={{
+                                                            ...badge,
+                                                            padding: "0.2rem 0.65rem", borderRadius: "999px",
+                                                            fontSize: "0.72rem", fontWeight: 600
+                                                        }}>
+                                                            {badge.label}
+                                                        </span>
+                                                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                                            {isOpen ? "▲" : "▼"}
+                                                        </span>
+                                                    </div>
+                                                </button>
+
+                                                {/* Expanded detail */}
+                                                {isOpen && (
+                                                    <div style={{ borderTop: "1px solid var(--border)", padding: "1rem 1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                                        {!summary && (
+                                                            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>Loading…</p>
+                                                        )}
+                                                        {summary && rounds.length === 0 && (
+                                                            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>No participation data found.</p>
+                                                        )}
+                                                        {rounds.map((r, i) => (
+                                                            <div key={i}>
+                                                                {rounds.length > 1 && (
+                                                                    <div style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                                                                        Round {r.round}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Role badge */}
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" }}>
+                                                                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Role</span>
+                                                                    <span style={{
+                                                                        fontSize: "0.78rem", fontWeight: 600, padding: "0.15rem 0.55rem", borderRadius: "999px",
+                                                                        ...(r.sim_role === "med"           ? { background: "#e0f2fe", color: "#0369a1" } :
+                                                                            r.sim_role === "front_desk"    ? { background: "#ede9fe", color: "#7c3aed" } :
+                                                                            r.sim_role === "patient_actor" ? { background: "#ccfbf1", color: "#0f766e" } :
+                                                                                                             { background: "#f1f5f9", color: "#64748b" })
+                                                                    }}>
+                                                                        {r.sim_role === "med" ? "Med Student" :
+                                                                         r.sim_role === "front_desk" ? "Front Desk" :
+                                                                         r.sim_role === "patient_actor" ? "Patient Actor" : "Observer"}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Med encounters */}
+                                                                {r.medEncs.length > 0 && (
+                                                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                                                        <div style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>Patient seen</div>
+                                                                        {r.medEncs.map(enc => {
+                                                                            const tpl = enc.patient_templates;
+                                                                            const done = !!enc.med_completed_at;
+                                                                            return (
+                                                                                <div key={enc.id} style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem 0.875rem" }}>
+                                                                                    <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+                                                                                        {tpl ? `${tpl.first_name} ${tpl.last_name}` : "Unknown patient"}
+                                                                                    </div>
+                                                                                    {tpl?.chief_complaint && (
+                                                                                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>{tpl.chief_complaint}</div>
+                                                                                    )}
+                                                                                    <div style={{ marginTop: "0.35rem" }}>
+                                                                                        <span style={{
+                                                                                            fontSize: "0.7rem", fontWeight: 600, padding: "0.1rem 0.45rem", borderRadius: "999px",
+                                                                                            background: done ? "#ecfdf5" : "#fef9c3",
+                                                                                            color:      done ? "#047857" : "#854d0e"
+                                                                                        }}>
+                                                                                            {done ? "Completed" : "In progress"}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Front desk encounters */}
+                                                                {r.fdEncs.length > 0 && (
+                                                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                                                        <div style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>Patients checked in</div>
+                                                                        {r.fdEncs.map(enc => {
+                                                                            const tpl = enc.patient_templates;
+                                                                            return (
+                                                                                <div key={enc.id} style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem 0.875rem", fontSize: "0.875rem" }}>
+                                                                                    <span style={{ fontWeight: 600 }}>{tpl ? `${tpl.first_name} ${tpl.last_name}` : "Unknown patient"}</span>
+                                                                                    {tpl?.chief_complaint && (
+                                                                                        <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}> · {tpl.chief_complaint}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Patient actor encounters */}
+                                                                {r.actEncs.length > 0 && (
+                                                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                                                        <div style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>Portrayed patient</div>
+                                                                        {r.actEncs.map(enc => {
+                                                                            const tpl = enc.patient_templates;
+                                                                            return (
+                                                                                <div key={enc.id} style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem 0.875rem", fontSize: "0.875rem" }}>
+                                                                                    <span style={{ fontWeight: 600 }}>{tpl ? `${tpl.first_name} ${tpl.last_name}` : "Unknown patient"}</span>
+                                                                                    {tpl?.chief_complaint && (
+                                                                                        <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}> · {tpl.chief_complaint}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Observer or no encounters yet */}
+                                                                {r.sim_role === "observer" && r.medEncs.length === 0 && r.fdEncs.length === 0 && r.actEncs.length === 0 && (
+                                                                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>You observed this simulation.</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )}
                                             </div>

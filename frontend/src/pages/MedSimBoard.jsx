@@ -4,6 +4,7 @@ import {
     getSimulation,
     getSimEncounters,
     openSimCase,
+    completeMedEncounter,
     subscribeToSimulation,
 } from "../services/simulationService.js";
 
@@ -26,7 +27,8 @@ export default function MedSimBoard({ simId, onNavigate }) {
     const [toast, setToast] = useState(null);
     const [now, setNow] = useState(Date.now());
     const [error, setError] = useState("");
-    const [opening, setOpening] = useState(null); // encounterId being opened
+    const [opening, setOpening] = useState(null);    // encounterId being opened
+    const [completing, setCompleting] = useState(null); // encounterId being marked done
     const prevRef = useRef([]);
     const toastTimer = useRef(null);
     const unsubRef = useRef(null);
@@ -43,6 +45,17 @@ export default function MedSimBoard({ simId, onNavigate }) {
             setEncounters(encData);
         } catch (e) {
             setError(e.message);
+        }
+    }
+
+    async function handleComplete(enc) {
+        setCompleting(enc.id);
+        try {
+            await completeMedEncounter(enc.id);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setCompleting(null);
         }
     }
 
@@ -240,20 +253,47 @@ export default function MedSimBoard({ simId, onNavigate }) {
                                             {enc.status.replace(/_/g, " ")}
                                         </span>
 
-                                        <span>
+                                        <span style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
                                             {isMyPatient ? (
-                                                <button type="button"
-                                                    className="primary-button"
-                                                    style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
-                                                    disabled={opening === enc.id}
-                                                    onClick={() => handleSeePatient(enc)}>
-                                                    {opening === enc.id ? "Opening…" : "See patient →"}
-                                                </button>
+                                                enc.status === "med_complete" ? (
+                                                    <span style={{
+                                                        fontSize: "0.75rem", fontWeight: 600,
+                                                        background: "#dcfce7", color: "#15803d",
+                                                        padding: "0.2rem 0.6rem", borderRadius: "999px"
+                                                    }}>
+                                                        Done
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        <button type="button"
+                                                            className="secondary-button"
+                                                            style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
+                                                            disabled={opening === enc.id || completing === enc.id}
+                                                            onClick={() => handleSeePatient(enc)}>
+                                                            {opening === enc.id ? "Opening…" : "View chart"}
+                                                        </button>
+                                                        {enc.status === "in_progress" && (
+                                                            <button type="button"
+                                                                className="primary-button"
+                                                                style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
+                                                                disabled={completing === enc.id || opening === enc.id}
+                                                                onClick={() => handleComplete(enc)}>
+                                                                {completing === enc.id ? "Saving…" : "Mark as seen"}
+                                                            </button>
+                                                        )}
+                                                        {enc.status === "checked_in" && (
+                                                            <button type="button"
+                                                                className="primary-button"
+                                                                style={{ padding: "0.4rem 0.75rem", fontSize: "0.8rem" }}
+                                                                disabled={opening === enc.id}
+                                                                onClick={() => handleSeePatient(enc)}>
+                                                                {opening === enc.id ? "Opening…" : "See patient →"}
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )
                                             ) : (
-                                                <span style={{
-                                                    fontSize: "0.75rem",
-                                                    color: "var(--text-muted)"
-                                                }}>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                                                     Another student's patient
                                                 </span>
                                             )}

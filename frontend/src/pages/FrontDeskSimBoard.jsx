@@ -3,6 +3,7 @@ import {
     getSimulation,
     getSimEncounters,
     checkInEncounter,
+    dischargeEncounter,
     subscribeToSimulation,
 } from "../services/simulationService.js";
 import RoomsSlot from "../components/simulation/RoomsSlot.jsx";
@@ -27,6 +28,7 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
     const [encounters, setEncounters] = useState([]);
     const [selected, setSelected] = useState(null); // encounter id
     const [checkingIn, setCheckingIn] = useState(false);
+    const [discharging, setDischarging] = useState(false);
     const [error, setError] = useState("");
     const unsubRef = useRef(null);
 
@@ -60,6 +62,20 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
             setError(e.message);
         } finally {
             setCheckingIn(false);
+        }
+    }
+
+    async function handleDischarge() {
+        if (!selected) return;
+        setDischarging(true);
+        setError("");
+        try {
+            await dischargeEncounter(selected);
+            setSelected(null);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setDischarging(false);
         }
     }
 
@@ -165,33 +181,39 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                         <span>Checked in</span>
                                         <span>Room</span>
                                     </div>
-                                    {checkedIn.map(enc => (
-                                        <div key={enc.id} style={{
-                                            display: "grid",
-                                            gridTemplateColumns: "1fr 100px 100px",
-                                            padding: "0.75rem 1.25rem",
-                                            borderBottom: "1px solid var(--border)",
-                                            alignItems: "center", fontSize: "0.875rem",
-                                            background: enc.status === "med_complete" ? "#f0fdf4" : "#fff"
-                                        }}>
-                                            <span>
-                                                <strong>{patientName(enc)}</strong>
-                                                {enc.status === "med_complete" && (
+                                    {checkedIn.map(enc => {
+                                        const canDischarge = enc.status === "med_complete";
+                                        const isDischarged = enc.status === "discharged";
+                                        const isSelected = selected === enc.id;
+                                        return (
+                                            <div key={enc.id}
+                                                onClick={() => !isEnded && canDischarge && setSelected(isSelected ? null : enc.id)}
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "1fr 100px 110px",
+                                                    padding: "0.75rem 1.25rem",
+                                                    borderBottom: "1px solid var(--border)",
+                                                    alignItems: "center", fontSize: "0.875rem",
+                                                    background: isSelected ? "#eff6ff" : canDischarge ? "#f0fdf4" : "#fff",
+                                                    borderLeft: isSelected ? "3px solid #2563eb" : canDischarge ? "3px solid #15803d" : "3px solid transparent",
+                                                    cursor: canDischarge && !isEnded ? "pointer" : "default",
+                                                }}>
+                                                <span>
+                                                    <strong>{patientName(enc)}</strong>
                                                     <span style={{
-                                                        marginLeft: "0.5rem", fontSize: "0.75rem",
-                                                        color: "#15803d", fontWeight: 600
+                                                        marginLeft: "0.5rem", fontSize: "0.72rem", fontWeight: 600,
+                                                        color: isDischarged ? "#64748b" : canDischarge ? "#15803d" : "var(--text-muted)"
                                                     }}>
-                                                        ✓ Ready for discharge
+                                                        {isDischarged ? "Discharged" : canDischarge ? "Ready for discharge" : enc.status.replace(/_/g, " ")}
                                                     </span>
-                                                )}
-                                            </span>
-                                            <span style={{ color: "var(--text-muted)" }}>
-                                                {formatCheckedInTime(enc.checked_in_at)}
-                                            </span>
-                                            {/* Rooms placeholder — Rooms team replaces this column */}
-                                            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>
-                                        </div>
-                                    ))}
+                                                </span>
+                                                <span style={{ color: "var(--text-muted)" }}>
+                                                    {formatCheckedInTime(enc.checked_in_at)}
+                                                </span>
+                                                <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>
+                                            </div>
+                                        );
+                                    })}
                                 </>
                             )}
                         </section>
@@ -204,7 +226,9 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                             borderRadius: "12px", padding: "1.25rem", alignSelf: "start"
                         }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                                <h4 style={{ margin: 0 }}>Check-in</h4>
+                                <h4 style={{ margin: 0 }}>
+                                    {selectedEnc.status === "med_complete" ? "Discharge" : "Check-in"}
+                                </h4>
                                 <button type="button" onClick={() => setSelected(null)}
                                     style={{
                                         background: "none", border: "none", cursor: "pointer",
@@ -232,40 +256,105 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                 )}
                             </div>
 
-                            <div style={{ marginBottom: "1rem" }}>
-                                <p style={{
-                                    margin: "0 0 0.5rem", fontSize: "0.8rem", fontWeight: 600,
-                                    textTransform: "uppercase", letterSpacing: "0.04em",
-                                    color: "var(--text-muted)"
-                                }}>
-                                    Scheduled time
-                                </p>
-                                <p style={{ margin: 0, fontWeight: 700, color: "#2563eb" }}>
-                                    {formatTime(selectedEnc.scheduled_time)}
-                                </p>
-                            </div>
+                            {selectedEnc.status === "med_complete" ? (
+                                <>
+                                    <div style={{
+                                        display: "flex", flexDirection: "column", gap: "0.4rem",
+                                        marginBottom: "1.25rem", fontSize: "0.875rem"
+                                    }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                            <span style={{ color: "var(--text-muted)" }}>Checked in</span>
+                                            <span>{formatCheckedInTime(selectedEnc.checked_in_at)}</span>
+                                        </div>
+                                        {selectedEnc.med_completed_at && (
+                                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                <span style={{ color: "var(--text-muted)" }}>Seen by provider</span>
+                                                <span>{formatCheckedInTime(selectedEnc.med_completed_at)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{
+                                        background: "#f0fdf4", border: "1px solid #bbf7d0",
+                                        borderRadius: "8px", padding: "0.75rem 1rem",
+                                        marginBottom: "1.25rem", fontSize: "0.875rem", color: "#15803d", fontWeight: 500
+                                    }}>
+                                        Provider has completed the visit. Patient is ready to be discharged.
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="primary-button"
+                                        style={{ width: "100%" }}
+                                        onClick={handleDischarge}
+                                        disabled={discharging || isEnded}
+                                    >
+                                        {discharging ? "Discharging…" : "Discharge patient"}
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ marginBottom: "1rem" }}>
+                                        <p style={{
+                                            margin: "0 0 0.5rem", fontSize: "0.8rem", fontWeight: 600,
+                                            textTransform: "uppercase", letterSpacing: "0.04em",
+                                            color: "var(--text-muted)"
+                                        }}>
+                                            Scheduled time
+                                        </p>
+                                        <p style={{ margin: 0, fontWeight: 700, color: "#2563eb" }}>
+                                            {formatTime(selectedEnc.scheduled_time)}
+                                        </p>
+                                    </div>
 
-                            {/* Rooms handoff point */}
-                            <div style={{ marginBottom: "1rem" }}>
-                                <p style={{
-                                    margin: "0 0 0.5rem", fontSize: "0.8rem", fontWeight: 600,
-                                    textTransform: "uppercase", letterSpacing: "0.04em",
-                                    color: "var(--text-muted)"
-                                }}>
-                                    Room
-                                </p>
-                                <RoomsSlot encounterId={selectedEnc.id} simulationId={simId} />
-                            </div>
+                                    <div style={{ marginBottom: "1rem" }}>
+                                        <p style={{
+                                            margin: "0 0 0.5rem", fontSize: "0.8rem", fontWeight: 600,
+                                            textTransform: "uppercase", letterSpacing: "0.04em",
+                                            color: "var(--text-muted)"
+                                        }}>
+                                            Room
+                                        </p>
+                                        <RoomsSlot encounterId={selectedEnc.id} simulationId={simId} />
+                                    </div>
 
-                            <button
-                                type="button"
-                                className="primary-button"
-                                style={{ width: "100%" }}
-                                onClick={handleCheckIn}
-                                disabled={checkingIn || isEnded}
-                            >
-                                {checkingIn ? "Checking in…" : "Check in patient"}
-                            </button>
+                                    {/* ── Patient look-up [placeholder] ── */}
+                                    <div style={{ marginBottom: "1rem", opacity: 0.4, pointerEvents: "none" }}>
+                                        <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>
+                                            Patient look-up
+                                        </p>
+                                        <input className="form-input" type="text" placeholder="Search by name or DOB…" disabled />
+                                    </div>
+
+                                    {/* ── Visit history [placeholder] ── */}
+                                    <div style={{ marginBottom: "1rem", opacity: 0.4, pointerEvents: "none" }}>
+                                        <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>
+                                            Visit history
+                                        </p>
+                                        <div style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: "6px", padding: "0.6rem 0.75rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                            No prior visits on record.
+                                        </div>
+                                    </div>
+
+                                    {/* ── Assigned provider [placeholder] ── */}
+                                    <div style={{ marginBottom: "1.25rem", opacity: 0.4, pointerEvents: "none" }}>
+                                        <p style={{ margin: "0 0 0.4rem", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)" }}>
+                                            Assigned provider
+                                        </p>
+                                        <div style={{ background: "#f8fafc", border: "1px solid var(--border)", borderRadius: "6px", padding: "0.6rem 0.75rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                            Not yet assigned.
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="primary-button"
+                                        style={{ width: "100%" }}
+                                        onClick={handleCheckIn}
+                                        disabled={checkingIn || isEnded}
+                                    >
+                                        {checkingIn ? "Checking in…" : "Check in patient"}
+                                    </button>
+                                </>
+                            )}
                         </aside>
                     )}
                 </div>
