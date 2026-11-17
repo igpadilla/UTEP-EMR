@@ -11,10 +11,10 @@ export default function PatientManager({ onNavigate, embedded = false }) {
     const filtered = patients.filter((p) => {
         const q = search.toLowerCase();
         return (
-            p.first_name.toLowerCase().includes(q) ||
-            p.last_name.toLowerCase().includes(q) ||
-            String(p.age).includes(q) ||
-            p.id.toLowerCase().includes(q)
+            (p.first_name ?? "").toLowerCase().includes(q) ||
+            (p.last_name ?? "").toLowerCase().includes(q) ||
+            String(p.age ?? "").includes(q) ||
+            (p.id ?? "").toLowerCase().includes(q)
         );
     });
 
@@ -29,7 +29,7 @@ export default function PatientManager({ onNavigate, embedded = false }) {
             .select("*")
             .is("archived_at", null)
             .order("created_at", { ascending: false });
-        if (!error) setPatients(data);
+        if (!error) setPatients(data ?? []);
         setLoading(false);
     }
 

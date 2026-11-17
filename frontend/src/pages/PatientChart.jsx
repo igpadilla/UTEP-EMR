@@ -19,7 +19,7 @@ const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Al
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null, simMode = false,
+    id, caseId, backTo, backId = null, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null, simMode = false,
 }) {
     // With no patient yet, the chart opens on an empty demographics form that creates one.
     // The other sections stay locked until the patient exists.
@@ -69,7 +69,7 @@ export default function PatientChart({
     }, [id, caseId, reload, creating]);
 
     function goBack() {
-        onNavigate(backTo ?? "patientLookup", id, fromCourse ? { fromCourse } : {});
+        onNavigate(backTo ?? "patientLookup", backId ?? id, fromCourse ? { fromCourse, course: fromCourse } : {});
     }
 
     function chooseTab(tab) {

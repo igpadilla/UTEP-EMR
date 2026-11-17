@@ -41,7 +41,11 @@ export default function CaseAssign({ templateId, fromCourseId = null, fromCourse
                 // Pre-select: prefer the course the instructor is currently in,
                 // fall back to the template's own course_id.
                 const preselect = fromCourseId ?? tmpl.course_id;
-                if (preselect && crs.some((c) => c.id === preselect)) handleCourseSelect(preselect);
+                if (fromCourseId) {
+                    handleCourseSelect(fromCourseId);
+                } else if (preselect && crs.some((c) => c.id === preselect)) {
+                    handleCourseSelect(preselect);
+                }
             } catch (err) {
                 console.error(err);
                 setError("Failed to load data.");
@@ -84,6 +88,7 @@ export default function CaseAssign({ templateId, fromCourseId = null, fromCourse
     });
 
     async function handleAssign() {
+        if (!template) return;
         if (!selectedCourseId) {
             setError("Choose the course this case is for.");
             return;

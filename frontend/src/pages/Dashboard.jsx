@@ -22,7 +22,7 @@ const STATUS_META = {
     },
     "pending review": {
         label: "Awaiting Grading",
-        badgeClass: "border-slate-900 text-slate-900 bg-white font-medium",
+        badgeClass: "border-utep-blue text-utep-blue bg-white font-medium",
     },
     completed: {
         label: "Completed",
@@ -304,7 +304,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("primary")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "primary"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -317,7 +317,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("submitted")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "submitted"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -330,7 +330,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("all")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "all"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -346,7 +346,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("primary")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "primary"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -359,7 +359,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("active")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "active"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -372,7 +372,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("completed")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "completed"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -542,7 +542,7 @@ export default function Dashboard({ user, onNavigate }) {
                                                                     backTo: "dashboard",
                                                                 })
                                                             }
-                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-sm transition-colors"
+                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                                                         >
                                                             {c.encounter_status === "revision_requested"
                                                                 ? "Revise"
@@ -560,9 +560,14 @@ export default function Dashboard({ user, onNavigate }) {
                                                             onClick={() =>
                                                                 c.course_id
                                                                     ? onNavigate("courseDetail", c.course_id)
-                                                                    : onNavigate("instructorCases")
+                                                                    : isAdmin
+                                                                      ? onNavigate("patientChart", null, {
+                                                                            caseId: c.id,
+                                                                            backTo: "dashboard",
+                                                                        })
+                                                                      : onNavigate("instructorCases")
                                                             }
-                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-sm transition-colors"
+                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                                                         >
                                                             {c.encounter_status === "pending review"
                                                                 ? "Grade"

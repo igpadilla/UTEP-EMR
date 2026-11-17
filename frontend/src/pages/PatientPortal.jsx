@@ -129,7 +129,7 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
                             <p className="portal-text">{records.last_visit.summary}</p></> : <p className="portal-empty">No visit summary yet</p>}
                     </section>}
                     {page === PAGES[4] && <section className="portal-card"><h2>My details</h2>
-                        <dl className="portal-details"><div><dt>Name</dt><dd>{name}</dd></div><div><dt>Date of birth</dt><dd>{portalDate(patient.date_of_birth)}</dd></div>
+                        <dl className="portal-details"><div><dt>Name</dt><dd>{name}</dd></div><div><dt>Date of birth</dt><dd>{portalDate(patient?.date_of_birth)}</dd></div>
                             <div><dt>Sign-in email</dt><dd>{user.email}</dd></div><div><dt>Account role</dt><dd>Patient</dd></div></dl>
                         </section>}
                 </>}

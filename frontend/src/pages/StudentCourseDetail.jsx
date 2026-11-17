@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMyCourseCases } from "../services/instructorService.js";
+import { getMyCourseCases, getCourseAnnouncements } from "../services/instructorService.js";
 import { getMyActiveSimulations, getOpenLobbiesForCourse, getMyLobbyMembership, joinSimLobby, getMySimsForCourse, getMySimSummary, getMySimGradesForCourse } from "../services/simulationService.js";
 import StudentCases from "./StudentCases.jsx";
 
@@ -46,11 +46,11 @@ const STATUS_LABELS = {
 };
 
 const TABS = [
-    { id: "home", label: "Home" },
-    { id: "cases", label: "Cases" },
-    { id: "gradebook", label: "Gradebook" },
-    { id: "simulations", label: "Simulations" },
-    { id: "announcements", label: "Announcements", disabled: true },
+    { id: "home",          label: "Home"          },
+    { id: "cases",         label: "Cases"         },
+    { id: "gradebook",     label: "Gradebook"     },
+    { id: "simulations",   label: "Simulations"   },
+    { id: "announcements", label: "Announcements" },
 ];
 
 const SIM_STATUS_BADGE = {
@@ -130,11 +130,39 @@ export default function StudentCourseDetail({ course, onNavigate }) {
     }
 
     useEffect(() => {
-        getMyCourseCases(course.id)
-            .then(setCases)
+        if (!course?.id) {
+            setLoading(false);
+            return;
+        }
+        Promise.all([
+            getMyCourseCases(course.id),
+            getCourseAnnouncements(course.id).catch(() => []),
+        ])
+            .then(([courseCases, courseAnnouncements]) => {
+                setCases(courseCases ?? []);
+                setAnnouncements(courseAnnouncements ?? []);
+            })
             .catch((err) => { console.error(err); setError("Failed to load cases."); })
             .finally(() => setLoading(false));
-    }, [course.id]);
+    }, [course?.id]);
+
+    useEffect(() => {
+        if (!course?.id || loading || activeTab === "cases") return;
+        getMyCourseCases(course.id)
+            .then((courseCases) => setCases(courseCases ?? []))
+            .catch(() => {});
+    }, [activeTab, course?.id]);
+
+    if (!course) {
+        return (
+            <main className="instructor-main">
+                <p className="instructor-loading">Course not found.</p>
+                <button className="secondary-action-button" type="button" onClick={() => onNavigate("studentCourses")}>
+                    ← My Courses
+                </button>
+            </main>
+        );
+    }
 
     const instructor = course.profiles;
     const banner = DISCIPLINE_BANNERS[course.discipline] ?? DEFAULT_BANNER;

@@ -566,7 +566,11 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                                 type="button"
                                                 onClick={() => {
                                                     setSelectedGroupKey(null);
-                                                    onNavigate("patientChart", null, { caseId: c.id, backTo: "courses" });
+                                                    onNavigate("patientChart", null, {
+                                                        caseId: c.id,
+                                                        backTo: fromCourseId ? "courseDetail" : "instructorCases",
+                                                        backId: fromCourseId ?? null,
+                                                    });
                                                 }}
                                             >
                                                 Chart
