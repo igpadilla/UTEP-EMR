@@ -8,6 +8,7 @@ import {
     subscribeToSimulation,
 } from "../services/simulationService.js";
 import RoomsSlot from "../components/simulation/RoomsSlot.jsx";
+import RoleReveal, { ROLE_INFO } from "../components/simulation/RoleReveal.jsx";
 
 function patientName(enc) {
     const t = enc.patient_templates;
@@ -31,8 +32,15 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
     const [checkingIn, setCheckingIn] = useState(false);
     const [discharging, setDischarging] = useState(false);
     const [error, setError] = useState("");
+    const [revealRole, setRevealRole] = useState(null);
     const unsubRef = useRef(null);
     const roundRef = useRef(null);
+
+    function navigateToRole(role) {
+        if (role === "med") onNavigate("medSim", simId);
+        else if (role === "patient_actor") onNavigate("patientActorSim", simId);
+        else if (role === "observer") onNavigate("simulationMonitor", simId);
+    }
 
     async function load() {
         try {
@@ -43,13 +51,10 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
             setSim(simData);
             setEncounters(encData);
 
-            // Round switched — navigate to whichever board matches the new role.
+            // Round switched — show role reveal then navigate.
             if (roundRef.current !== null && simData.current_round !== roundRef.current) {
                 const newRole = await getMySimRole(simId);
-                if (newRole === "med") onNavigate("medSim", simId);
-                else if (newRole === "patient_actor") onNavigate("patientActorSim", simId);
-                else if (newRole === "observer") onNavigate("simulationMonitor", simId);
-                // "front_desk" stays on this board — no navigation needed
+                setRevealRole(newRole);
             }
             roundRef.current = simData.current_round;
         } catch (e) {
@@ -98,6 +103,10 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
         ["checked_in", "in_progress", "med_complete", "discharged"].includes(e.status));
     const selectedEnc = encounters.find(e => e.id === selected);
 
+    if (revealRole) {
+        return <RoleReveal role={revealRole} onDone={() => { setRevealRole(null); navigateToRole(revealRole); }} />;
+    }
+
     return (
         <div className="emr-app">
             <main className="dashboard-main">
@@ -106,10 +115,29 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                         onClick={() => onNavigate("simulationLobby", simId)}>
                         ← Lobby
                     </button>
-                    <div>
-                        <p className="section-title">Front Desk</p>
-                        <h2 style={{ margin: 0 }}>{sim?.title ?? "…"}</h2>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{
+                            width: "44px", height: "44px", borderRadius: "50%",
+                            background: ROLE_INFO.front_desk.bg, display: "flex", alignItems: "center",
+                            justifyContent: "center", flexShrink: 0,
+                            boxShadow: `0 0 0 3px ${ROLE_INFO.front_desk.color}33`,
+                            animation: "sim-role-land 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both",
+                        }}>
+                            <img src={ROLE_INFO.front_desk.img} alt="Front Desk" style={{ width: "26px", height: "26px", objectFit: "contain" }} />
+                        </div>
+                        <div>
+                            <p className="section-title" style={{ margin: 0 }}>Front Desk</p>
+                            <h2 style={{ margin: 0 }}>{sim?.title ?? "…"}</h2>
+                        </div>
                     </div>
+                    <style>{`
+                        @keyframes sim-role-land {
+                            0%   { transform: translateX(42vw) translateY(38vh) scale(2.2); opacity: 1; }
+                            68%  { transform: translateX(0)    translateY(0)    scale(1);   opacity: 1; }
+                            78%  { opacity: 0.15; }
+                            100% { transform: scale(1); opacity: 1; }
+                        }
+                    `}</style>
                     {isEnded && (
                         <span style={{
                             marginLeft: "auto", background: "#f1f5f9", color: "#64748b",

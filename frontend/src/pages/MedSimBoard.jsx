@@ -8,15 +8,17 @@ import {
     completeMedEncounter,
     subscribeToSimulation,
 } from "../services/simulationService.js";
+import RoleReveal, { ROLE_INFO } from "../components/simulation/RoleReveal.jsx";
 
 function patientName(enc) {
     const t = enc.patient_templates;
     return t ? `${t.first_name} ${t.last_name}` : "Patient";
 }
 
-function elapsed(iso) {
-    if (!iso) return null;
-    const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+function elapsed(startIso, endIso) {
+    if (!startIso) return null;
+    const end = endIso ? new Date(endIso).getTime() : Date.now();
+    const secs = Math.floor((end - new Date(startIso).getTime()) / 1000);
     const m = Math.floor(secs / 60), s = secs % 60;
     return `${m}:${String(s).padStart(2, "0")}`;
 }
@@ -30,10 +32,17 @@ export default function MedSimBoard({ simId, onNavigate }) {
     const [error, setError] = useState("");
     const [opening, setOpening] = useState(null);    // encounterId being opened
     const [completing, setCompleting] = useState(null); // encounterId being marked done
+    const [revealRole, setRevealRole] = useState(null);
     const prevRef = useRef([]);
     const toastTimer = useRef(null);
     const unsubRef = useRef(null);
     const roundRef = useRef(null);
+
+    function navigateToRole(role) {
+        if (role === "front_desk") onNavigate("frontDeskSim", simId);
+        else if (role === "patient_actor") onNavigate("patientActorSim", simId);
+        else if (role === "observer") onNavigate("simulationMonitor", simId);
+    }
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
@@ -84,13 +93,10 @@ export default function MedSimBoard({ simId, onNavigate }) {
             setSim(simData);
             setEncounters(encData);
 
-            // Round switched — navigate to whichever board matches the new role.
+            // Round switched — show role reveal then navigate.
             if (roundRef.current !== null && simData.current_round !== roundRef.current) {
                 const newRole = await getMySimRole(simId);
-                if (newRole === "front_desk") onNavigate("frontDeskSim", simId);
-                else if (newRole === "patient_actor") onNavigate("patientActorSim", simId);
-                else if (newRole === "observer") onNavigate("simulationMonitor", simId);
-                // "med" stays on this board — no navigation needed
+                setRevealRole(newRole);
             }
             roundRef.current = simData.current_round;
         } catch (e) {
@@ -100,15 +106,20 @@ export default function MedSimBoard({ simId, onNavigate }) {
 
     useEffect(() => {
         load();
-        unsubRef.current = subscribeToSimulation(simId, loadEncounters);
-        const ticker = setInterval(() => setNow(Date.now()), 1000);
+        unsubRef.current = subscribeToSimulation(simId, load);
+        const ticker = setInterval(() => {
+            setSim(prev => {
+                if (prev?.status === "ended") clearInterval(ticker);
+                return prev;
+            });
+            setNow(Date.now());
+        }, 1000);
         return () => {
             unsubRef.current?.();
             clearInterval(ticker);
         };
     }, [simId]);
 
-    // Detect when my assigned patient transitions to checked_in → show toast
     useEffect(() => {
         if (!userId || encounters.length === 0) return;
         const prevById = Object.fromEntries(prevRef.current.map(e => [e.id, e]));
@@ -130,15 +141,17 @@ export default function MedSimBoard({ simId, onNavigate }) {
 
     const isEnded = sim?.status === "ended";
 
-    // Encounters visible to this board: checked_in and beyond (not expected, not cancelled)
     const visible = encounters.filter(e =>
         ["checked_in", "in_progress", "med_complete"].includes(e.status)
     );
 
-    // My assigned ones first, then others
     const mine = visible.filter(e => e.assigned_med_id === userId);
     const others = visible.filter(e => e.assigned_med_id !== userId);
     const sorted = [...mine, ...others];
+
+    if (revealRole) {
+        return <RoleReveal role={revealRole} onDone={() => { setRevealRole(null); navigateToRole(revealRole); }} />;
+    }
 
     return (
         <div className="emr-app">
@@ -148,10 +161,29 @@ export default function MedSimBoard({ simId, onNavigate }) {
                         onClick={() => onNavigate("simulationLobby", simId)}>
                         ← Lobby
                     </button>
-                    <div>
-                        <p className="section-title">Med Board</p>
-                        <h2 style={{ margin: 0 }}>{sim?.title ?? "…"}</h2>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{
+                            width: "44px", height: "44px", borderRadius: "50%",
+                            background: ROLE_INFO.med.bg, display: "flex", alignItems: "center",
+                            justifyContent: "center", flexShrink: 0,
+                            boxShadow: `0 0 0 3px ${ROLE_INFO.med.color}33`,
+                            animation: "sim-role-land 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both",
+                        }}>
+                            <img src={ROLE_INFO.med.img} alt="Med Student" style={{ width: "26px", height: "26px", objectFit: "contain" }} />
+                        </div>
+                        <div>
+                            <p className="section-title" style={{ margin: 0 }}>Med Board</p>
+                            <h2 style={{ margin: 0 }}>{sim?.title ?? "…"}</h2>
+                        </div>
                     </div>
+                    <style>{`
+                        @keyframes sim-role-land {
+                            0%   { transform: translateX(42vw) translateY(38vh) scale(2.2); opacity: 1; }
+                            68%  { transform: translateX(0)    translateY(0)    scale(1);   opacity: 1; }
+                            78%  { opacity: 0.15; }
+                            100% { transform: scale(1); opacity: 1; }
+                        }
+                    `}</style>
                     {isEnded && (
                         <span style={{
                             marginLeft: "auto", background: "#f1f5f9", color: "#64748b",
@@ -258,7 +290,7 @@ export default function MedSimBoard({ simId, onNavigate }) {
                                             fontVariantNumeric: "tabular-nums",
                                             color: "var(--text-muted)", fontSize: "0.875rem"
                                         }}>
-                                            {enc.checked_in_at ? elapsed(enc.checked_in_at) : "—"}
+                                            {enc.checked_in_at ? elapsed(enc.checked_in_at, enc.med_completed_at ?? sim?.ended_at) : "—"}
                                         </span>
 
                                         <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>

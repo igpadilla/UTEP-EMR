@@ -7,13 +7,7 @@ import {
     leaveSimLobby,
     subscribeToSimulation,
 } from "../services/simulationService.js";
-
-const ROLE_INFO = {
-    med: { label: "Med Student", desc: "You will evaluate and treat a patient." },
-    front_desk: { label: "Front Desk", desc: "You will check in and discharge patients." },
-    patient_actor: { label: "Patient Actor", desc: "You will act as a patient at the front desk." },
-    observer: { label: "Observer", desc: "You will watch the simulation." },
-};
+import RoleReveal, { ROLE_INFO } from "../components/simulation/RoleReveal.jsx";
 
 function memberName(m) {
     const p = m.profile;
@@ -26,12 +20,11 @@ export default function SimulationLobbyWaiting({ simId, onNavigate }) {
     const [myMembership, setMyMembership] = useState(null);
     const [leaving, setLeaving] = useState(false);
     const [error, setError] = useState("");
+    const [revealRole, setRevealRole] = useState(null); // role string while reveal is showing
     const unsubRef = useRef(null);
     const navigatedRef = useRef(false);
 
     function navigateToRole(role) {
-        if (navigatedRef.current) return;
-        navigatedRef.current = true;
         if (role === "front_desk") onNavigate("frontDeskSim", simId);
         else if (role === "med") onNavigate("medSim", simId);
         else if (role === "observer") onNavigate("simulationMonitor", simId);
@@ -50,10 +43,11 @@ export default function SimulationLobbyWaiting({ simId, onNavigate }) {
             setMembers(membersData);
             setMyMembership(myData);
 
-            // Navigate as soon as the sim goes active
+            // Show role reveal screen — only trigger once
             if (simData?.status === "active" && !navigatedRef.current) {
+                navigatedRef.current = true;
                 const role = await getMySimRole(simId);
-                navigateToRole(role);
+                setRevealRole(role);
             }
             // Lobby was cancelled by instructor
             if (simData?.status === "ended" && !navigatedRef.current) {
@@ -85,6 +79,10 @@ export default function SimulationLobbyWaiting({ simId, onNavigate }) {
 
     const myRole = myMembership?.assigned_role;
     const roleInfo = myRole ? ROLE_INFO[myRole] : null;
+
+    if (revealRole) {
+        return <RoleReveal role={revealRole} onDone={() => navigateToRole(revealRole)} />;
+    }
 
     return (
         <div className="emr-app">

@@ -28,9 +28,10 @@ const STATUS_COLOR = {
     cancelled: "#fee2e2",
 };
 
-function elapsed(from) {
+function elapsed(from, end) {
     if (!from) return null;
-    const secs = Math.floor((Date.now() - new Date(from).getTime()) / 1000);
+    const endMs = end ? new Date(end).getTime() : Date.now();
+    const secs = Math.floor((endMs - new Date(from).getTime()) / 1000);
     const m = Math.floor(secs / 60), s = secs % 60;
     return `${m}:${String(s).padStart(2, "0")}`;
 }
@@ -75,7 +76,13 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
         });
         load();
         unsubRef.current = subscribeToSimulation(simId, load);
-        const ticker = setInterval(() => setNow(Date.now()), 1000);
+        const ticker = setInterval(() => {
+            setSim(prev => {
+                if (prev?.status === "ended") clearInterval(ticker);
+                return prev;
+            });
+            setNow(Date.now());
+        }, 1000);
         return () => {
             unsubRef.current?.();
             clearInterval(ticker);
@@ -277,7 +284,7 @@ export default function SimulationMonitor({ simId, courseId, courseName, onNavig
                                             )}
                                             {enc.checked_in_at && status !== "expected" && (
                                                 <div style={{ color: "var(--text-muted)" }}>
-                                                    +{elapsed(enc.checked_in_at)}
+                                                    +{elapsed(enc.checked_in_at, enc.discharged_at ?? sim?.ended_at)}
                                                 </div>
                                             )}
                                             {actor && (

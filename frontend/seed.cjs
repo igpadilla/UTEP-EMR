@@ -17,7 +17,13 @@ async function seed() {
     { email: 'admin@test.com', firstName: 'System', lastName: 'Admin', role: 'admin' },
     { email: 'instructor@test.com', firstName: 'Jane', lastName: 'Instructor', role: 'instructor' },
     { email: 'student@test.com', firstName: 'John', lastName: 'Student', role: 'student', clinicalRole: 'pharmacy' },
-    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student', clinicalRole: 'physical_therapy' }
+    { email: 'pt.student@test.com', firstName: 'Sam', lastName: 'PT Student', role: 'student', clinicalRole: 'physical_therapy' },
+    { email: 'nurs.student1@test.com', firstName: 'Alice', lastName: 'Nguyen', role: 'student', clinicalRole: 'nursing' },
+    { email: 'nurs.student2@test.com', firstName: 'Brian', lastName: 'Ortega', role: 'student', clinicalRole: 'nursing' },
+    { email: 'nurs.student3@test.com', firstName: 'Carmen', lastName: 'Torres', role: 'student', clinicalRole: 'nursing' },
+    { email: 'nurs.student4@test.com', firstName: 'David', lastName: 'Kim', role: 'student', clinicalRole: 'nursing' },
+    { email: 'nurs.student5@test.com', firstName: 'Elena', lastName: 'Patel', role: 'student', clinicalRole: 'nursing' },
+    { email: 'nurs.student6@test.com', firstName: 'Frank', lastName: 'Rivera', role: 'student', clinicalRole: 'nursing' },
   ];
 
   for (const u of users) {
@@ -216,7 +222,77 @@ async function seed() {
         else console.log('pt.student@test.com enrolled in PT 3301.');
       }
     }
-  }
+
+    // Seed NURS 3310 course
+    console.log('Creating NURS 3310 course...');
+    const { data: nursCourse, error: nursCourseError } = await supabase
+      .from('courses')
+      .upsert(
+        { instructor_id: instructorForCourse.id, course_number: 'NURS 3310', crn: '33456', discipline: 'nursing' },
+        { onConflict: 'instructor_id,crn', ignoreDuplicates: false }
+      )
+      .select('id')
+      .single();
+
+    if (nursCourseError) {
+      console.error('Error creating NURS course:', nursCourseError.message);
+    } else {
+      console.log('NURS 3310 created with ID:', nursCourse.id);
+
+      // Enroll 6 nursing students
+      const nursStudentEmails = [
+        'nurs.student1@test.com', 'nurs.student2@test.com', 'nurs.student3@test.com',
+        'nurs.student4@test.com', 'nurs.student5@test.com', 'nurs.student6@test.com',
+      ];
+      const { data: allUsers } = await supabase.auth.admin.listUsers();
+      for (const email of nursStudentEmails) {
+        const nursStudent = allUsers?.users?.find(u => u.email === email);
+        if (!nursStudent) { console.error(`Could not find ${email}`); continue; }
+        const { error: enrollErr } = await supabase
+          .from('course_enrollments')
+          .upsert(
+            { course_id: nursCourse.id, student_id: nursStudent.id, enrolled_by: instructorForCourse.id },
+            { onConflict: 'course_id,student_id', ignoreDuplicates: true }
+          );
+        if (enrollErr) console.error(`Error enrolling ${email}:`, enrollErr.message);
+        else console.log(`${email} enrolled in NURS 3310.`);
+      }
+
+      // Seed 4 nursing patients
+      const nursPatients = [
+        {
+          first_name: 'Margaret', last_name: 'Sullivan', age: 72, sex: 'Female',
+          occupation: 'Retired Teacher',
+          current_medications: [{ medicine: { name: 'Warfarin', unit: 'mg' }, dosage: 5, frequency: 1 }],
+          last_visit: '2026-10-01', last_visit_notes: 'Admitted for hip fracture post-fall.'
+        },
+        {
+          first_name: 'Carlos', last_name: 'Mendez', age: 54, sex: 'Male',
+          occupation: 'Construction Worker',
+          current_medications: [{ medicine: { name: 'Insulin Glargine', unit: 'units' }, dosage: 20, frequency: 1 }],
+          last_visit: '2026-10-05', last_visit_notes: 'Admitted for diabetic foot ulcer management.'
+        },
+        {
+          first_name: 'Linda', last_name: 'Washington', age: 38, sex: 'Female',
+          occupation: 'Accountant',
+          current_medications: [{ medicine: { name: 'Albuterol', unit: 'mcg' }, dosage: 90, frequency: 4 }],
+          last_visit: '2026-10-10', last_visit_notes: 'Admitted for acute asthma exacerbation.'
+        },
+        {
+          first_name: 'Raymond', last_name: 'Chen', age: 65, sex: 'Male',
+          occupation: 'Engineer',
+          current_medications: [{ medicine: { name: 'Furosemide', unit: 'mg' }, dosage: 40, frequency: 1 }],
+          last_visit: '2026-10-12', last_visit_notes: 'Admitted for decompensated heart failure.'
+        },
+      ];
+
+      for (const p of nursPatients) {
+        const { data: np, error: npErr } = await supabase.from('patients').insert([p]).select().single();
+        if (npErr) console.error(`Error creating patient ${p.first_name} ${p.last_name}:`, npErr.message);
+        else console.log(`NURS patient created: ${np.first_name} ${np.last_name} (${np.id})`);
+      }
+    }
+  }  // end if (instructorForCourse && studentForCourse)
 
   // Seed template + case assignment
   console.log('Looking up instructor and student IDs...');
@@ -307,6 +383,104 @@ async function seed() {
     }
   } else {
     console.error('Could not find instructor or student user — skipping template/case seed.');
+  }
+
+  // Seed nursing templates for NURS 3310
+  console.log('Seeding NURS 3310 templates...');
+  const { data: nursCourseForTemplates } = await supabase
+    .from('courses')
+    .select('id')
+    .eq('crn', '33456')
+    .maybeSingle();
+
+  const { data: instructorForTemplates } = await supabase.auth.admin.listUsers()
+    .then(({ data }) => ({ data: data?.users?.find(u => u.email === 'instructor@test.com') }));
+
+  if (instructorForTemplates && nursCourseForTemplates) {
+    const nursTemplates = [
+      {
+        title: 'Post-Op Hip Replacement — Fall Risk Assessment',
+        discipline: 'nursing',
+        course_id: nursCourseForTemplates.id,
+        instructor_id: instructorForTemplates.id,
+        first_name: 'Margaret', last_name: 'Sullivan', age: 72, sex: 'Female',
+        occupation: 'Retired Teacher',
+        chief_complaint: 'Day 1 post-op right hip replacement. Patient is confused and attempting to get out of bed unassisted.',
+        clinical_baseline: {
+          'BP': '138/82 mmHg', 'HR': '88 bpm', 'RR': '16 breaths/min',
+          'Temp': '37.4°C', 'O2 Sat': '95% on 2L NC', 'Pain Score': '7/10',
+        },
+        hidden_diagnosis: 'Post-operative delirium with high fall risk',
+        student_instructions: 'You are a nursing student on a surgical floor. Your patient is 1 day post-op and showing signs of confusion. Perform a fall risk assessment, implement appropriate safety measures, and document your findings.',
+        expectations_rubric: '1. Complete a fall risk assessment (Morse Fall Scale)\n2. Implement at least 3 fall prevention interventions\n3. Assess for post-operative delirium using CAM tool\n4. Notify provider with SBAR communication\n5. Document interventions in nursing note',
+        allergies: ['Codeine'],
+        medical_history: ['Osteoporosis', 'Hypertension', 'Mild cognitive impairment'],
+        current_medications: [
+          { medicine: { name: 'Warfarin', unit: 'mg' }, dosage: 5, frequency: 1 },
+          { medicine: { name: 'Oxycodone', unit: 'mg' }, dosage: 5, frequency: 4 },
+          { medicine: { name: 'Ondansetron', unit: 'mg' }, dosage: 4, frequency: 3 },
+        ],
+      },
+      {
+        title: 'Diabetic Foot Ulcer — Wound Care & Glucose Management',
+        discipline: 'nursing',
+        course_id: nursCourseForTemplates.id,
+        instructor_id: instructorForTemplates.id,
+        first_name: 'Carlos', last_name: 'Mendez', age: 54, sex: 'Male',
+        occupation: 'Construction Worker',
+        chief_complaint: 'Non-healing wound on plantar surface of left foot for 3 weeks. Wound is 3cm × 2cm with yellow slough and surrounding erythema.',
+        clinical_baseline: {
+          'BP': '148/90 mmHg', 'HR': '94 bpm', 'RR': '18 breaths/min',
+          'Temp': '38.1°C', 'O2 Sat': '97% on room air',
+          'Blood Glucose': '312 mg/dL', 'HbA1c': '10.2%',
+        },
+        hidden_diagnosis: 'Infected diabetic foot ulcer (Wagner Grade 2) with poorly controlled Type 2 DM',
+        student_instructions: 'You are a nursing student on a medical-surgical floor. Perform a wound assessment, provide appropriate wound care, and address the patient\'s elevated blood glucose. The patient admits to not checking his glucose regularly.',
+        expectations_rubric: '1. Perform and document a complete wound assessment\n2. Select appropriate wound dressing and provide rationale\n3. Administer insulin per sliding scale and document\n4. Provide diabetes self-management education\n5. Identify signs of infection and escalate appropriately',
+        allergies: ['Sulfa drugs'],
+        medical_history: ['Type 2 Diabetes (12 years)', 'Peripheral neuropathy', 'Hypertension', 'Obesity'],
+        current_medications: [
+          { medicine: { name: 'Insulin Glargine', unit: 'units' }, dosage: 20, frequency: 1 },
+          { medicine: { name: 'Metformin', unit: 'mg' }, dosage: 1000, frequency: 2 },
+          { medicine: { name: 'Lisinopril', unit: 'mg' }, dosage: 10, frequency: 1 },
+        ],
+      },
+      {
+        title: 'Acute Asthma Exacerbation — Respiratory Assessment',
+        discipline: 'nursing',
+        course_id: nursCourseForTemplates.id,
+        instructor_id: instructorForTemplates.id,
+        first_name: 'Linda', last_name: 'Washington', age: 38, sex: 'Female',
+        occupation: 'Accountant',
+        chief_complaint: 'Severe shortness of breath and wheezing for 4 hours. Patient unable to complete full sentences. Home nebulizer treatments not providing relief.',
+        clinical_baseline: {
+          'BP': '142/88 mmHg', 'HR': '112 bpm', 'RR': '28 breaths/min',
+          'Temp': '37.0°C', 'O2 Sat': '89% on room air', 'Peak Flow': '42% predicted',
+        },
+        hidden_diagnosis: 'Severe acute asthma exacerbation',
+        student_instructions: 'You are a nursing student in the emergency department. Your patient is in respiratory distress. Perform a respiratory assessment, initiate oxygen therapy, prepare and administer ordered bronchodilators, and monitor response to treatment.',
+        expectations_rubric: '1. Perform a complete respiratory assessment including auscultation findings\n2. Initiate and titrate oxygen therapy to target SpO2 ≥ 95%\n3. Administer nebulized albuterol and document patient response\n4. Identify signs of respiratory failure requiring escalation\n5. Educate patient on asthma action plan and inhaler technique',
+        allergies: ['Aspirin', 'NSAIDs'],
+        medical_history: ['Asthma (since childhood)', 'Allergic rhinitis', 'Eczema'],
+        current_medications: [
+          { medicine: { name: 'Albuterol', unit: 'mcg' }, dosage: 90, frequency: 4 },
+          { medicine: { name: 'Fluticasone', unit: 'mcg' }, dosage: 220, frequency: 2 },
+          { medicine: { name: 'Montelukast', unit: 'mg' }, dosage: 10, frequency: 1 },
+        ],
+      },
+    ];
+
+    for (const tmpl of nursTemplates) {
+      const { data: t, error: tErr } = await supabase
+        .from('patient_templates')
+        .insert(tmpl)
+        .select('id, title')
+        .single();
+      if (tErr) console.error(`Error creating template "${tmpl.title}":`, tErr.message);
+      else console.log(`NURS template created: "${t.title}" (${t.id})`);
+    }
+  } else {
+    console.error('Could not find instructor or NURS course — skipping nursing templates.');
   }
 
   console.log('Seeding complete!');
