@@ -123,7 +123,31 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
         </section>;
     }
 
-    const contacts = Array.isArray(patient.emergency_contacts) ? patient.emergency_contacts.filter(Boolean) : [];
+    const contacts = Array.isArray(patient.emergency_contacts)
+        ? patient.emergency_contacts.filter((c) => c && (c.name?.trim() || c.phone?.trim()))
+        : [];
+    const allergies = Array.isArray(patient.allergies) ? patient.allergies.filter(Boolean) : [];
+    const medicalHistory = Array.isArray(patient.medical_history) ? patient.medical_history.filter(Boolean) : [];
+    const medications = Array.isArray(patient.current_medications)
+        ? patient.current_medications
+              .filter(Boolean)
+              .map((m) =>
+                  typeof m === "string"
+                      ? m
+                      : `${m.medicine?.name ?? m.name ?? "Medication"} ${m.dosage ?? ""}${m.medicine?.unit ?? m.unit ?? ""}${m.frequency ? ` ${m.frequency}x/day` : ""}`.trim()
+              )
+        : [];
+    const baselineEntries =
+        patient.clinical_baseline && typeof patient.clinical_baseline === "object" && !Array.isArray(patient.clinical_baseline)
+            ? Object.entries(patient.clinical_baseline).filter(([, v]) => v != null && String(v).trim() !== "")
+            : [];
+    const hasCaseScenarioDetails = Boolean(
+        patient.chief_complaint ||
+        patient.student_instructions ||
+        patient.expectations_rubric ||
+        baselineEntries.length > 0
+    );
+
     return <section aria-labelledby="chart-summary-heading">
         <div className="chart-section-heading">
             <h2 id="chart-summary-heading">Patient summary</h2>
@@ -157,12 +181,33 @@ export default function PatientSummary({ patient, canEdit, editing, onEdit, onCa
                 </dl>) : <p className="chart-muted">No emergency contacts recorded.</p>}
             </article>
             <article className="chart-card">
+                <h3>Medical information</h3>
+                <dl className="chart-details">
+                    <Detail label="Allergies" value={allergies.length ? allergies.join(", ") : null} />
+                    <Detail label="Medical history" value={medicalHistory.length ? medicalHistory.join(", ") : null} />
+                    <Detail label="Medications" value={medications.length ? medications.join(", ") : null} />
+                </dl>
+            </article>
+            <article className="chart-card">
                 <h3>Last visit</h3>
                 <dl className="chart-details">
                     <Detail label="Date" value={patient.last_visit} />
                     <Detail label="Notes" value={patient.last_visit_notes} />
                 </dl>
             </article>
+            {hasCaseScenarioDetails && (
+                <article className="chart-card">
+                    <h3>Clinical scenario & baseline</h3>
+                    <dl className="chart-details">
+                        {patient.chief_complaint && <Detail label="Chief complaint" value={patient.chief_complaint} />}
+                        {baselineEntries.map(([key, val]) => (
+                            <Detail key={key} label={key} value={val} />
+                        ))}
+                        {patient.student_instructions && <Detail label="Instructions" value={patient.student_instructions} />}
+                        {patient.expectations_rubric && <Detail label="Expectations & rubric" value={patient.expectations_rubric} />}
+                    </dl>
+                </article>
+            )}
         </div>
     </section>;
 }

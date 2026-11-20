@@ -10,6 +10,7 @@ import PatientMedications from "../components/patient-chart/PatientMedications.j
 import PatientVisits from "../components/patient-chart/PatientVisits.jsx";
 import { patientList } from "../components/patient-chart/patientChartForm.js";
 import { archivePatient, loadPatientChart } from "../services/patientChartService.js";
+import NotesPanel from "../components/NotesPanel.jsx";
 import "./PatientChart.css";
 
 const EDITABLE_STATUSES = ["not started", "in progress", "revision_requested"];
@@ -18,7 +19,7 @@ const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Al
 
 
 export default function PatientChart({
-    id, caseId, backTo, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null,
+    id, caseId, backTo, backId = null, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null, simMode = false,
 }) {
     // With no patient yet, the chart opens on an empty demographics form that creates one.
     // The other sections stay locked until the patient exists.
@@ -68,7 +69,7 @@ export default function PatientChart({
     }, [id, caseId, reload, creating]);
 
     function goBack() {
-        onNavigate(backTo ?? "patientLookup", id, fromCourse ? { fromCourse } : {});
+        onNavigate(backTo ?? "patientLookup", backId ?? id, fromCourse ? { fromCourse, course: fromCourse } : {});
     }
 
     function chooseTab(tab) {
@@ -168,7 +169,7 @@ export default function PatientChart({
                             }}>Refresh chart</button>
                             {onArchived && canEdit && !creating && <button type="button" className="secondary-action-button chart-archive-button"
                                 disabled={Boolean(editingSection)} onClick={archive}>Archive patient</button>}
-                            {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>← Back</button>}
+                            {!embedded && <button type="button" className="secondary-action-button" disabled={Boolean(editingSection)} onClick={goBack}>{simMode ? "← Back to Patients" : "← Back"}</button>}
                         </div>
                     </div>
                 </div>
@@ -213,11 +214,12 @@ export default function PatientChart({
                     : activeTab === "Diagnoses" ? <PatientDiagnoses {...sectionProps} editing={editingSection === "diagnoses"}
                         onEdit={() => setEditingSection("diagnoses")} />
                     : activeTab === "Vitals" ? <VitalsPanel patientId={id} caseId={caseId} locked={locked} />
-                    : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} />
+                    : activeTab === "Labs & Imaging" ? <DiagnosticsPanel patientId={id} caseId={caseId} locked={locked} canReleaseToPortal={canEdit} />
                     : activeTab === "Medications" ? <PatientMedications {...sectionProps} editing={editingSection === "medications"}
                         onEdit={() => setEditingSection("medications")} />
                     : activeTab === "Visits" ? <PatientVisits {...sectionProps} caseId={caseId} canManagePortal={canManagePortal} />
                     : activeTab === "Referrals" ? <ReferralManager patientId={id} caseId={caseId} readOnly={locked} />
+                    : activeTab === "Notes" ? <NotesPanel caseId={caseId} simMode={simMode} locked={locked} />
                     : <p className="chart-placeholder">{activeTab} is coming soon.</p>}
             </div>
 

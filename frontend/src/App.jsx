@@ -21,7 +21,18 @@ import PatientChart from "./pages/PatientChart.jsx";
 import PatientPortal from "./pages/PatientPortal.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import IdleWarning from "./components/IdleWarning.jsx";
+import SimulationList from "./pages/SimulationList.jsx";
+import SimulationBuilder from "./pages/SimulationBuilder.jsx";
+import SimulationMonitor from "./pages/SimulationMonitor.jsx";
+import SimulationLobby from "./pages/SimulationLobby.jsx";
+import SimulationLobbyManager from "./pages/SimulationLobbyManager.jsx";
+import SimulationLobbyWaiting from "./pages/SimulationLobbyWaiting.jsx";
+import FrontDeskSimBoard from "./pages/FrontDeskSimBoard.jsx";
+import MedSimBoard from "./pages/MedSimBoard.jsx";
+import SimulationPatientView from "./pages/SimulationPatientView.jsx";
+import PatientActorSim from "./pages/PatientActorSim.jsx";
 import AuditLog from "./pages/AuditLog.jsx";
+import { stopSimulation } from "./services/simulationService.js";
 
 import {
     getSession,
@@ -34,7 +45,11 @@ import { hasPermission } from "./services/permissionService.js";
 import { getLivePatientAccess, NO_LIVE_PATIENT_ACCESS, FULL_LIVE_PATIENT_ACCESS } from "./services/clinicalRoleService.js";
 
 export default function App() {
+
+
+
     const [session, setSession] = useState(null);
+    
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -86,7 +101,7 @@ export default function App() {
             clearTimeout(authTimer);
             if (newSession) {
                 setUser((current) => current?.id === newSession.user.id ? current : null);
-                // Supabase auth callbacks must finish before making another auth request.
+                // HERE supabase auth callbacks must finish before making another auth request.
                 authTimer = setTimeout(() => { if (!disposed) loadUser({ background: true }); }, 0);
             } else {
                 setUser(null);
@@ -207,12 +222,16 @@ export default function App() {
             setError("");
             setAccountWarning("");
         } catch (error) {
+        
             if (request !== accountRequest.current) return;
             console.error(error);
-            //     Keep the open page and its edits when a background check cannot connect
-            if (background) setAccountWarning("Unable to check your account right now. We'll try again shortly.");
-            else setUser(null);
-            setError("Unable to load your account.");
+            if (background) {
+                // Keep the open page — just show a dismissible warning
+                setAccountWarning("Unable to check your account right now. We'll try again shortly.");
+            } else {
+                setUser(null);
+                setError("Unable to load your account.");
+            }
         }
     }
 
@@ -239,21 +258,22 @@ export default function App() {
         return <ChangePassword onDone={() => loadUser()} />;
     }
 
-    //     Patient logins go straight to their own view, with no staff navigation
+    //     Patient logins go straight to their own view with no staff navigation
     if (user.profile.account_type === "patient") {
         return <PatientPortal key={user.id} user={user} accountWarning={accountWarning}
             idleWarning={showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />} />;
     }
 
     const isAdmin = user.profile.account_type === "admin";
+    
     const isInstructor = user.profile.account_type === "instructor";
+    
     const isStudent = user.profile.account_type === "student";
-    const canManageStudents = ["admin", "instructor"].includes(
-        user.profile.account_type,
-    );
-    // Only instructors create and manage cases and templates; admins manage accounts
+    
+    const canManageStudents = isAdmin;
+    // Only instructors create and manage cases and templates, then admins manage accounts
     const canManageCases = isInstructor;
-    // Admins manage all courses and enrollments, so they keep the Courses pages
+    // Admins manage all courses and enrollments, so they keep the courses pages
     const canManageCourses = isAdmin || isInstructor;
 
     const navbarPage =
@@ -265,23 +285,31 @@ export default function App() {
         : nav.page === "courses" || nav.page === "courseDetail" ? "courses"
         : nav.page === "studentCases" ? "studentCases"
         : nav.page === "studentCourses" || nav.page === "studentCourseDetail" ? "myCourses"
+        : nav.page === "simulationList" || nav.page === "simulationBuilder" || nav.page === "simulationMonitor" ? "courses"
+        : nav.page === "simulationLobby" || nav.page === "simulationLobbyWaiting" || nav.page === "frontDeskSim" || nav.page === "medSim" || nav.page === "patientActorSim" ? "myCourses"
+        : nav.page === "simulationLobbyManager" ? "courses"
         : nav.page === "auditLog" ? "auditLog"
         : nav.page === "rooms" ? "rooms"
         : "dashboard";
 
     function handleNavbarNavigate(page) {
         if (page === "students" && canManageStudents) {
+        
             navigate("studentManagement");
-        } else if (page === "courses" && canManageCourses) {
+        } 
+         else if (page === "courses" && canManageCourses) {
             navigate("courses");
-        } else if (page === "myCourses") {
+        
+        } 
+        else if (page === "myCourses") {
             navigate("studentCourses");
         } else if (page === "studentCases") {
             navigate("studentCases");
         } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
-        } else if (page === "appointments") {
+        } 
+        else if (page === "appointments") {
             navigate("appointments");
         } else if (page === "auditLog" && isAdmin) {
             navigate("auditLog");
@@ -292,7 +320,7 @@ export default function App() {
         }
     }
 
-    // Live patient pages are for staff and non-clinical roles; other students are sent to their courses
+    // Live patient pages are for staff and non clinical roles, then all other students are sent to their courses
     const livePatientPage = ["patientLookup", "studentPatientDetail", "appointments"].includes(nav.page)
         || (nav.page === "patientChart" && !nav.caseId);
     const page = isStudent && !liveAccess.read && livePatientPage ? "studentCourses" : nav.page;
@@ -305,17 +333,21 @@ export default function App() {
         case "patientLookup":
             pageContent = <PatientLookup onNavigate={navigate} access={liveAccess} />;
             break;
+            
         case "studentPatientDetail":
             pageContent = <StudentPatientDetail id={nav.id} onNavigate={navigate} access={liveAccess} />;
             break;
+            
         case "patientChart":
             pageContent = <PatientChart key={nav.caseId ? `case-${nav.caseId}` : `patient-${nav.id}`}
-                id={nav.id} caseId={nav.caseId} backTo={nav.backTo} onNavigate={navigate}
+                id={nav.id} caseId={nav.caseId} backTo={nav.backTo} backId={nav.backId ?? null} onNavigate={navigate}
                 canEditPatient={user.profile.active && (isAdmin || isInstructor)}
                 canManagePortal={isAdmin}
                 onArchived={() => navigate("patientManager")}
-                fromCourse={nav.fromCourse ?? null} />;
+                fromCourse={nav.fromCourse ?? null}
+                simMode={nav.backTo === "medSim"} />;
             break;
+            
         case "studentManagement":
             pageContent = canManageStudents
                 ? <StudentManagement onNavigate={navigate} canManageAccounts={isAdmin} />
@@ -346,15 +378,55 @@ export default function App() {
             pageContent = <StudentCourses onNavigate={navigate} />;
             break;
         case "studentCourseDetail":
-            pageContent = <StudentCourseDetail course={nav.course} onNavigate={navigate} />;
+            pageContent = nav.course
+                ? <StudentCourseDetail course={nav.course} onNavigate={navigate} />
+                : <StudentCourses onNavigate={navigate} />;
             break;
         case "courses":
             pageContent = canManageCourses
-                ? <CourseForm onNavigate={navigate} />
+                ? <CourseForm onNavigate={navigate} canManageStudents={canManageStudents} />
                 : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "courseDetail":
-            pageContent = <CourseDetail courseId={nav.id} onNavigate={navigate} />;
+            pageContent = canManageCourses
+                ? <CourseDetail key={nav.id} courseId={nav.id} onNavigate={navigate} canManageStudents={canManageStudents} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationList":
+            pageContent = canManageCourses
+                ? <SimulationList courseId={nav.courseId ?? nav.id} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationBuilder":
+            pageContent = canManageCourses
+                ? <SimulationBuilder simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationMonitor":
+            pageContent = <SimulationMonitor simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />;
+            break;
+        case "simulationLobby":
+            pageContent = <SimulationLobby simId={nav.id} onNavigate={navigate} isStaff={isAdmin || isInstructor} />;
+            break;
+        case "simulationLobbyManager":
+            pageContent = canManageCourses
+                ? <SimulationLobbyManager simId={nav.id} courseId={nav.courseId} courseName={nav.courseName} onNavigate={navigate} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "simulationLobbyWaiting":
+            pageContent = <SimulationLobbyWaiting simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "frontDeskSim":
+            pageContent = <FrontDeskSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "medSim":
+            pageContent = <MedSimBoard simId={nav.id} onNavigate={navigate} />;
+            break;
+        case "simulationPatient":
+            pageContent = <SimulationPatientView encounterId={nav.id} simId={nav.simId} onNavigate={navigate} />;
+            break;
+        case "patientActorSim":
+            pageContent = <PatientActorSim simId={nav.id} onNavigate={navigate} />;
             break;
         case "auditLog":
             pageContent = isAdmin ? <AuditLog /> : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
@@ -369,7 +441,7 @@ export default function App() {
             pageContent = <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
     }
 
-    // The template builder uses the whole screen for the case form and the patient chart.
+    // Now, the template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
 
     if (isTemplateBuilder) {
@@ -390,6 +462,7 @@ export default function App() {
                 onNavigate={handleNavbarNavigate}
                 canUseLivePatients={liveAccess.read}
                 canReadRooms={canReadRooms}
+                autoCollapse={page === "courseDetail" || page === "studentCourseDetail"}
             />
             <div className="flex-1 flex flex-col min-w-0 bg-white">
                 <Header
@@ -412,5 +485,6 @@ export default function App() {
                 </footer>
             </div>
         </div>
+        
     );
 }

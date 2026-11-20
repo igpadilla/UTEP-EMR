@@ -55,6 +55,7 @@ pnpm-debug.log*
 supabase/.branches
 supabase/.temp
 supabase/snippets/
+supabase/local_dev_seed.sql
 
 # IDEs and Editors
 .vscode/*
@@ -69,3 +70,6 @@ supabase/snippets/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Claude Code
+CLAUDE.md

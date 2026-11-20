@@ -150,7 +150,7 @@ export default function ReferralManager({ patientId, caseId, readOnly = false })
                     return (
                         <div key={r.id} className="referral-card">
                             <div className="referral-card-header">
-                                <strong>{r.target_discipline} ({r.priority.toUpperCase()})</strong>
+                                <strong>{r.target_discipline} ({(r.priority || "routine").toUpperCase()})</strong>
                                 <span className="referral-status">{r.status}</span>
                             </div>
                             <p className="referral-meta">

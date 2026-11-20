@@ -1,8 +1,11 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 
+
 type EnrollBody = {
+
   studentId?: string;
+  courseId?: string;
   courseNumber?: string;
   crn?: string;
 };
@@ -26,7 +29,7 @@ export default {
       return errorResponse("You must be signed in", 401);
     }
 
-    // Verify the caller is an active instructor or admin
+    //     Only admins can put a student into a course
     const { data: callerProfile, error: profileError } =
       await ctx.supabaseAdmin
         .from("profiles")
@@ -38,45 +41,47 @@ export default {
       return errorResponse("Unable to verify your account.", 500);
     }
 
-    const allowedRoles = ["admin", "instructor"];
-    if (!callerProfile.active || !allowedRoles.includes(callerProfile.account_type)) {
+    if (!callerProfile.active || callerProfile.account_type !== "admin") {
       return errorResponse(
-        "Only active admins and instructors can enroll students.",
+        "Only active admins can enroll students.",
         403,
       );
     }
 
     let body: EnrollBody;
     try {
-      body = await req.json();
+      const parsed = await req.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+      body = parsed;
     } catch {
-      return errorResponse("The request body must be valid JSON", 400);
+      return errorResponse("The request body must be a JSON object", 400);
     }
 
-    const studentId = body.studentId?.trim();
-    const courseNumber = body.courseNumber?.trim();
-    const crn = body.crn?.trim();
+    const studentId = typeof body.studentId === "string" ? body.studentId.trim() : "";
+    const courseId = typeof body.courseId === "string" ? body.courseId.trim() : "";
+    const courseNumber = typeof body.courseNumber === "string" ? body.courseNumber.trim() : "";
+    const crn = typeof body.crn === "string" ? body.crn.trim() : "";
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    if (!studentId || !courseNumber || !crn) {
-      return errorResponse("studentId, courseNumber, and crn are required", 400);
+    if (!uuid.test(studentId) || (body.courseId != null && !uuid.test(courseId))
+        || (!courseId && (!courseNumber || !crn || courseNumber.length > 100 || crn.length > 100))) {
+      return errorResponse("Choose a valid student and an existing course", 400);
     }
 
-    // Upsert the course — create it if it doesn't exist for this instructor+crn
-    const { data: course, error: courseError } = await ctx.supabaseAdmin
-      .from("courses")
-      .upsert(
-        { instructor_id: user.id, course_number: courseNumber, crn },
-        { onConflict: "instructor_id,crn", ignoreDuplicates: false },
-      )
-      .select("id")
-      .single();
 
-    if (courseError || !course) {
-      return errorResponse(
-        courseError?.message ?? "Unable to find or create the course.",
-        500,
-      );
-    }
+    const { data: student, error: studentError } = await ctx.supabaseAdmin.from("profiles")
+      .select("user_id").eq("user_id", studentId).eq("account_type", "student").eq("active", true).maybeSingle();
+    if (studentError) return errorResponse("Unable to check the student.", 500);
+    if (!student) return errorResponse("Choose an active student account", 400);
+
+    //     Find the course, do not create a new one under the admin's name
+    let query = ctx.supabaseAdmin.from("courses").select("id");
+    query = courseId ? query.eq("id", courseId) : query.eq("course_number", courseNumber).eq("crn", crn);
+    const { data: courses, error: courseError } = await query.limit(2);
+    if (courseError) return errorResponse("Unable to check the course.", 500);
+    if (!courses?.length) return errorResponse("Course not found. Create the course first, then retry enrollment.", 404);
+    if (courses.length > 1) return errorResponse("More than one course matches. Open the correct course's Roster tab to import students.", 409);
+    const course = courses[0];
 
     // Enroll the student — ignore if already enrolled
     const { error: enrollError } = await ctx.supabaseAdmin
@@ -86,6 +91,7 @@ export default {
         { onConflict: "course_id,student_id", ignoreDuplicates: true },
       );
 
+
     if (enrollError) {
       return errorResponse(
         enrollError.message ?? "Unable to enroll the student.",
@@ -94,5 +100,4 @@ export default {
     }
 
     return Response.json({ enrolled: true, courseId: course.id }, { status: 200 });
-  }),
-};
+  }),};

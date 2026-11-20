@@ -5,6 +5,7 @@ import {
     getAllCourses,
 } from "../services/instructorService.js";
 import { getMyAssignedCases as getStudentCases } from "../services/studentCaseService.js";
+import { getMyActiveSimulations } from "../services/simulationService.js";
 
 const STATUS_META = {
     "not started": {
@@ -21,7 +22,7 @@ const STATUS_META = {
     },
     "pending review": {
         label: "Awaiting Grading",
-        badgeClass: "border-slate-900 text-slate-900 bg-white font-medium",
+        badgeClass: "border-utep-blue text-utep-blue bg-white font-medium",
     },
     completed: {
         label: "Completed",
@@ -55,10 +56,16 @@ export default function Dashboard({ user, onNavigate }) {
     const isAdmin = accountType === "admin";
 
     const firstName =
+    
         profile.first_name ||
         profile.firstName ||
         profile.full_name?.split(" ")[0] ||
         "Clinician";
+
+    const [activeSims, setActiveSims] = useState([]);
+    useEffect(() => {
+        getMyActiveSimulations().then(setActiveSims).catch(() => {});
+    }, []);
 
     const [cases, setCases] = useState([]);
     const [courseMap, setCourseMap] = useState({});
@@ -187,6 +194,25 @@ export default function Dashboard({ user, onNavigate }) {
                 </div>
             </header>
 
+            {/* Active simulation banners */}
+            {activeSims.length > 0 && (
+                <div className="pt-4 flex flex-col gap-2">
+                    {activeSims.map(p => (
+                        <div key={p.simulation_id}
+                            className="flex items-center justify-between gap-4 px-4 py-3 rounded-sm border border-green-200 bg-green-50 text-sm">
+                            <span className="font-medium text-green-800">
+                                Active simulation: {p.simulations?.title}
+                            </span>
+                            <button type="button"
+                                className="px-3 py-1 text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-sm transition-colors"
+                                onClick={() => onNavigate("simulationLobby", p.simulation_id)}>
+                                Join →
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Minimalist Metric Strip */}
             <section
                 aria-label="Task summary metrics"
@@ -278,7 +304,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("primary")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "primary"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -291,7 +317,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("submitted")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "submitted"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -304,7 +330,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("all")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "all"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -320,7 +346,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("primary")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "primary"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -333,7 +359,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("active")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "active"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -346,7 +372,7 @@ export default function Dashboard({ user, onNavigate }) {
                                     onClick={() => setFilterTab("completed")}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                                         filterTab === "completed"
-                                            ? "bg-slate-900 text-white"
+                                            ? "bg-utep-blue text-white"
                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                     }`}
                                 >
@@ -469,6 +495,11 @@ export default function Dashboard({ user, onNavigate }) {
                                                 >
                                                     {statusInfo.label}
                                                 </span>
+                                                {Array.isArray(c.addendums) && c.addendums.length > 0 && (
+                                                    <span className="ml-1.5 inline-block font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-600 rounded-sm">
+                                                        Addendum ({c.addendums.length})
+                                                    </span>
+                                                )}
                                                 {c.score != null && (
                                                     <span className="ml-2 font-mono text-[11px] text-slate-500 tabular-nums">
                                                         {c.score}/{c.max_score ?? 100}
@@ -506,11 +537,12 @@ export default function Dashboard({ user, onNavigate }) {
                                                         <button
                                                             type="button"
                                                             onClick={() =>
-                                                                onNavigate("studentCases", null, {
-                                                                    openCaseId: c.id,
+                                                                onNavigate("patientChart", null, {
+                                                                    caseId: c.id,
+                                                                    backTo: "dashboard",
                                                                 })
                                                             }
-                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-sm transition-colors"
+                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                                                         >
                                                             {c.encounter_status === "revision_requested"
                                                                 ? "Revise"
@@ -518,7 +550,9 @@ export default function Dashboard({ user, onNavigate }) {
                                                                   ? "Continue"
                                                                   : c.encounter_status === "not started"
                                                                     ? "Start Case"
-                                                                    : "View Note"}
+                                                                    : c.encounter_status === "completed"
+                                                                      ? "Note / Addendum"
+                                                                      : "View Note"}
                                                         </button>
                                                     ) : (
                                                         <button
@@ -526,9 +560,14 @@ export default function Dashboard({ user, onNavigate }) {
                                                             onClick={() =>
                                                                 c.course_id
                                                                     ? onNavigate("courseDetail", c.course_id)
-                                                                    : onNavigate("instructorCases")
+                                                                    : isAdmin
+                                                                      ? onNavigate("patientChart", null, {
+                                                                            caseId: c.id,
+                                                                            backTo: "dashboard",
+                                                                        })
+                                                                      : onNavigate("instructorCases")
                                                             }
-                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-sm transition-colors"
+                                                            className="px-2.5 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                                                         >
                                                             {c.encounter_status === "pending review"
                                                                 ? "Grade"

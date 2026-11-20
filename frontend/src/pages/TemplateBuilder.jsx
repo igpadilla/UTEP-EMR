@@ -32,6 +32,7 @@ const EMPTY_FORM = {
     chief_complaint: "",
     student_instructions: "",
     hidden_diagnosis: "",
+    answer_key: "",
 };
 
 const DEFAULT_RUBRIC_CRITERIA = [
@@ -115,10 +116,10 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
     function fillFromPatient(p) {
         setForm((f) => ({
             ...f,
-            first_name: p.first_name,
-            last_name: p.last_name,
+            first_name: p.first_name ?? "",
+            last_name: p.last_name ?? "",
             date_of_birth: p.date_of_birth ?? "",
-            age: String(p.age),
+            age: p.age == null ? "" : String(p.age),
             sex: p.sex ?? "",
             phone_number: p.phone_number ?? "",
             email: p.email ?? "",
@@ -145,10 +146,10 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
                         target_year: t.target_year ?? "",
                         discipline: t.discipline ?? "",
                         course_id: t.course_id ?? "",
-                        first_name: t.first_name,
-                        last_name: t.last_name,
+                        first_name: t.first_name ?? "",
+                        last_name: t.last_name ?? "",
                         date_of_birth: t.date_of_birth ?? "",
-                        age: String(t.age),
+                        age: t.age == null ? "" : String(t.age),
                         sex: t.sex ?? "",
                         phone_number: t.phone_number ?? "",
                         email: t.email ?? "",
@@ -157,9 +158,10 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
                         emergency_contact_phone: t.emergency_contact_phone ?? "",
                         allergies: Array.isArray(t.allergies) ? t.allergies : [],
                         medical_history: Array.isArray(t.medical_history) ? t.medical_history : [],
-                        chief_complaint: t.chief_complaint,
+                        chief_complaint: t.chief_complaint ?? "",
                         student_instructions: t.student_instructions ?? "",
                         hidden_diagnosis: t.hidden_diagnosis ?? "",
+                        answer_key: t.answer_key ?? "",
                     });
                     
                     if (t.current_medications) {
@@ -362,6 +364,7 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
             rubric_criteria: rubricCriteria,
             student_instructions: form.student_instructions.trim() || null,
             hidden_diagnosis: form.hidden_diagnosis.trim() || null,
+            answer_key: form.answer_key.trim() || null,
             expectations_rubric: expectationsRubric.trim() || null,
             initial_referral: isTypedPatient && initialReferral.target_discipline ? initialReferral : null,
             patient_id: linkedPatientId,
@@ -1042,6 +1045,25 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
                             disabled={submitting}
                             className="instructor-textarea"
                             placeholder="Add reference notes, ideal differential diagnoses, or specific instructions for this scenario..."
+                        />
+                    </div>
+                </div>
+
+                <div className="instructor-form-section">
+                    <h3 className="instructor-form-section-title">Instructor Answer Key (Hidden from Students)</h3>
+                    <p className="instructor-baseline-hint">
+                        Shared reference answer key for instructors grading this case. Never shown to students.
+                    </p>
+                    <div className="student-form-field instructor-form-wide">
+                        <textarea
+                            id="answer_key"
+                            name="answer_key"
+                            rows={4}
+                            value={form.answer_key}
+                            onChange={handleChange}
+                            disabled={submitting}
+                            className="instructor-textarea"
+                            placeholder="Add ideal SOAP note responses, expected clinical reasoning, or grading benchmarks..."
                         />
                     </div>
                 </div>

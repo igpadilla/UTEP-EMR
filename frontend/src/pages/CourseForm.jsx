@@ -7,8 +7,8 @@ import {
     getClinicalRoles,
     getCourseStudents,
 } from "../services/instructorService.js";
-import BulkStudentImport from "../components/BulkStudentImport.jsx";
 import { supabase } from "../supabase.js";
+
 
 const EMPTY_FORM = { course_number: "", crn: "", discipline: "" };
 
@@ -27,7 +27,10 @@ const DISCIPLINE_BANNERS = {
 };
 const DEFAULT_BANNER = "linear-gradient(135deg, #475569 0%, #94a3b8 100%)";
 
+
+
 const DISCIPLINE_ABBR = {
+
     pharmacy:                  "PHARM",
     nursing:                   "NURS",
     physical_therapy:          "PT",
@@ -37,16 +40,17 @@ const DISCIPLINE_ABBR = {
     speech_language_pathology: "SLP",
     social_work:               "SW",
     inpatient_physician:       "MD",
+
 };
 
-export default function CourseForm({ onNavigate }) {
+export default function CourseForm({ onNavigate, canManageStudents = false }) {
+
     const [courses, setCourses]       = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [roles, setRoles]           = useState([]);
     const [form, setForm]             = useState(EMPTY_FORM);
     const [editingId, setEditingId]   = useState(null);
     const [formOpen, setFormOpen]     = useState(false);
-    const [showImport, setShowImport] = useState(false);
     const [loading, setLoading]       = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
@@ -61,14 +65,17 @@ export default function CourseForm({ onNavigate }) {
                 const [c, r] = await Promise.all([getAllCourses(), getClinicalRoles()]);
                 setCourses(c);
                 setRoles(r);
-            } catch (err) {
+            } 
+            
+            catch (err) {
                 console.error(err);
                 setError("Failed to load courses.");
             }
             setLoading(false);
         }
         load();
-    }, []);
+    }, []
+    );
 
     function handleChange(e) {
         const { name, value } = e.target;
@@ -82,7 +89,6 @@ export default function CourseForm({ onNavigate }) {
         setForm(EMPTY_FORM);
         setError("");
         setSuccess("");
-        setShowImport(false);
         setFormOpen(true);
     }
 
@@ -95,7 +101,6 @@ export default function CourseForm({ onNavigate }) {
         });
         setError("");
         setSuccess("");
-        setShowImport(false);
         setFormOpen(true);
     }
 
@@ -105,7 +110,6 @@ export default function CourseForm({ onNavigate }) {
         setForm(EMPTY_FORM);
         setError("");
         setSuccess("");
-        setShowImport(false);
     }
 
     async function handleSubmit(e) {
@@ -120,7 +124,7 @@ export default function CourseForm({ onNavigate }) {
         try {
             if (editingId) {
                 const updated = await updateCourse(editingId, form);
-                setCourses((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+                setCourses((prev) => prev.map((c) => (c.id === editingId ? { ...c, ...updated } : c)));
                 setSuccess("Course updated.");
             } else {
                 const created = await createCourse(form);
@@ -170,7 +174,9 @@ export default function CourseForm({ onNavigate }) {
             <main className="instructor-main">
                 <p className="instructor-loading">Loading…</p>
             </main>
-        );
+     
+           );
+    
     }
 
     return (
@@ -195,7 +201,8 @@ export default function CourseForm({ onNavigate }) {
             {error   && <p className="form-message form-message-error"   role="alert">{error}</p>}
             {success && <p className="form-message form-message-success" role="status">{success}</p>}
 
-            {/* ── Add / Edit Form ────────────────────────────── */}
+            {/*------------------- Add / Edit Form -------------------*/}
+            
             {formOpen && (
                 <div className="instructor-form-panel" style={{ marginBottom: "1.5rem" }}>
                     <div className="instructor-form-section">
@@ -276,31 +283,13 @@ export default function CourseForm({ onNavigate }) {
                                         ? editingId ? "Saving…" : "Creating…"
                                         : editingId ? "Save Changes" : "Create Course"}
                                 </button>
-                                {editingId && (
-                                    <button
-                                        className="secondary-action-button"
-                                        type="button"
-                                        onClick={() => setShowImport((v) => !v)}
-                                        disabled={submitting}
-                                        style={{ marginLeft: "auto" }}
-                                    >
-                                        {showImport ? "Hide Roster Import" : "Import Roster as CSV"}
-                                    </button>
-                                )}
                             </div>
                         </form>
-
-                        {editingId && showImport && (
-                            <BulkStudentImport onImported={async () => {
-                                const updated = await getAllCourses().catch(() => null);
-                                if (updated) setCourses(updated);
-                            }} />
-                        )}
                     </div>
                 </div>
             )}
 
-            {/* ── Course Cards ───────────────────────────────── */}
+            {/* -------------------Course Cards------------------- */}
             {courses.length === 0 ? (
                 <div className="patients-empty-state">
                     <strong>No courses yet</strong>
@@ -319,6 +308,7 @@ export default function CourseForm({ onNavigate }) {
                                     style={{ background: banner }}
                                 />
 
+
                                 <div className="course-card-body">
                                     <span className="course-card-id">CRN {c.crn}</span>
                                     <span className="course-card-name">
@@ -333,7 +323,7 @@ export default function CourseForm({ onNavigate }) {
                                             ? `${instructor.first_name} ${instructor.last_name}`
                                             : "—"}
                                     </span>
-                                    {isOwner && (
+                                    {(isOwner || canManageStudents) && (
                                         <div className="course-card-actions">
                                             <button
                                                 className="secondary-action-button"
@@ -359,7 +349,11 @@ export default function CourseForm({ onNavigate }) {
                         );
                     })}
                 </div>
-            )}
+            )
+            }
         </main>
+    
+    
     );
+    
 }

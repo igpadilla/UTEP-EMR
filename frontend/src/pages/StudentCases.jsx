@@ -3,11 +3,12 @@ import {
     getMyAssignedCases,
     startCase,
     saveCaseNotes,
-    submitCase
+    submitCase,
+    submitCaseAddendum,
 } from "../services/studentCaseService.js";
-import TagSelector from "../components/TagSelector.jsx";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import { getClinicalNoteTemplatesForCase } from "../services/clinicalNoteTemplateService.js";
 import PatientChart from "./PatientChart.jsx";
 
@@ -43,7 +44,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
     const [error, setError] = useState("");
 
     const [activeCase, setActiveCase] = useState(null);
-    const [showChart, setShowChart] = useState(false);
+    const [showChart, setShowChart] = useState(true);
     const templateRequestId = useRef(0);
 
     const [notes, setNotes] = useState("");
@@ -79,12 +80,12 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         fetchCases();
     }, []);
 
-    const openedFromLink = useRef(false);
+    const openedFromLink = useRef(null);
     useEffect(() => {
-        if (!openCaseId || openedFromLink.current || loading) return;
+        if (!openCaseId || openedFromLink.current === openCaseId || loading) return;
         const target = cases.find((c) => c.id === openCaseId);
         if (target) {
-            openedFromLink.current = true;
+            openedFromLink.current = openCaseId;
             openCase(target);
         }
     }, [openCaseId, loading, cases]);
@@ -197,7 +198,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         setPtSoap(loadPTSoap(openedCase.encounter_notes));
         setNotes(openedCase.encounter_notes ?? "");
         setActiveCase(openedCase);
-        setShowChart(false);
+        setShowChart(true);
         setModalError("");
 
         await loadCaseNoteTemplates(openedCase);
@@ -305,7 +306,15 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
         setSubmitting(false);
     }
 
-    const isEditable = activeCase && EDITABLE_STATUSES.includes(activeCase.encounter_status);
+    const hasAddendums = Array.isArray(activeCase?.addendums) && activeCase.addendums.length > 0;
+    const isEditable =
+        activeCase &&
+        EDITABLE_STATUSES.includes(activeCase.encounter_status) &&
+        !hasAddendums;
+    const canAddAddendum =
+        Boolean(activeCase) &&
+        (activeCase.encounter_status === "completed" ||
+            (activeCase.encounter_status === "revision_requested" && hasAddendums));
 
     const visibleCases = fromCourse
         ? cases.filter((c) => c.course_id === fromCourse.id)
@@ -357,124 +366,6 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
 
                 {/* Case body */}
                 <div className="case-modal-body" style={{ maxWidth: "none", padding: 0 }}>
-
-                    {/* Student Instructions */}
-                    {activeCase.patient_snapshot?.student_instructions && (
-                        <div className="case-modal-section">
-                            <p className="case-modal-section-label">Instructions</p>
-                            <div className="case-complaint-box">
-                                <p>{activeCase.patient_snapshot.student_instructions}</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Patient snapshot */}
-                    <div className="case-modal-section">
-                        <p className="case-modal-section-label">Patient Info</p>
-                        <div className="case-info-grid">
-                            {activeCase.patient_snapshot?.age && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Age</span>
-                                    <span>{activeCase.patient_snapshot.age}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.date_of_birth && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">DOB</span>
-                                    <span>{activeCase.patient_snapshot.date_of_birth}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.sex && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Sex</span>
-                                    <span>{activeCase.patient_snapshot.sex}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.occupation && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Occupation</span>
-                                    <span>{activeCase.patient_snapshot.occupation}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.phone_number && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Phone</span>
-                                    <span>{activeCase.patient_snapshot.phone_number}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.email && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Email</span>
-                                    <span>{activeCase.patient_snapshot.email}</span>
-                                </div>
-                            )}
-                            {activeCase.patient_snapshot?.emergency_contacts?.[0] && (
-                                <div className="case-info-item">
-                                    <span className="case-info-label">Emergency Contact</span>
-                                    <span>{activeCase.patient_snapshot.emergency_contacts[0].name} ({activeCase.patient_snapshot.emergency_contacts[0].phone})</span>
-                                </div>
-                            )}
-                        </div>
-                        {activeCase.patient_snapshot?.chief_complaint && (
-                            <div className="case-complaint-box">
-                                <span className="case-info-label">Chief Complaint</span>
-                                <p>{activeCase.patient_snapshot.chief_complaint}</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Medical Information */}
-                    {(activeCase.patient_snapshot?.allergies?.length > 0 || activeCase.patient_snapshot?.medical_history?.length > 0 || activeCase.patient_snapshot?.current_medications?.length > 0) && (
-                        <div className="case-modal-section">
-                            <p className="case-modal-section-label">Medical Information</p>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                                {activeCase.patient_snapshot?.allergies?.length > 0 && (
-                                    <div>
-                                        <span className="case-info-label">Allergies</span>
-                                        <TagSelector value={activeCase.patient_snapshot.allergies} readOnly={true} />
-                                    </div>
-                                )}
-                                {activeCase.patient_snapshot?.medical_history?.length > 0 && (
-                                    <div>
-                                        <span className="case-info-label">Medical History</span>
-                                        <TagSelector value={activeCase.patient_snapshot.medical_history} readOnly={true} />
-                                    </div>
-                                )}
-                                {activeCase.patient_snapshot?.current_medications?.length > 0 && (
-                                    <div>
-                                        <span className="case-info-label">Medications</span>
-                                        <TagSelector value={activeCase.patient_snapshot.current_medications.map(m => `${m.medicine.name} ${m.dosage}${m.medicine.unit} ${m.frequency}x/day`)} readOnly={true} />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Clinical baseline */}
-                    {activeCase.patient_snapshot?.clinical_baseline &&
-                        Object.keys(activeCase.patient_snapshot.clinical_baseline).length > 0 && (
-                        <div className="case-modal-section">
-                            <p className="case-modal-section-label">Clinical Baseline</p>
-                            <div className="case-baseline-grid">
-                                {Object.entries(activeCase.patient_snapshot.clinical_baseline).map(([k, v]) => (
-                                    <div key={k} className="case-baseline-item">
-                                        <span className="case-info-label">{k}</span>
-                                        <span>{v}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Expectations & Rubric */}
-                    {activeCase.patient_snapshot?.expectations_rubric && (
-                        <div className="case-modal-section">
-                            <p className="case-modal-section-label">Expectations & Rubric</p>
-                            <div className="case-notes-readonly">
-                                {activeCase.patient_snapshot.expectations_rubric}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Revision requested feedback */}
                     {activeCase.encounter_status === "revision_requested" && (
@@ -615,6 +506,23 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
                         ) : (
                             <p>No clinical note form is available.</p>
                         )}
+
+                        <ClinicalNoteAddendums
+                            addendums={activeCase.addendums ?? []}
+                            canAdd={canAddAddendum}
+                            encounterStatus={activeCase.encounter_status}
+                            onSubmitAddendum={async ({ reason, content }) => {
+                                const updated = await submitCaseAddendum(
+                                    activeCase.id,
+                                    activeCase.addendums ?? [],
+                                    { reason, content }
+                                );
+                                setActiveCase(updated);
+                                setCases((prev) =>
+                                    prev.map((x) => (x.id === updated.id ? updated : x))
+                                );
+                            }}
+                        />
                     </div>
 
                     {modalError && (

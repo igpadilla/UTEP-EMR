@@ -3,6 +3,7 @@ import { getMyTemplates, getMyAssignedCases, deleteTemplate, searchPatients, gra
 import { getCaseAuditLogs } from "../services/auditService.js";
 import PTSoapNote from "../components/PTSoapNote.jsx";
 import DynamicClinicalNoteForm from "../components/DynamicClinicalNoteForm.jsx";
+import ClinicalNoteAddendums from "../components/ClinicalNoteAddendums.jsx";
 import { getCaseCriteria, previewGrade } from "../lib/grading.js";
 
 const STATUS_STYLES = {
@@ -71,6 +72,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
     const [annotations, setAnnotations] = useState([]);
     const [annotationDraft, setAnnotationDraft] = useState("");
     const [annotationTarget, setAnnotationTarget] = useState("General");
+    const [showAnswerKey, setShowAnswerKey] = useState(true);
 
     // Audit log modal
     const [auditLogs, setAuditLogs] = useState([]);
@@ -183,6 +185,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
         setRubricScores(initial);
         setAnnotationDraft("");
         setAnnotationTarget("General");
+        setShowAnswerKey(true);
     }
 
     function closeReview() {
@@ -563,7 +566,11 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                                 type="button"
                                                 onClick={() => {
                                                     setSelectedGroupKey(null);
-                                                    onNavigate("patientChart", null, { caseId: c.id, backTo: "courses" });
+                                                    onNavigate("patientChart", null, {
+                                                        caseId: c.id,
+                                                        backTo: fromCourseId ? "courseDetail" : "instructorCases",
+                                                        backId: fromCourseId ?? null,
+                                                    });
                                                 }}
                                             >
                                                 Chart
@@ -707,6 +714,12 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                     })()}
                                 </div>
 
+                                <ClinicalNoteAddendums
+                                    addendums={reviewCase.addendums ?? []}
+                                    canAdd={false}
+                                    encounterStatus={reviewCase.encounter_status}
+                                />
+
                                 {annotations.length > 0 && (
                                     <div style={{ marginTop: "1.25rem" }}>
                                         <p className="case-modal-section-label">Chart Annotations</p>
@@ -814,6 +827,28 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                         <p style={{ margin: 0, fontSize: "0.82rem", color: "#0f172a", whiteSpace: "pre-wrap" }}>
                                             {reviewCase.patient_templates?.expectations_rubric || reviewCase.patient_snapshot?.expectations_rubric}
                                         </p>
+                                    </div>
+                                )}
+
+                                {reviewCase.patient_templates?.answer_key?.trim() && (
+                                    <div className="mb-5 rounded-md border border-slate-200 bg-white p-3.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">
+                                                Instructor Answer Key · Staff Only
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAnswerKey((prev) => !prev)}
+                                                className="font-mono text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-800 cursor-pointer bg-transparent border-0 p-0"
+                                            >
+                                                {showAnswerKey ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                        {showAnswerKey && (
+                                            <p className="mt-2 mb-0 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                                {reviewCase.patient_templates.answer_key}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -997,8 +1032,9 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                     <table className="patient-table">
                                         <thead>
                                             <tr>
-                                                <th>When</th>
-                                                <th>Actor</th>
+                                                <th>Timestamp</th>
+                                                <th>Name</th>
+                                                <th>User ID</th>
                                                 <th>Action</th>
                                                 <th>Detail</th>
                                             </tr>
@@ -1006,13 +1042,16 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
                                         <tbody>
                                             {auditLogs.map((log) => (
                                                 <tr key={log.id} className="instructor-table-row">
-                                                    <td style={{ whiteSpace: "nowrap" }}>
+                                                    <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
                                                         {new Date(log.created_at).toLocaleString()}
                                                     </td>
                                                     <td>
                                                         {log.profiles
                                                             ? `${log.profiles.first_name} ${log.profiles.last_name}`
                                                             : "—"}
+                                                    </td>
+                                                    <td style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                                        {log.actor_id ?? "—"}
                                                     </td>
                                                     <td>
                                                         <span className="instructor-status-badge" style={STATUS_STYLES["in progress"]}>
