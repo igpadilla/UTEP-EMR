@@ -8,6 +8,11 @@ import {
     subscribeToSimulation,
 } from "../services/simulationService.js";
 import RoomsSlot from "../components/simulation/RoomsSlot.jsx";
+import {
+    getSimulationRooms,
+    getSimulationRoomAssignments,
+} from "../services/simulationRoomService.js";
+
 
 function patientName(enc) {
     const t = enc.patient_templates;
@@ -33,6 +38,9 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
     const [error, setError] = useState("");
     const unsubRef = useRef(null);
     const roundRef = useRef(null);
+    const [simulationRooms, setSimulationRooms] = useState([]);
+    const [roomAssignments, setRoomAssignments] = useState([]);
+
 
     async function load() {
         try {
@@ -40,8 +48,16 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                 getSimulation(simId),
                 getSimEncounters(simId),
             ]);
+
+            const [roomData, assignmentData] = await Promise.all([
+                getSimulationRooms(simId, simData.current_round),
+                getSimulationRoomAssignments(simId, simData.current_round),
+            ]);
+
             setSim(simData);
             setEncounters(encData);
+            setSimulationRooms(roomData);
+            setRoomAssignments(assignmentData);
 
             // Round switched — navigate to whichever board matches the new role.
             if (roundRef.current !== null && simData.current_round !== roundRef.current) {
@@ -197,9 +213,13 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                         const canDischarge = enc.status === "med_complete";
                                         const isDischarged = enc.status === "discharged";
                                         const isSelected = selected === enc.id;
+                                        const assignment = roomAssignments.find(a => a.encounter_id === enc.id);
+                                        const assignedRoom = assignment ? simulationRooms.find(
+                                            room => room.id === assignment.simulation_room_id
+                                        ) : null;
                                         return (
                                             <div key={enc.id}
-                                                onClick={() => !isEnded && canDischarge && setSelected(isSelected ? null : enc.id)}
+                                                onClick={() => !isEnded && (enc.status === "checked_in" || canDischarge) && setSelected(isSelected ? null : enc.id)}
                                                 style={{
                                                     display: "grid",
                                                     gridTemplateColumns: "1fr 100px 110px",
@@ -208,7 +228,7 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                                     alignItems: "center", fontSize: "0.875rem",
                                                     background: isSelected ? "#eff6ff" : canDischarge ? "#f0fdf4" : "#fff",
                                                     borderLeft: isSelected ? "3px solid #2563eb" : canDischarge ? "3px solid #15803d" : "3px solid transparent",
-                                                    cursor: canDischarge && !isEnded ? "pointer" : "default",
+                                                    cursor: (enc.status === "checked_in" || canDischarge) && !isEnded ? "pointer" : "default",
                                                 }}>
                                                 <span>
                                                     <strong>{patientName(enc)}</strong>
@@ -222,7 +242,13 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                                 <span style={{ color: "var(--text-muted)" }}>
                                                     {formatCheckedInTime(enc.checked_in_at)}
                                                 </span>
-                                                <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>
+                                                <span style={{
+                                                    color: assignedRoom ? "#15803d":"var(--text-muted)",
+                                                    fontSize: "0.8rem",
+                                                    fontWeight: assignedRoom ? 600 : 400,
+                                                }}>
+                                                    {assignedRoom ? `Room ${assignedRoom.room_number}` : "—"}
+                                                </span>
                                             </div>
                                         );
                                     })}
@@ -239,7 +265,9 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                         }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                                 <h4 style={{ margin: 0 }}>
-                                    {selectedEnc.status === "med_complete" ? "Discharge" : "Check-in"}
+                                    {selectedEnc.status === "med_complete"
+                                    ? "Discharge"
+                                    : selectedEnc.status === "check_in" ? "Room Assignment" : "Check-in"}
                                 </h4>
                                 <button type="button" onClick={() => setSelected(null)}
                                     style={{
@@ -325,7 +353,13 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                         }}>
                                             Room
                                         </p>
-                                        <RoomsSlot encounterId={selectedEnc.id} simulationId={simId} />
+                                        <RoomsSlot
+                                            encounterId={selectedEnc.id}
+                                            simulationId={simId}
+                                            round={sim?.current_round}
+                                            encounterStatus={selectedEnc.status}
+                                            isEnded={isEnded}
+                                        />
                                     </div>
 
                                     {/* ── Patient look-up [placeholder] ── */}
@@ -356,15 +390,16 @@ export default function FrontDeskSimBoard({ simId, onNavigate }) {
                                         </div>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        className="primary-button"
-                                        style={{ width: "100%" }}
-                                        onClick={handleCheckIn}
-                                        disabled={checkingIn || isEnded}
-                                    >
-                                        {checkingIn ? "Checking in…" : "Check in patient"}
-                                    </button>
+                                    {selectedEnc.status === "expected" &&(
+                                        <button
+                                            type="button"
+                                            className="primary-button"
+                                            style={{ width: "100%" }}
+                                            onClick={handleCheckIn}
+                                            disabled={checkingIn || isEnded}
+                                        >
+                                            {checkingIn ? "Checking in…" : "Check in patient"}
+                                        </button>)}
                                 </>
                             )}
                         </aside>
