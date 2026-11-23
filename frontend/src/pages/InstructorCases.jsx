@@ -292,7 +292,7 @@ export default function InstructorCases({ onNavigate, fromCourseId = null, fromC
             {!embedded && (
                 <div className="instructor-page-header">
                     <div>
-                        <p className="section-title">{fromCourseName ? fromCourseName : "Instructor"}</p>
+                        {fromCourseName && <p className="section-title">{fromCourseName}</p>}
                         <h2>Case Management</h2>
                         <p>{fromCourseId ? "Manage cases assigned in this course." : "Create patient templates and assign training cases to students."}</p>
                     </div>

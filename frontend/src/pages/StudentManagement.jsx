@@ -86,7 +86,6 @@ export default function StudentManagement({ onNavigate, canManageAccounts = fals
     {/* Page heading and navigation back to the dashboard. */}
     <header className="student-management-header">
       <div>
-        <p className="eyebrow">Administration</p>
         <h2>Student Management</h2>
         <p>View and manage student accounts.</p>
       </div>

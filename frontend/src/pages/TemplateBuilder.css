@@ -175,9 +175,9 @@
 }
 
 .template-step-pill.active {
-    background: #0284c7;
+    background: var(--primary);
     color: #ffffff;
-    border-color: #0284c7;
+    border-color: var(--primary);
     font-weight: 600;
 }
 
@@ -247,8 +247,8 @@
 }
 
 .template-subtab-btn.active {
-    background: #0284c7;
-    border-color: #0284c7;
+    background: var(--primary);
+    border-color: var(--primary);
     color: #ffffff;
     font-weight: 600;
 }

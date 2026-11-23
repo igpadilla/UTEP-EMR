@@ -39,7 +39,6 @@ export default function PatientManager({ onNavigate, embedded = false }) {
             {!embedded && (
                 <div className="instructor-page-header">
                     <div>
-                        <p className="section-title">Instructor</p>
                         <h2>Patient Manager</h2>
                         <p>Manage the patient registry used for building case templates.</p>
                     </div>

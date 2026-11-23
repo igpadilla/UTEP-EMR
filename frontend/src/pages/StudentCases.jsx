@@ -600,7 +600,7 @@ export default function StudentCases({ onNavigate, openCaseId = null, fromCourse
             {!embedded && (
                 <div className="instructor-page-header">
                     <div>
-                        <p className="section-title">{fromCourse ? fromCourse.course_number : "Student"}</p>
+                        {fromCourse && <p className="section-title">{fromCourse.course_number}</p>}
                         <h2>My Cases</h2>
                         <p>Training cases assigned to you by your instructor.</p>
                     </div>

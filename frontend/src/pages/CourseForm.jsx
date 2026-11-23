@@ -183,7 +183,6 @@ export default function CourseForm({ onNavigate, canManageStudents = false }) {
         <main className="instructor-main">
             <div className="instructor-page-header">
                 <div>
-                    <p className="section-title">Instructor</p>
                     <h2>Courses</h2>
                     <p>Manage your courses and their clinical disciplines.</p>
                 </div>

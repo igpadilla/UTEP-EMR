@@ -174,10 +174,7 @@ export default function Dashboard({ user, onNavigate }) {
             {/* Page Header */}
             <header className="pb-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
-                    <p className="font-mono text-[11px] uppercase tracking-widest text-slate-400">
-                        {isStudent ? "Student Clinical Queue" : "Instructor Grading Queue"}
-                    </p>
-                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                         {firstName}&rsquo;s Workspace
                     </h1>
                 </div>
