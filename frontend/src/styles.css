@@ -3,16 +3,46 @@
 @theme {
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --color-utep-blue: #041E42;
-  --color-utep-blue-hover: #0A2E5C;
+  --color-utep-blue: #0F3B70;
+  --color-utep-blue-hover: #164C8C;
+  --color-role-tint: #EFF6FF;
+  --color-role-border: #BFDBFE;
+}
+
+/* Role-based Accent Palettes */
+:root,
+[data-role="instructor"] {
+  --color-utep-blue: #0F3B70;
+  --color-utep-blue-hover: #164C8C;
+  --color-role-tint: #EFF6FF;
+  --color-role-border: #BFDBFE;
+  --primary: var(--color-utep-blue);
+  --primary-hover: var(--color-utep-blue-hover);
+  --primary-light: var(--color-role-tint);
+}
+
+[data-role="student"] {
+  --color-utep-blue: #E87722;
+  --color-utep-blue-hover: #D46817;
+  --color-role-tint: #FFF7ED;
+  --color-role-border: #FED7AA;
+  --primary: var(--color-utep-blue);
+  --primary-hover: var(--color-utep-blue-hover);
+  --primary-light: var(--color-role-tint);
+}
+
+[data-role="admin"] {
+  --color-utep-blue: #0F172A;
+  --color-utep-blue-hover: #1E293B;
+  --color-role-tint: #F1F5F9;
+  --color-role-border: #CBD5E1;
+  --primary: var(--color-utep-blue);
+  --primary-hover: var(--color-utep-blue-hover);
+  --primary-light: var(--color-role-tint);
 }
 
 /* Global Design Variables */
 :root {
-  --primary: #0284c7;
-  --primary-hover: #0369a1;
-  --primary-light: #e0f2fe;
-
   --bg: #f8fafc;
   --surface: #ffffff;
 
@@ -29,14 +59,7 @@
   --header-height: 72px;
   --nav-height: 52px;
 
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
 
   color: var(--text);
   background: var(--bg);
@@ -322,7 +345,7 @@ button {
 
 .course-sidenav-item.active {
   border-left-color: var(--primary);
-  background: #eff6ff;
+  background: var(--primary-light);
   color: var(--primary);
   font-weight: 600;
 }
@@ -339,7 +362,7 @@ button {
 }
 
 .course-sidenav-item.active .course-sidenav-badge {
-  background: #dbeafe;
+  background: var(--color-role-border);
   color: var(--primary);
 }
 
@@ -423,7 +446,7 @@ button {
   .course-sidenav-item.active {
     border-left-color: transparent;
     border-bottom-color: var(--primary);
-    background: #eff6ff;
+    background: var(--primary-light);
   }
 
   .course-tab-content {
@@ -929,26 +952,33 @@ button {
   width: 100%;
 
   margin-top: auto;
-  padding: 0.7rem 1rem;
+  padding: 0.55rem 0.95rem;
 
   display: flex;
   align-items: center;
   justify-content: space-between;
 
-  border: none;
-  border-radius: 7px;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
 
   background: var(--primary);
   color: white;
 
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
 
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.primary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 
@@ -1305,16 +1335,24 @@ button {
 /* Register patient */
 
 .primary-action-button {
-  padding: 0.7rem 1rem;
+  padding: 0.55rem 0.95rem;
 
-  border: none;
-  border-radius: 7px;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
 
   background: var(--primary);
   color: white;
 
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.primary-action-button:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .primary-action-button:disabled {
@@ -1538,21 +1576,25 @@ button {
 
 /* Secondary command used to return to the dashboard. */
 .secondary-action-button {
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0.95rem;
 
   border: 1px solid var(--border-dark);
-  border-radius: 6px;
+  border-radius: 4px;
 
   background: var(--surface);
   color: var(--text-secondary);
 
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .secondary-action-button:hover:not(:disabled) {
   background: var(--bg);
   border-color: #94a3b8;
+  color: var(--text);
 }
 
 .secondary-action-button:disabled {
@@ -2077,7 +2119,7 @@ button {
 }
 
 .instructor-action-assign {
-  border-color: #bae6fd;
+  border-color: var(--color-role-border);
 
   background: var(--primary-light);
   color: var(--primary);

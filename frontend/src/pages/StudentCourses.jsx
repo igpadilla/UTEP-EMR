@@ -50,7 +50,6 @@ export default function StudentCourses({ onNavigate }) {
         <main className="instructor-main">
             <div className="instructor-page-header">
                 <div>
-                    <p className="section-title">Student</p>
                     <h2>My Courses</h2>
                     <p>Courses you are currently enrolled in.</p>
                 </div>

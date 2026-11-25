@@ -443,10 +443,11 @@ export default function App() {
 
     // Now, the template builder uses the whole screen for the case form and the patient chart.
     const isTemplateBuilder = page === "templateBuilder";
+    const accountRole = user.profile.account_type ?? "instructor";
 
     if (isTemplateBuilder) {
         return (
-            <div className="emr-app emr-app-fullscreen">
+            <div className="emr-app emr-app-fullscreen" data-role={accountRole}>
                 {accountWarning && <p className="form-message" role="status">{accountWarning}</p>}
                 {pageContent}
                 {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
@@ -455,7 +456,7 @@ export default function App() {
     }
 
     return (
-        <div className="min-h-screen flex bg-white text-slate-900 font-sans">
+        <div className="min-h-screen flex bg-white text-slate-900 font-sans" data-role={accountRole}>
             <Navbar
                 user={user}
                 currentPage={navbarPage}

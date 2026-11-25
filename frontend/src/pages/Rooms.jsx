@@ -462,7 +462,7 @@ export default function Rooms() {
                                 setCreateRoomError("");
                                 setCreateRoomSuccess("");
                             }}
-                            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                            className="rounded-sm bg-utep-blue px-4 py-2 text-xs font-medium text-white hover:bg-utep-blue-hover transition-colors"
                         >
                             + Create Room
                         </button>
@@ -509,7 +509,7 @@ export default function Rooms() {
                             <button
                                 type="submit"
                                 disabled={creatingRoom}
-                                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                className="rounded-sm bg-utep-blue px-4 py-2 text-xs font-medium text-white hover:bg-utep-blue-hover transition-colors disabled:opacity-50"
                             >
                                 {creatingRoom ? "Creating..." : "Create Room"}
                             </button>
@@ -586,7 +586,7 @@ export default function Rooms() {
                             <button
                                 type="submit"
                                 disabled={updatingRoom}
-                                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                className="rounded-sm bg-utep-blue px-4 py-2 text-xs font-medium text-white hover:bg-utep-blue-hover transition-colors disabled:opacity-50"
                             >
                                 {updatingRoom ? "Saving..." : "Save Changes"}
                             </button>
@@ -694,7 +694,7 @@ export default function Rooms() {
                                         type="button"
                                         onClick={handleAssignPatient}
                                         disabled={!selectedPatientId || assigning}
-                                        className="mt-4 px-4 py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="mt-4 rounded-sm px-4 py-2 text-xs font-medium bg-utep-blue text-white hover:bg-utep-blue-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {assigning ? "Assigning..." : "Confirm Assignment"}
                                     </button>
@@ -889,7 +889,7 @@ export default function Rooms() {
                                                                     <button 
                                                                         type="button" 
                                                                         onClick={() => setSelectedRoomId(room.id)} 
-                                                                        className="px-4 py-2 text-xs font-medium bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                                                                        className="rounded-sm px-3 py-1.5 text-xs font-medium bg-utep-blue text-white hover:bg-utep-blue-hover transition-colors"
                                                                     >
                                                                         Assign Patient
                                                                     </button>
