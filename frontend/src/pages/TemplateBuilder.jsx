@@ -403,7 +403,6 @@ export default function TemplateBuilder({ templateId, patientId, fromCourseId = 
             {!splitView && !embedded && (
                 <div className="instructor-page-header">
                     <div>
-                        <p className="section-title">Instructor</p>
                         <h2>{pageTitle}</h2>
                         <p>
                             {isFromPatient

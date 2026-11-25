@@ -325,7 +325,7 @@ export default function Header({ user, onNavigate, canUseLivePatients = false })
             <div className="flex items-center gap-4 shrink-0">
                 <div className="flex items-center gap-2.5">
                     <span className="text-xs font-medium text-slate-900">{fullName}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded-sm">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-utep-blue border border-utep-blue/30 bg-role-tint px-1.5 py-0.5 rounded-sm">
                         {roleLabel}
                     </span>
                 </div>

@@ -164,7 +164,7 @@ export default function ClinicalNoteAddendums({
                                     onClick={() => setReason(opt.value)}
                                     className={`px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider border rounded-sm transition-colors ${
                                         reason === opt.value
-                                            ? "border-slate-900 bg-slate-900 text-white"
+                                            ? "border-utep-blue bg-utep-blue text-white"
                                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                                     }`}
                                 >
@@ -216,7 +216,7 @@ export default function ClinicalNoteAddendums({
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="px-3 py-1 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-sm transition-colors"
+                                className="px-3 py-1 text-xs font-medium text-white bg-utep-blue hover:bg-utep-blue-hover rounded-sm transition-colors"
                             >
                                 {submitting ? "Signing..." : "Sign & Submit Addendum"}
                             </button>
