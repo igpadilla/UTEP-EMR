@@ -97,3 +97,16 @@ export async function updateRoom(roomId, roomNumber, location) {
 
     return data;
 }
+
+export async function setRoomActive(roomId, isActive) {
+    const { data, error } = await supabase.rpc("set_room_active", {
+        p_room_id: roomId,
+        p_is_active: isActive
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}

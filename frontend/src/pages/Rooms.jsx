@@ -5,7 +5,8 @@ import { getRooms,
     dismissPatientFromRoom, 
     getRoomOccupancyHistory, 
     createRoom, 
-    updateRoom 
+    updateRoom,
+    setRoomActive
 } from "../services/roomService.js";
 import { hasPermission } from "../services/permissionService.js";
 
@@ -52,6 +53,9 @@ export default function Rooms() {
     const [editRoomError, setEditRoomError] = useState("");
     const [editRoomSuccess, setEditRoomSuccess] = useState("");
 
+    const [changingRoomStatusId, setChangingRoomStatusId] = useState(null);
+    const [roomStatusError, setRoomStatusError] = useState("");
+    const [roomStatusSuccess, setRoomStatusSuccess] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -434,6 +438,47 @@ export default function Rooms() {
         }
     }
 
+    async function handleRoomStatusChange(room) {
+        if (!canManageRooms || changingRoomStatusId !== null) {
+            return;
+        }
+
+        const newStatus = !room.is_active;
+
+        // Prevent deactivation of occupied rooms.
+        if (!newStatus && room.is_occupied) {
+            setRoomStatusError(`Cannot deactivate ${room.room_number} because it is occupied.`);
+            setRoomStatusSuccess("");
+            return;
+        }
+
+        setChangingRoomStatusId(room.id);
+        setRoomStatusError("");
+        setRoomStatusSuccess("");
+
+        try {
+            // Update the room's active status in Supabase.
+            await setRoomActive(room.id, newStatus);
+
+            // Refresh the room list.
+            const updatedRooms = await getRooms();
+            setRooms(updatedRooms);
+            setError("");
+
+            setRoomStatusSuccess(
+                `Room ${room.room_number} ${
+                    newStatus ? "reactivated" : "deactivated"
+                } successfully.`
+            );
+        } catch (err) {
+            console.error("Unable to change room status:", err);
+
+            setRoomStatusError(err.message || "Unable to change room status.");
+        } finally {
+            setChangingRoomStatusId(null);
+        }
+    }
+
     const totalRooms = rooms.length;
     const occupiedRooms = rooms.filter(
         (room) => room.is_active && room.is_occupied
@@ -616,6 +661,28 @@ export default function Rooms() {
                 >
                     <p className="text-sm text-emerald-700">
                         {editRoomSuccess}
+                    </p>
+                </div>
+            )}
+
+            {roomStatusError && (
+                <div
+                    role="alert"
+                    className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4"
+                >
+                    <p className="text-sm text-red-700">
+                        {roomStatusError}
+                    </p>
+                </div>
+            )}
+
+            {roomStatusSuccess && (
+                <div
+                    role="status"
+                    className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4"
+                >
+                    <p className="text-sm text-emerald-700">
+                        {roomStatusSuccess}
                     </p>
                 </div>
             )}
@@ -884,7 +951,7 @@ export default function Rooms() {
                                                     </td>
                                                     {(canAssignRooms || canDismissRooms || canReadRoomHistory) && (
                                                         <td className="px-6 py-4">
-                                                            <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                                                                 {room.is_active && !room.is_occupied && canAssignRooms && (
                                                                     <button 
                                                                         type="button" 
@@ -898,7 +965,7 @@ export default function Rooms() {
                                                                 {room.is_occupied && room.patient_id && canDismissRooms && (
                                                                     <button
                                                                         type="button"
-                                                                        className="px-4 py-2 text-xs font-medium bg-rose-100 text-rose-700 opacity-60 cursor-not-allowed"
+                                                                        className="px-2 py-1 text-xs font-medium bg-rose-100 text-rose-700 opacity-60 cursor-not-allowed"
                                                                         onClick={() => {
                                                                             setSelectedDismissalRoom(room);
                                                                             setDismissalError("");
@@ -912,7 +979,7 @@ export default function Rooms() {
                                                                 {canReadRoomHistory && (
                                                                     <button
                                                                         type="button"
-                                                                        className="px-4 py-2 text-xs font-medium border border-slate-300 text-slate-500 opacity-60 cursor-not-allowed"
+                                                                        className="px-2 py-1 text-xs font-medium border border-slate-300 text-slate-500 opacity-60 cursor-not-allowed"
                                                                         onClick={() => {
                                                                             setSelectedHistoryRoom(room);
                                                                             setRoomHistory([]);
@@ -933,9 +1000,36 @@ export default function Rooms() {
                                                                             setEditRoomError("");
                                                                             setEditRoomSuccess("");
                                                                         }}
-                                                                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                                                                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                                                                     >
                                                                         Edit Room
+                                                                    </button>
+                                                                )}
+
+                                                                {canManageRooms && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRoomStatusChange(room)}
+                                                                        disabled={
+                                                                            changingRoomStatusId !== null ||
+                                                                            (room.is_active && room.is_occupied)
+                                                                        }
+                                                                        title={
+                                                                            room.is_active && room.is_occupied
+                                                                                ? "Dismiss or transfer the patient before deactivating this room."
+                                                                                : undefined
+                                                                        }
+                                                                        className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                                            room.is_active
+                                                                                ? "border border-rose-300 text-rose-700 hover:bg-rose-50"
+                                                                                : "bg-emerald-700 text-white hover:bg-emerald-800"
+                                                                        }`}
+                                                                    >
+                                                                        {changingRoomStatusId === room.id
+                                                                            ? "Updating..."
+                                                                            : room.is_active
+                                                                            ? "Deactivate"
+                                                                            : "Reactivate"}
                                                                     </button>
                                                                 )}
 
