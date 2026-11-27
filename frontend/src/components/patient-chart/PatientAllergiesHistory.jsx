@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { saveAllergiesAndHistory } from "../../services/patientChartService.js";
-import { historyToForm, patientList } from "./patientChartForm.js";
+import { patientList } from "./patientChartForm.js";
+import ChartEntryList from "./ChartEntryList.jsx";
 
 
 function SavedList({ values, emptyText }) {
@@ -11,12 +12,13 @@ function SavedList({ values, emptyText }) {
 
 
 export default function PatientAllergiesHistory({ patient, canEdit, editing, onEdit, onCancel, onSaved }) {
-    const [form, setForm] = useState({ allergies: "", medical_history: "" });
+    const [form, setForm] = useState({ allergies: [], medical_history: [] });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
 
     function beginEdit() {
-        setForm(historyToForm(patient));
+        setForm({ allergies: patientList(patient.allergies).map((value) => ({ value })),
+            medical_history: patientList(patient.medical_history).map((value) => ({ value })) });
         setError("");
         onEdit();
     }
@@ -27,7 +29,10 @@ export default function PatientAllergiesHistory({ patient, canEdit, editing, onE
         setSaving(true);
         setError("");
         try {
-            const saved = await saveAllergiesAndHistory(patient, form);
+            const saved = await saveAllergiesAndHistory(patient, {
+                allergies: form.allergies.map((entry) => entry.value).join("\n"),
+                medical_history: form.medical_history.map((entry) => entry.value).join("\n"),
+            });
             onSaved(saved, "Allergies and medical history saved.");
         } catch (saveError) {
             setError(saveError.message);
@@ -39,20 +44,18 @@ export default function PatientAllergiesHistory({ patient, canEdit, editing, onE
     if (editing && canEdit) {
         return <section className="chart-card" aria-labelledby="history-edit-heading">
             <h2 id="history-edit-heading">Edit allergies and history</h2>
-            <p id="chart-list-help">Write one item per line. Leave a list blank to clear its recorded items.</p>
+            <p>Add or remove items, then save your changes.</p>
             <form onSubmit={save}>
                 <fieldset className="chart-form-grid" disabled={saving}>
                     <legend className="chart-sr-only">Allergies and medical history</legend>
-                    <div className="chart-field">
-                        <label htmlFor="chart-allergies-input">Allergies</label>
-                        <textarea id="chart-allergies-input" rows={7} value={form.allergies} aria-describedby="chart-list-help"
-                            onChange={(event) => setForm((current) => ({ ...current, allergies: event.target.value }))} />
-                    </div>
-                    <div className="chart-field">
-                        <label htmlFor="chart-history-input">Medical history</label>
-                        <textarea id="chart-history-input" rows={7} value={form.medical_history} aria-describedby="chart-list-help"
-                            onChange={(event) => setForm((current) => ({ ...current, medical_history: event.target.value }))} />
-                    </div>
+                    <section><h3>Allergies</h3>
+                        <ChartEntryList name="Allergy" entries={form.allergies} fields={[{ key: 'value', label: 'Allergy' }]}
+                            addLabel="Add allergy" disabled={saving} onChange={(entries) => setForm((current) => ({ ...current, allergies: entries }))} />
+                    </section>
+                    <section><h3>Medical history</h3>
+                        <ChartEntryList name="History item" entries={form.medical_history} fields={[{ key: 'value', label: 'History item' }]}
+                            addLabel="Add history item" disabled={saving} onChange={(entries) => setForm((current) => ({ ...current, medical_history: entries }))} />
+                    </section>
                 </fieldset>
                 {error && <p className="form-message form-message-error" role="alert">{error}</p>}
                 <div className="chart-actions">

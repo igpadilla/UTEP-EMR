@@ -63,6 +63,10 @@ try {
     await page.route("http://127.0.0.1:54321/**", async (route) => {
         const request = route.request(), url = new URL(request.url());
         const reply = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
+        if (url.pathname.endsWith('/rpc/has_permission')) return reply(true);
+        if (url.pathname.endsWith('/simulation_participants')) return reply([]);
+        if (['course_announcements','simulations'].some((table)=>url.pathname.endsWith(`/${table}`))) return reply([]);
+        if (url.pathname.endsWith('/rpc/get_course_student_emails')) return reply(roster.map((row)=>({user_id:row.user_id,email:row.email})));
         if (url.pathname.endsWith("/token")) return reply({ access_token: jwt, refresh_token: "test-refresh", token_type: "bearer", expires_in: 3600, user });
         if (url.pathname.endsWith("/user")) {
             if (sessionMissing) return reply({ error_code: "session_not_found", message: "Session not found" }, 401);
@@ -161,11 +165,27 @@ try {
     await page.getByRole("alert").filter({ hasText: "First and last names" }).waitFor();
     assert.equal(creationCalls, 0);
 
-    await page.getByLabel("CSV Data").fill("Ana Smith,invalid,P,1");
+    await page.getByLabel("CSV or XML data").fill("Ana Smith,invalid,P,1");
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByText("Row 1: Enter a valid email address.").waitFor();
     assert.equal(creationCalls, 0);
-    await page.getByLabel("CSV Data").fill("Ana Smith,ana@example.edu,P,1");
+    const xml = '<students><student><fullName>Ana Smith</fullName><email>ana@example.edu</email><courseNumber>P</courseNumber><crn>1</crn></student></students>';
+    const xmlChecks = await page.evaluate(async (input) => {
+        const {parseStudentXml} = await import('/src/lib/studentImport.js');
+        return [
+            parseStudentXml(input.replace('Ana Smith','Ana &amp; Maria Smith')),
+            parseStudentXml('<students><student>'),
+            parseStudentXml('<!DOCTYPE students [<!ENTITY private SYSTEM "file:///private">]><students/>'),
+            parseStudentXml(input.replace('</student>', '<email>extra@example.edu</email></student>')),
+            parseStudentXml(input.replace('</students>',input.match(/<student>.*<\/student>/)[0]+'</students>')),
+        ];
+    },xml);
+    assert.equal(xmlChecks[0].rows[0].firstName,'Ana');
+    assert.equal(xmlChecks[0].rows[0].lastName,'& Maria Smith');
+    assert.ok(xmlChecks.slice(1).every((result)=>result.errors.length));
+    await page.getByLabel('Choose roster file',{exact:true}).setInputFiles({name:'class.xml',mimeType:'application/xml',buffer:Buffer.from(xml)});
+    await page.getByLabel('CSV or XML data',{exact:true}).filter({hasText:''}).waitFor();
+    await page.waitForFunction((input)=>document.getElementById('bulk-data').value===input,xml);
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
     assert.equal(await page.locator(".student-import-credentials code").count(), 1);
@@ -189,14 +209,15 @@ try {
     assert.equal(enrollmentRequests.at(-1).courseId, course.id);
     await page.getByRole("button",{name:"Remove",exact:true}).last().click();
     await page.getByText("03, Student",{exact:true}).waitFor({state:"hidden"});
-    await page.getByRole("button", { name: "Import Roster as CSV", exact: true }).click();
+    await page.getByRole("button", { name: "Import Roster (CSV/XML)", exact: true }).click();
     enrolled = false;
     const beforeCourseImport = creationCalls;
-    await page.getByLabel("CSV Data").fill("Wrong Course,wrong@example.edu,OTHER,2");
+    await page.getByLabel("CSV or XML data").fill("Wrong Course,wrong@example.edu,OTHER,2");
     await page.getByRole("button",{name:"Run Bulk Import",exact:true}).click();
     await page.getByRole("alert").filter({hasText:"Use course P, CRN 1"}).waitFor();
     assert.equal(creationCalls,beforeCourseImport);
-    await page.getByLabel("CSV Data").fill("Ana Jones,ana.jones@example.edu,P,1");
+    await page.getByLabel('Choose roster file',{exact:true}).setInputFiles({name:'class.csv',mimeType:'text/csv',buffer:Buffer.from('Ana Jones,ana.jones@example.edu,P,1')});
+    await page.waitForFunction(()=>document.getElementById('bulk-data').value==='Ana Jones,ana.jones@example.edu,P,1');
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
     const coursePassword = await page.locator(".student-import-credentials code").textContent();
@@ -230,7 +251,7 @@ try {
     accountType = "instructor";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByRole("button",{name:"Create Student",exact:true}).waitFor({state:"hidden"});
-    assert.equal(await page.getByLabel("CSV Data").count(),0);
+    assert.equal(await page.getByLabel("CSV or XML data").count(),0);
     await page.getByRole("button", { name: "Courses", exact: true }).click();
     await page.getByText("P", { exact: true }).click();
     await page.getByRole("button", { name: /^Cases\b/ }).click();

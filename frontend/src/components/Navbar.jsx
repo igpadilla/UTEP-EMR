@@ -4,6 +4,8 @@ const STORAGE_KEY = "emr:sidebarCollapsed";
 
 function NavIcon({ name }) {
     switch (name) {
+        case "createPatient":
+            return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="9" cy="7" r="3" /><path d="M3 20v-2a6 6 0 0112 0v2M19 8v8M15 12h8" /></svg>;
         case "dashboard":
             return (
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -69,6 +71,7 @@ export default function Navbar({
     user,
     canUseLivePatients = false,
     canReadRooms = false,
+    canCreatePatient = false,
     autoCollapse = false,
     collapsed: controlledCollapsed,
     onToggleCollapse,
@@ -134,6 +137,7 @@ export default function Navbar({
               ? [{ id: "courses", label: "Courses" }]
               : []),
         ...(showPatients ? [{ id: "patients", label: "Patients" }] : []),
+        ...(canCreatePatient ? [{ id: "createPatient", label: "Create patient" }] : []),
         ...(canReadRooms ? [{ id: "rooms", label: "Rooms" }] : []),
         ...(canManageStudents ? [{ id: "students", label: "Students" }] : []),
         ...(isAdmin ? [{ id: "auditLog", label: "Audit Log" }] : []),

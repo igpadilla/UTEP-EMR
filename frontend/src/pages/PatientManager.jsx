@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import PatientRegistrationForm from "../components/PatientRegistrationForm.jsx";
+import PatientFiles from "../components/PatientFiles.jsx";
 
 export default function PatientManager({ onNavigate, embedded = false }) {
     const [patients, setPatients] = useState([]);
@@ -93,6 +94,7 @@ export default function PatientManager({ onNavigate, embedded = false }) {
             )}
 
             {/* Search + table */}
+            {!showForm && <PatientFiles patients={patients} onImported={fetchPatients} />}
             {!showForm && (
                 <div className="course-detail-section">
                     <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)" }}>

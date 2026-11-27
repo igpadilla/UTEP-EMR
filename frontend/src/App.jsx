@@ -63,6 +63,7 @@ export default function App() {
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
     const signedInUserId = useRef(null);
+    const loadedAccountId = useRef(null);
 
     useEffect(() => {
         const updatePage = () => setShowAbout(window.location.hash === "#/about");
@@ -100,6 +101,7 @@ export default function App() {
             accountRequest.current++;
             //     A different account (or none) must not keep the last user's page open
             if ((newSession?.user.id ?? null) !== signedInUserId.current) {
+                loadedAccountId.current = null;
                 signedInUserId.current = newSession?.user.id ?? null;
                 setNav({ page: "dashboard", id: null });
                 setLiveAccess(NO_LIVE_PATIENT_ACCESS);
@@ -227,13 +229,14 @@ export default function App() {
             setLiveAccess(livePatients);
             setCanReadRooms(roomsAllowed);
             setUser(currentUser);
+            loadedAccountId.current = currentUser.id;
             setError("");
             setAccountWarning("");
         } catch (error) {
         
             if (request !== accountRequest.current) return;
             console.error(error);
-            if (background) {
+            if (background && loadedAccountId.current && loadedAccountId.current === signedInUserId.current) {
                 // Keep the open page — just show a dismissible warning
                 setAccountWarning("Unable to check your account right now. We'll try again shortly.");
             } else {
@@ -287,7 +290,8 @@ export default function App() {
     const canManageCourses = isAdmin || isInstructor;
 
     const navbarPage =
-        nav.page === "studentManagement" ? "students"
+        nav.page === "createPatient" ? "createPatient"
+        : nav.page === "studentManagement" ? "students"
         : nav.page === "patientManager" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
@@ -315,6 +319,8 @@ export default function App() {
             navigate("studentCourses");
         } else if (page === "studentCases") {
             navigate("studentCases");
+        } else if (page === "createPatient" && user.profile.active && (isAdmin || isInstructor)) {
+            navigate("createPatient");
         } else if (page === "patients") {
             // Clinical students work on their own case copies; front desk and biller use Patient Lookup
             navigate(isAdmin || isInstructor ? "patientManager" : isStudent && !liveAccess.read ? "studentCourses" : "patientLookup");
@@ -337,6 +343,12 @@ export default function App() {
 
     let pageContent;
     switch (page) {
+        case "createPatient":
+            pageContent = user.profile.active && (isAdmin || isInstructor)
+                ? <PatientChart key="new-patient" onNavigate={navigate} backTo="patientManager" canEditPatient
+                    onPatientCreated={(patient) => navigate("patientChart", patient.id, { backTo: "patientManager" })} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
         case "patientManager":
             pageContent = <PatientManager onNavigate={navigate} />;
             break;
@@ -473,6 +485,7 @@ export default function App() {
                 onNavigate={handleNavbarNavigate}
                 canUseLivePatients={liveAccess.read}
                 canReadRooms={canReadRooms}
+                canCreatePatient={user.profile.active && (isAdmin || isInstructor)}
                 autoCollapse={page === "courseDetail" || page === "studentCourseDetail"}
             />
             <div className="flex-1 flex flex-col min-w-0 bg-white">

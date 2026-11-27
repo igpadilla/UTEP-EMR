@@ -677,7 +677,7 @@ export default function CourseDetail({ courseId, onNavigate, canManageStudents =
                                     <div className="student-form-actions">
                                         <button className="primary-action-button" type="submit" disabled={enrolling}>{enrolling ? "Enrolling…" : "Enroll student"}</button>
                                         <button className="secondary-action-button" type="button" disabled={enrolling} onClick={() => setShowImport((value) => !value)}>
-                                            {showImport ? "Hide Roster Import" : "Import Roster as CSV"}</button>
+                                            {showImport ? "Hide Roster Import" : "Import Roster (CSV/XML)"}</button>
                                     </div>
                                 </form>
                                 {showImport && <BulkStudentImport course={course} onImported={reloadRoster} />}

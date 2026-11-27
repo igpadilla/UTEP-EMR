@@ -90,6 +90,28 @@ test("patient portal isolates records and exposes only released patient-facing c
             await assert.rejects(as(db, ALICE, 'select get_my_patient_portal($1)', [PATIENT_B]), /does not exist/);
         });
 
+        await t.test("portal reads current chart details and visit history without internal notes", async () => {
+            await db.query(`update patients set phone_number='555-0100', address='123 Demo Street',
+                allergies=ARRAY['Latex'], medical_history=ARRAY['Asthma'],
+                diagnoses='[{"code":"DEMO","description":"Demo diagnosis","internal":"PRIVATE DIAGNOSIS"}]',
+                immunizations='[{"vaccine":"Demo vaccine","date":"2026-11-20","dose":"First","internal":"PRIVATE IMMUNIZATION"}]' where id=$1`, [PATIENT_A]);
+            const first = await portal(ALICE);
+            assert.equal(first.patient.phone_number, '555-0100');
+            assert.deepEqual(first.allergies, ['Latex']);
+            assert.deepEqual(first.medical_history, ['Asthma']);
+            assert.equal(first.diagnoses[0].description, 'Demo diagnosis');
+            assert.equal(first.immunizations[0].vaccine, 'Demo vaccine');
+            assert.equal(first.visits[0].id, VISIT);
+            assert.equal(first.visits[0].summary, null);
+            assert.ok(!JSON.stringify(first).includes('PRIVATE'));
+            assert.ok(!JSON.stringify(first).includes('INTERNAL NOTES'));
+            await db.query(`update patients set phone_number='555-0200', allergies=ARRAY['Penicillin'] where id=$1`, [PATIENT_A]);
+            const updated = await portal(ALICE);
+            assert.equal(updated.patient.phone_number, '555-0200');
+            assert.deepEqual(updated.allergies, ['Penicillin']);
+            assert.deepEqual((await portal(BOB)).visits, []);
+        });
+
         await t.test("portal access stays read-only even with a leftover front desk role", async () => {
             await assert.rejects(as(db, ALICE, `insert into patients(first_name,last_name,age) values ('X','Y',5)`), /row-level security/);
             await assert.rejects(as(db, ALICE, `insert into visits(patient_id,notes) values ('${PATIENT_A}','bad')`), /row-level security/);

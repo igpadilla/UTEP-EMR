@@ -31,7 +31,11 @@ try {
     const user = { id: '11111111-1111-4111-8111-111111111111', email: 'demo-patient@example.edu', role: 'authenticated', aud: 'authenticated', user_metadata: {}, app_metadata: {} };
     const jwt = () => `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: user.id, exp: Math.floor(Date.now()/1000)+3600, role:'authenticated' })).toString('base64url')}.test`;
     const records = {
-        patient: { first_name: 'Avery', last_name: 'Demo', date_of_birth: '1990-05-20' },
+        patient: { first_name: 'Avery', last_name: 'Demo', date_of_birth: '1990-05-20', phone_number:'555-0100', address:'123 Demo Street' },
+        allergies:['Peanuts, tree nuts'],medical_history:['Asthma'],diagnoses:[{code:'DEMO',description:'Demo diagnosis'}],
+        immunizations:[{vaccine:'Demo vaccine',date:'2026-11-20',dose:'First dose'}],
+        visits:[{id:'visit-new',visit_type:'Routine',date:'2026-11-20',summary:null},
+            {id:'visit-shared',visit_type:'Follow-up',date:'2026-10-01',summary:'Demo visit summary shared by the care team.\nFollow the recorded care plan.'}],
         medications: [{ name: 'Demo recorded medication', dosage: '5', unit: 'mg', frequency: '2', status: 'Active', prescriber: 'Dr. Demo' }],
         labs: [{ id: 'lab-1', test_name: 'Demo lab result', resulted_at: '2026-10-01', overall_flag: 'normal',
             values: [{ code:'demo', name:'Example value', value:'0', unit:'units', reference_range:'0–1', flag:'normal' }], result_note: 'A fictional result for the walkthrough.' }],
@@ -114,6 +118,10 @@ try {
     await page.getByRole('button', { name:'Update Password', exact:true }).click();
     await page.getByRole('heading', { name:/Good .*Avery/ }).waitFor();
     await page.getByText('Dr. Demo', { exact:true }).waitFor();
+    await page.getByText('Peanuts, tree nuts',{exact:true}).waitFor();
+    await page.getByText('Asthma',{exact:true}).waitFor();
+    await page.getByText('DEMO · Demo diagnosis',{exact:true}).waitFor();
+    await page.getByText('Demo vaccine',{exact:false}).waitFor();
     assert.equal(await page.getByRole('button', { name:'Students', exact:true }).count(), 0);
     assert.equal(await page.getByRole('button', { name:/Edit|Schedule|Delete|Refill/ }).count(), 0);
     await page.screenshot({ path:`${output}/01-overview.png`, fullPage:true });
@@ -136,20 +144,22 @@ try {
     for (const [nav, expected, shot] of [
         ['Medications & Prescriptions','Dr. Demo','02-medications'],
         ['Lab Results','Demo lab result','03-lab-results'],
-        ['Last Visit Summary','Demo visit summary shared by the care team.','04-visit-summary'],
+        ['Visits','Demo visit summary shared by the care team.','04-visit-summary'],
         ['My Profile',user.email,'05-profile'],
     ]) {
         await page.getByRole('navigation', { name:'Patient portal' }).getByRole('button', { name:nav, exact:true }).click();
-        await page.getByText(expected, { exact:nav !== 'Last Visit Summary' }).waitFor();
+        await page.getByText(expected, { exact:nav !== 'Visits' }).waitFor();
         if (nav === 'Lab Results') {
             await page.getByRole('cell',{name:'0 units',exact:true}).waitFor();
             assert.equal(await page.getByRole('cell',{name:'0–1',exact:true}).count(),1);
         }
+        if (nav === 'Visits') await page.getByText('No summary has been shared for this visit.',{exact:true}).waitFor();
+        if (nav === 'My Profile') await page.getByText('555-0100',{exact:true}).waitFor();
         await page.screenshot({ path:`${output}/${shot}.png`, fullPage:true });
     }
     empty = true;
     await page.getByRole('button', { name:'Refresh records', exact:true }).click();
-    for (const [nav, text] of [['Medications & Prescriptions','No medications yet'], ['Lab Results','No lab results yet'], ['Last Visit Summary','No visit summary yet']]) {
+    for (const [nav, text] of [['Medications & Prescriptions','No medications yet'], ['Lab Results','No lab results yet'], ['Visits','No visits recorded.']]) {
         await page.getByRole('navigation').getByRole('button', { name:nav, exact:true }).click();
         await page.getByText(text, { exact:true }).waitFor();
     }
@@ -159,6 +169,11 @@ try {
     fail = false; empty = false;
     await page.getByRole('button', { name:'Try again', exact:true }).click();
     await page.getByText('Demo visit summary shared by the care team.', { exact:false }).waitFor();
+    records.allergies = ['Updated chart allergy'];
+    await page.getByRole('button',{name:'My Health',exact:true}).click();
+    await page.getByRole('button',{name:'Refresh records',exact:true}).click();
+    await page.getByText('Updated chart allergy',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Peanuts, tree nuts',{exact:true}).count(),0);
     await page.setViewportSize({ width:390, height:844 });
     await page.getByRole('navigation',{name:'Patient portal'}).getByRole('button',{name:'Lab Results',exact:true}).click();
     await page.getByRole('cell',{name:'0 units',exact:true}).waitFor();
@@ -175,13 +190,14 @@ try {
 
     // A second login cannot inherit the first patient's records or open content after deactivation.
     Object.assign(user,{id:'55555555-5555-4555-8555-555555555555',email:'second-patient@example.edu'});
-    Object.assign(records,{patient:{first_name:'Jordan',last_name:'Demo',date_of_birth:'1992-05-20'},medications:[],labs:[],last_visit:null});
+    Object.assign(records,{patient:{first_name:'Jordan',last_name:'Demo',date_of_birth:'1992-05-20'},medications:[],labs:[],last_visit:null,visits:[],allergies:[],medical_history:[],diagnoses:[],immunizations:[]});
     await page.getByLabel('Email',{exact:true}).fill(user.email);
     await page.getByLabel('Password',{exact:true}).fill('Temporary123');
     await page.getByRole('button',{name:'Sign In',exact:true}).click();
     await page.getByRole('heading',{name:/Good .*Jordan/}).waitFor();
     assert.equal(await page.getByText('Demo recorded medication',{exact:true}).count(),0);
     await page.getByText('No prescription alerts yet.',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Updated chart allergy',{exact:true}).count(),0);
     assert.equal(await page.getByText('Your prescription was sent to Demo Pharmacy as part of this simulation.',{exact:true}).count(),0);
     await page.getByRole('navigation',{name:'Patient portal'}).getByRole('button',{name:'Lab Results',exact:true}).click();
     await page.getByText('No lab results yet',{exact:true}).waitFor();

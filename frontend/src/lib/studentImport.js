@@ -2,7 +2,7 @@ import { validateStudentIdentity, validateStudentEmail } from "../../../supabase
 
 // Parse quoted fields, escaped quotes, CRLF, and line breaks inside quoted fields.
 // Keep source line numbers so a bad row can be found in the original roster.
-function readCsv(text) {
+export function readCsv(text) {
     const records = [];
     let fields = [], field = "", quoted = false, closedQuote = false;
     let line = 1, rowLine = 1;
@@ -38,16 +38,20 @@ function readCsv(text) {
 }
 
 export function parseStudentImport(text) {
-    const rows = [], errors = [], emails = new Map();
     let records;
     try {
         records = readCsv(text.replace(/^\uFEFF/, ""));
     } catch (error) {
         return { rows: [], errors: [error.message] };
     }
-    if (!records.length) return { rows, errors: ["Enter at least one student row."] };
+    if (!records.length) return { rows: [], errors: ["Enter at least one student row."] };
     const header = records[0].fields.map((value) => value.toLowerCase().replace(/[\s_]/g, ""));
     if (header.join(",") === "fullname,email,coursenumber,crn") records.shift();
+    return validateRosterRecords(records);
+}
+
+function validateRosterRecords(records) {
+    const rows = [], errors = [], emails = new Map();
 
     for (const { fields, rowNumber } of records) {
         try {
@@ -67,6 +71,33 @@ export function parseStudentImport(text) {
     }
     if (!rows.length && !errors.length) errors.push("The file contains a header but no student rows.");
     return { rows, errors };
+}
+
+export function parseStudentXml(text) {
+    const failure = (message) => ({ rows: [], errors: [message] });
+    if (/<!DOCTYPE|<!ENTITY/i.test(text)) return failure("XML rosters cannot contain DOCTYPE or ENTITY declarations.");
+    const document = new DOMParser().parseFromString(text, 'application/xml');
+    if (document.querySelector('parsererror')) return failure("This XML is not valid. Check the opening and closing tags.");
+    const root = document.documentElement;
+    if (root?.tagName !== 'students' || root.attributes.length) return failure("Use a <students> root with <student> entries.");
+    const keys = ['fullName', 'email', 'courseNumber', 'crn'];
+    const records = [];
+    for (const [index, student] of [...root.children].entries()) {
+        if (student.tagName !== 'student' || student.attributes.length) return failure(`Row ${index + 1}: Expected a <student> entry.`);
+        const fields = [...student.children];
+        if (fields.length !== 4 || keys.some((key) => fields.filter((field) => field.tagName === key).length !== 1)
+            || fields.some((field) => field.children.length || field.attributes.length)) {
+            return failure(`Row ${index + 1}: Include fullName, email, courseNumber and crn once each, with text values.`);
+        }
+        records.push({ rowNumber: index + 1, fields: keys.map((key) => fields.find((field) => field.tagName === key).textContent.trim()) });
+    }
+    if (!records.length) return failure("Add at least one <student> entry.");
+    return validateRosterRecords(records);
+}
+
+export function parseRoster(text) {
+    if (text.length > 2 * 1024 * 1024) return { rows: [], errors: ["Choose a roster smaller than 2 MB."] };
+    return text.replace(/^\uFEFF/, '').trimStart().startsWith('<') ? parseStudentXml(text) : parseStudentImport(text);
 }
 
 function temporaryPassword() {

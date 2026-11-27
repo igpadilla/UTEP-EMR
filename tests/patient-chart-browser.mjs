@@ -68,10 +68,10 @@ try {
         occupation: "Teacher", phone_number: "555-0100", email: "ana@example.edu", address: "123 Example Street",
         emergency_contacts: [{ name: "Pat", phone: "555-0101", relationship: "Sibling" }, { name: "Sam", phone: "555-0102" }],
         allergies: ["Penicillin"], medical_history: ["Asthma"], current_medications: [{ name: "Existing medicine" }],
-        diagnoses: [],
+        diagnoses: [], immunizations: [],
         updated_at: "2026-10-01T00:00:00.000Z",
     };
-    let failLoad = true, failSave = false, conflict = false;
+    let failLoad = true, failSave = false, conflict = false, failVisits = true;
     let caseStatus = "in progress";
     const patches = [], reads = [];
     const casePatient = { first_name: "Case", last_name: "Patient", age: 70, sex: "Male", allergies: ["Case pollen"], medical_history: ["Case condition"], diagnoses: [{ code: "I10", description: "Essential (primary) hypertension", status: "active" }] };
@@ -81,6 +81,11 @@ try {
         const reply = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
         reads.push({ path: url.pathname, method: request.method(), search: url.search });
         if (url.pathname.endsWith("/rpc/log_record_view")) return reply(null);
+        if (url.pathname.endsWith('/visits')) {
+            if (failVisits) return reply({message:'Test visits failure'},500);
+            return reply([{id:'visit-one',patient_id:patient.id,visit_type:'Follow-up',notes:'Saved visit notes',created_at:'2026-11-20T12:00:00Z'}]);
+        }
+        if (url.pathname.endsWith('/rpc/patient_portal_account_status')) return reply(null);
         if (url.pathname.endsWith("/patients")) {
             if (request.method() === "PATCH") {
                 patches.push(request.postDataJSON());
@@ -138,8 +143,13 @@ try {
 
     await page.getByRole("tab", { name: "Allergies & History", exact: true }).click();
     await page.getByRole("button", { name: "Edit allergies and history", exact: true }).click();
-    await page.getByLabel("Allergies", { exact: true }).fill("Latex\n Penicillin \nlatex\nPeanuts, tree nuts");
-    await page.getByLabel("Medical history", { exact: true }).fill("Asthma\nHypertension");
+    await page.getByLabel('Allergy 1',{exact:true}).fill('Latex');
+    for (const [index, value] of [' Penicillin ', 'latex', 'Peanuts, tree nuts'].entries()) {
+        await page.getByRole('button',{name:'Add allergy',exact:true}).click();
+        await page.getByLabel(`Allergy ${index + 2}`,{exact:true}).fill(value);
+    }
+    await page.getByRole('button',{name:'Add history item',exact:true}).click();
+    await page.getByLabel('History item 2',{exact:true}).fill('Hypertension');
     await page.getByRole("button", { name: "Save allergies and history", exact: true }).click();
     await page.getByText("Allergies and medical history saved.", { exact: true }).waitFor();
     assert.deepEqual(patient.allergies, ["Latex", "Penicillin", "Peanuts, tree nuts"]);
@@ -148,6 +158,7 @@ try {
     await page.locator(".chart-allergies").filter({ hasText: "Latex, Penicillin, Peanuts, tree nuts" }).waitFor();
 
     await page.getByRole("button", { name: "Edit allergies and history", exact: true }).click();
+    await page.getByRole('button',{name:'Remove allergy 1',exact:true}).click();
     conflict = true;
     await page.getByRole("button", { name: "Save allergies and history", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "The patient changed" }).waitFor();
@@ -165,6 +176,36 @@ try {
     await page.getByRole("tab", { name: "Allergies & History", exact: true }).click();
     await page.screenshot({ path: `${output}/allergies-mobile.png`, fullPage: true });
     console.log("PASS: allergies/history save independently, banner updates, conflicts are shown, and mobile layout fits");
+
+    await page.getByRole('button',{name:'Edit immunizations',exact:true}).click();
+    await page.getByRole('button',{name:'Add immunization',exact:true}).click();
+    await page.getByLabel('Dose 1',{exact:true}).fill('First dose');
+    await page.getByRole('button',{name:'Save immunizations',exact:true}).click();
+    await page.getByText('Vaccine name is required for each immunization entry.',{exact:true}).waitFor();
+    await page.getByLabel('Vaccine 1',{exact:true}).fill('Demo vaccine');
+    await page.getByLabel('Date given 1',{exact:true}).fill('2026-11-20');
+    failSave = true;
+    await page.getByRole('button',{name:'Save immunizations',exact:true}).click();
+    await page.getByRole('alert').filter({hasText:'Could not save these patient details'}).waitFor();
+    assert.equal(await page.getByLabel('Vaccine 1',{exact:true}).inputValue(),'Demo vaccine');
+    await page.screenshot({path:`${output}/immunizations-mobile.png`,fullPage:true});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.getByRole('button',{name:'Save immunizations',exact:true}).click();
+    await page.getByText('Immunizations saved.',{exact:true}).waitFor();
+    assert.deepEqual(patient.immunizations,[{vaccine:'Demo vaccine',date:'2026-11-20',dose:'First dose',notes:''}]);
+    assert.deepEqual(Object.keys(patches.at(-1)).sort(),['immunizations','updated_at']);
+    await page.getByRole('button',{name:'Edit immunizations',exact:true}).click();
+    await page.getByRole('button',{name:'Remove immunization 1',exact:true}).click();
+    await page.getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.equal(patient.immunizations.length,1);
+
+    await page.getByRole('tab',{name:'Visits',exact:true}).click();
+    await page.getByRole('button',{name:'Retry visits',exact:true}).waitFor();
+    assert.equal(await page.getByText('No visits recorded.',{exact:true}).count(),0);
+    failVisits = false;
+    await page.getByRole('button',{name:'Retry visits',exact:true}).click();
+    await page.getByText('Saved visit notes',{exact:false}).waitFor();
+    console.log('PASS: consistent list controls, immunization validation/retry/cancel, and visits retry');
 
     await page.getByRole("tab", { name: "Medications", exact: true }).click();
     await page.locator('strong').filter({ hasText: /^Existing medicine$/ }).waitFor();

@@ -4,7 +4,7 @@ import { logout } from "../services/auth.js";
 import "./PatientPortal.css";
 import PrescriptionAlerts from "../components/PrescriptionAlerts.jsx";
 
-const PAGES = ["My Health", "Medications & Prescriptions", "Lab Results", "Last Visit Summary", "My Profile"];
+const PAGES = ["My Health", "Medications & Prescriptions", "Lab Results", "Visits", "My Profile"];
 const FLAG_LABELS = { normal: "Normal", low: "Low", high: "High", abnormal: "Abnormal", critical: "Critical", critical_low: "Critical low", critical_high: "Critical high" };
 
 export function portalDate(value) {
@@ -89,6 +89,9 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
     const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
     const medications = Array.isArray(records?.medications) ? records.medications : [];
     const labs = Array.isArray(records?.labs) ? records.labs : [];
+    const visits = Array.isArray(records?.visits) ? records.visits : records?.last_visit ? [records.last_visit] : [];
+    const list = (name) => Array.isArray(records?.[name]) ? records[name] : [];
+    const lastVisit = visits[0] || records?.last_visit;
 
     return <div className="patient-portal">
         <header className="portal-header">
@@ -117,21 +120,38 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
                         <div className="portal-stats">
                             <button onClick={() => setPage(PAGES[1])}><span>Medications</span><strong>{medications.length}</strong><span>View medications →</span></button>
                             <button onClick={() => setPage(PAGES[2])}><span>Lab results</span><strong>{labs.length}</strong><span>View results →</span></button>
-                            <button onClick={() => setPage(PAGES[3])}><span>Last visit</span><strong className="portal-stat-date">{records.last_visit ? portalDate(records.last_visit.date) : "Not available"}</strong><span>View visit summary →</span></button>
+                            <button onClick={() => setPage(PAGES[3])}><span>Last visit</span><strong className="portal-stat-date">{lastVisit ? portalDate(lastVisit.date) : "Not available"}</strong><span>View visits →</span></button>
                         </div>
                         <PrescriptionAlerts key={user.id} userId={user.id} refresh={reload} />
                         <section className="portal-card"><h2>Medications & prescriptions</h2><MedicationList medications={medications} /></section>
+                        <div className="portal-health-history">
+                            {['allergies', 'medical_history'].map((key) => <section className="portal-card" key={key}>
+                                <h2>{key === 'allergies' ? 'Allergies' : 'Medical history'}</h2>
+                                {list(key).length ? <ul>{list(key).map((item, index) => <li key={index}>{item}</li>)}</ul> : <p className="portal-empty">None recorded.</p>}
+                            </section>)}
+                            <section className="portal-card"><h2>Diagnoses</h2>
+                                {list('diagnoses').length ? <ul>{list('diagnoses').map((item, index) => <li key={index}>{[item.code, item.description, item.status].filter(Boolean).join(' · ')}</li>)}</ul> : <p className="portal-empty">None recorded.</p>}
+                            </section>
+                            <section className="portal-card"><h2>Immunizations</h2>
+                                {list('immunizations').length ? <ul>{list('immunizations').map((item, index) => <li key={index}>{[item.vaccine, item.date && portalDate(item.date), item.dose, item.notes].filter(Boolean).join(' · ')}</li>)}</ul> : <p className="portal-empty">None recorded.</p>}
+                            </section>
+                        </div>
                     </>}
                     {page === PAGES[1] && <section className="portal-card"><h2>Medication list</h2><MedicationList medications={medications} /></section>}
                     {page === PAGES[2] && <section className="portal-card"><h2>Lab results</h2>
                         <LabResults labs={labs} />
                     </section>}
-                    {page === PAGES[3] && <section className="portal-card"><h2>Last visit</h2>
-                        {records.last_visit ? <><p>{records.last_visit.visit_type || "Visit"} · {portalDate(records.last_visit.date)}</p>
-                            <p className="portal-text">{records.last_visit.summary}</p></> : <p className="portal-empty">No visit summary yet</p>}
+                    {page === PAGES[3] && <section className="portal-card"><h2>Visit history</h2>
+                        {!visits.length && <p className="portal-empty">No visits recorded.</p>}
+                        {visits.map((visit, index) => <article className="portal-record" key={visit.id || index}>
+                            <h3>{visit.visit_type || "Visit"} · {portalDate(visit.date)}</h3>
+                            {visit.medications && <p>Medications: {visit.medications}</p>}
+                            <p className="portal-text">{visit.summary || "No summary has been shared for this visit."}</p>
+                        </article>)}
                     </section>}
                     {page === PAGES[4] && <section className="portal-card"><h2>My details</h2>
                         <dl className="portal-details"><div><dt>Name</dt><dd>{name}</dd></div><div><dt>Date of birth</dt><dd>{portalDate(patient?.date_of_birth)}</dd></div>
+                            {['age', 'sex', 'occupation', 'phone_number', 'email', 'address'].map((key) => <div key={key}><dt>{({age:'Age',sex:'Sex',occupation:'Occupation',phone_number:'Phone',email:'Contact email',address:'Address'})[key]}</dt><dd>{patient?.[key] ?? 'Not recorded'}</dd></div>)}
                             <div><dt>Sign-in email</dt><dd>{user.email}</dd></div><div><dt>Account role</dt><dd>Patient</dd></div></dl>
                         </section>}
                 </>}
