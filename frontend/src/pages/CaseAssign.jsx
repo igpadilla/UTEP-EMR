@@ -164,7 +164,6 @@ export default function CaseAssign({ templateId, fromCourseId = null, fromCourse
             ) : (
                 <div className="instructor-page-header">
                     <div>
-                        <p className="section-title">Instructor</p>
                         <h2>Assign Case</h2>
                         <p>Choose the students who will receive this training case.</p>
                     </div>

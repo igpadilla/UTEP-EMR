@@ -228,16 +228,10 @@ export default function Navbar({
 
             {/* Footer Metadata */}
             <div className="p-3.5 border-t border-slate-100">
-                {!isCollapsed ? (
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                        <span className="uppercase tracking-wider">{accountType}</span>
-                        <span>v2.4</span>
-                    </div>
-                ) : (
-                    <div className="text-center font-mono text-[10px] uppercase text-slate-400" title={`Role: ${accountType}`}>
-                        {accountType.slice(0, 3)}
-                    </div>
-                )}
+                <div className={`text-[11px] font-mono text-slate-400 ${isCollapsed ? "text-center text-[10px]" : "flex items-center justify-between"}`}>
+                    {!isCollapsed && <span>UTEP EMR</span>}
+                    <span>v2.4</span>
+                </div>
             </div>
         </aside>
     );

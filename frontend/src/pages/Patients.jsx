@@ -5,7 +5,6 @@ export default function Patients() {
     <main className="patients-main">
       <section className="patients-page-header">
         <div>
-          <p className="section-title">Patient Management</p>
           <h2>Patients</h2>
           <p>Search and access patient records.</p>
         </div>
