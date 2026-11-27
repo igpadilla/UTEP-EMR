@@ -167,12 +167,12 @@ try {
     console.log("PASS: allergies/history save independently, banner updates, conflicts are shown, and mobile layout fits");
 
     await page.getByRole("tab", { name: "Medications", exact: true }).click();
-    await page.getByText("Existing medicine", { exact: true }).waitFor();
+    await page.locator('strong').filter({ hasText: /^Existing medicine$/ }).waitFor();
     await page.getByRole("button", { name: "Edit medications", exact: true }).click();
     await page.getByRole("button", { name: "Remove Existing medicine", exact: true }).click();
-    await page.getByText("Existing medicine", { exact: true }).waitFor({ state: "hidden" });
+    await page.locator('strong').filter({ hasText: /^Existing medicine$/ }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByText("Existing medicine", { exact: true }).waitFor();
+    await page.locator('strong').filter({ hasText: /^Existing medicine$/ }).waitFor();
     assert.deepEqual(patient.current_medications, [{ name: "Existing medicine" }]);
     console.log("PASS: saved flat medication records display and edit without crashing or changing data on cancel");
 

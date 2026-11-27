@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { loadMyPatientPortal } from "../services/patientPortalService.js";
 import { logout } from "../services/auth.js";
 import "./PatientPortal.css";
+import PrescriptionAlerts from "../components/PrescriptionAlerts.jsx";
 
 const PAGES = ["My Health", "Medications & Prescriptions", "Lab Results", "Last Visit Summary", "My Profile"];
 const FLAG_LABELS = { normal: "Normal", low: "Low", high: "High", abnormal: "Abnormal", critical: "Critical", critical_low: "Critical low", critical_high: "Critical high" };
@@ -118,6 +119,7 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
                             <button onClick={() => setPage(PAGES[2])}><span>Lab results</span><strong>{labs.length}</strong><span>View results →</span></button>
                             <button onClick={() => setPage(PAGES[3])}><span>Last visit</span><strong className="portal-stat-date">{records.last_visit ? portalDate(records.last_visit.date) : "Not available"}</strong><span>View visit summary →</span></button>
                         </div>
+                        <PrescriptionAlerts key={user.id} userId={user.id} refresh={reload} />
                         <section className="portal-card"><h2>Medications & prescriptions</h2><MedicationList medications={medications} /></section>
                     </>}
                     {page === PAGES[1] && <section className="portal-card"><h2>Medication list</h2><MedicationList medications={medications} /></section>}

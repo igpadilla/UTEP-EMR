@@ -25,7 +25,8 @@ try {
     let mustChange = true, fail = false, empty = false, accountType = 'patient', accountActive = true, failRelease = false;
     const patientId = '22222222-2222-4222-8222-222222222222';
     const visitId = '33333333-3333-4333-8333-333333333333';
-    let portalAccount = null;
+    let portalAccount = null, failAlertRead = false, alertsMissing = false, failAlertSend = false;
+    const prescriptionAlerts = [{id:'alert-one', medication_name:'Demo recorded medication', pharmacy_name:'Demo Pharmacy', created_at:'2026-11-17T12:00:00Z', read_at:null}];
     const changes = [];
     const user = { id: '11111111-1111-4111-8111-111111111111', email: 'demo-patient@example.edu', role: 'authenticated', aud: 'authenticated', user_metadata: {}, app_metadata: {} };
     const jwt = () => `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: user.id, exp: Math.floor(Date.now()/1000)+3600, role:'authenticated' })).toString('base64url')}.test`;
@@ -48,7 +49,23 @@ try {
         if (path.endsWith('/user')) return reply(user);
         if (path.endsWith('/logout')) return reply({});
         if (path.endsWith('/rpc/log_record_view')) return reply(null);
-        if (['assigned_cases', 'courses'].some((table) => path.endsWith(`/${table}`))) return reply([]);
+        if (path.endsWith('/rpc/has_permission')) return reply(true);
+        if (path.endsWith('/rpc/get_my_prescription_alerts')) {
+            if (alertsMissing) return reply({code:'PGRST202',message:'Not installed'},404);
+            return reply(user.id === originalUser.id ? prescriptionAlerts : []);
+        }
+        if (path.endsWith('/rpc/read_my_prescription_alert')) {
+            if (failAlertRead) return reply({message:'Test read failure'},500);
+            assert.equal(req.postDataJSON().p_alert_id,'alert-one');
+            prescriptionAlerts[0].read_at = '2026-11-17T12:30:00Z';
+            return reply(null);
+        }
+        if (path.endsWith('/rpc/notify_patient_prescription')) {
+            if (failAlertSend) return reply({message:'Test send failure'},500);
+            assert.deepEqual(req.postDataJSON(), {p_patient_id:patientId,p_medication_name:'Demo recorded medication',p_pharmacy_name:'Campus Demo Pharmacy'});
+            return reply(null);
+        }
+        if (['assigned_cases', 'courses', 'simulation_participants'].some((table) => path.endsWith(`/${table}`))) return reply([]);
         if (path.endsWith('/profiles')) return reply({ user_id:user.id, first_name:records.patient.first_name, last_name:'Demo', account_type:accountType, active:accountActive, must_change_password:mustChange });
         if (path.endsWith('/diagnostic_orders')) return reply([{ id:'order-one',patient_id:patientId,case_id:null,category:'lab',status:'completed',test_name:'Demo lab result',
             priority:'routine',coding_system:'LOINC',clinical_code:'demo',clinical_indication:'Fictional teaching record',created_at:'2026-10-01', diagnostic_results:[result] }]);
@@ -61,7 +78,7 @@ try {
             return reply(null);
         }
         if (path.endsWith('/patients')) {
-            const patient = { id:patientId, ...records.patient, age:36, current_medications:[], allergies:[], medical_history:[] };
+            const patient = { id:patientId, ...records.patient, age:36, current_medications:records.medications, allergies:[], medical_history:[] };
             return reply(req.headers().accept?.includes('vnd.pgrst.object') ? patient : [patient]);
         }
         if (path.endsWith('/visits')) return reply([{ id:visitId, patient_id:patientId, visit_type:'Follow-up', notes:'Internal visit note', created_at:'2026-10-01' }]);
@@ -96,10 +113,26 @@ try {
     await page.getByLabel('Confirm Password', { exact:true }).fill('ChangedPassword123');
     await page.getByRole('button', { name:'Update Password', exact:true }).click();
     await page.getByRole('heading', { name:/Good .*Avery/ }).waitFor();
-    await page.getByText('Demo recorded medication', { exact:true }).waitFor();
+    await page.getByText('Dr. Demo', { exact:true }).waitFor();
     assert.equal(await page.getByRole('button', { name:'Students', exact:true }).count(), 0);
     assert.equal(await page.getByRole('button', { name:/Edit|Schedule|Delete|Refill/ }).count(), 0);
     await page.screenshot({ path:`${output}/01-overview.png`, fullPage:true });
+    await page.getByRole('heading',{name:'Prescription alerts (1 unread)',exact:true}).waitFor();
+    await page.getByText('Your prescription was sent to Demo Pharmacy as part of this simulation.',{exact:true}).waitFor();
+    failAlertRead = true;
+    await page.getByRole('button',{name:'Mark as read',exact:true}).click();
+    await page.getByText('Unable to mark this alert as read. Try again.',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Mark as read',exact:true}).count(),1);
+    failAlertRead = false;
+    await page.getByRole('button',{name:'Mark as read',exact:true}).click();
+    await page.getByRole('heading',{name:'Prescription alerts',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Refresh records',exact:true}).click();
+    await page.getByText('Read',{exact:true}).waitFor();
+    alertsMissing = true;
+    await page.getByRole('button',{name:'Refresh records',exact:true}).click();
+    await page.getByText('Prescription alerts are not available yet.',{exact:true}).waitFor();
+    await page.getByText('Demo recorded medication',{exact:true}).waitFor();
+    alertsMissing = false;
     for (const [nav, expected, shot] of [
         ['Medications & Prescriptions','Dr. Demo','02-medications'],
         ['Lab Results','Demo lab result','03-lab-results'],
@@ -132,6 +165,8 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true);
     await page.screenshot({path:`${output}/09-mobile-labs.png`,fullPage:true});
     await page.getByRole('button', { name:'My Health', exact:true }).click();
+    await page.getByText('Your prescription was sent to Demo Pharmacy as part of this simulation.',{exact:true}).waitFor();
+    await page.screenshot({path:`${output}/10-mobile-prescription-alert.png`,fullPage:true});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await page.screenshot({ path:`${output}/06-mobile.png`, fullPage:true });
     await page.getByRole('button', { name:'Sign out', exact:true }).click();
@@ -146,6 +181,8 @@ try {
     await page.getByRole('button',{name:'Sign In',exact:true}).click();
     await page.getByRole('heading',{name:/Good .*Jordan/}).waitFor();
     assert.equal(await page.getByText('Demo recorded medication',{exact:true}).count(),0);
+    await page.getByText('No prescription alerts yet.',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Your prescription was sent to Demo Pharmacy as part of this simulation.',{exact:true}).count(),0);
     await page.getByRole('navigation',{name:'Patient portal'}).getByRole('button',{name:'Lab Results',exact:true}).click();
     await page.getByText('No lab results yet',{exact:true}).waitFor();
     assert.equal(await page.getByText('Demo lab result',{exact:true}).count(),0);
@@ -196,6 +233,18 @@ try {
     await page.getByRole('button',{name:'Stop sharing with patient',exact:true}).click();
     await page.getByLabel('Patient summary (optional)').waitFor();
     assert.equal(result.portal_released_at,null);
+    await page.getByRole('tab',{name:'Medications',exact:true}).click();
+    await page.getByLabel('Saved medication',{exact:true}).selectOption('Demo recorded medication');
+    await page.getByLabel('Demo pharmacy',{exact:true}).fill('Campus Demo Pharmacy');
+    failAlertSend = true;
+    await page.getByRole('button',{name:'Send prescription alert',exact:true}).click();
+    await page.getByText('Test send failure',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Demo pharmacy',{exact:true}).inputValue(),'Campus Demo Pharmacy');
+    failAlertSend = false;
+    await page.getByRole('button',{name:'Send prescription alert',exact:true}).click();
+    await page.getByText('Prescription alert sent to the patient portal.',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Demo pharmacy',{exact:true}).inputValue(),'');
+    await page.screenshot({path:`${output}/11-staff-prescription-alert.png`,fullPage:true});
     await page.getByRole('button', { name:'Sign Out', exact:true }).click();
     await page.getByRole('button', { name:'Sign In', exact:true }).waitFor();
     accountType = 'instructor';

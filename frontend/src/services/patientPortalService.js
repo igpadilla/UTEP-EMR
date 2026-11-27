@@ -8,6 +8,26 @@ export async function loadMyPatientPortal() {
     return data;
 }
 
+export async function loadPrescriptionAlerts() {
+    const { data, error } = await supabase.rpc("get_my_prescription_alerts");
+    if (error?.code === "PGRST202") return null;
+    if (error) throw new Error("Unable to load prescription alerts. Try again.");
+    return Array.isArray(data) ? data : [];
+}
+
+export async function readPrescriptionAlert(id) {
+    const { error } = await supabase.rpc("read_my_prescription_alert", { p_alert_id: id });
+    if (error) throw new Error("Unable to mark this alert as read. Try again.");
+}
+
+export async function notifyPatientPrescription(patientId, medication, pharmacy) {
+    const { error } = await supabase.rpc("notify_patient_prescription", {
+        p_patient_id: patientId, p_medication_name: medication, p_pharmacy_name: pharmacy.trim(),
+    });
+    if (error?.code === "PGRST202") throw new Error("Prescription alerts need a database update before they can be used.");
+    if (error) throw new Error(error.message || "Unable to send the prescription alert. Try again.");
+}
+
 export async function createPatientPortalAccount(details) {
     const { data, error } = await supabase.functions.invoke("create-patient-account", { body: details });
     if (error) {
