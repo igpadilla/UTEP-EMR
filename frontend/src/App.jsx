@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Login from "./pages/Login.jsx";
+import AboutUs from "./pages/AboutUs.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import Header from "./components/Header.jsx";
@@ -58,9 +59,16 @@ export default function App() {
     const [liveAccess, setLiveAccess] = useState(NO_LIVE_PATIENT_ACCESS);
     const [canReadRooms, setCanReadRooms] = useState(false);
     const [nav, setNav] = useState({ page: "dashboard", id: null });
+    const [showAbout, setShowAbout] = useState(() => window.location.hash === "#/about");
     const accountRequest = useRef(0);
     const stayIdleRef = useRef(() => {});
     const signedInUserId = useRef(null);
+
+    useEffect(() => {
+        const updatePage = () => setShowAbout(window.location.hash === "#/about");
+        window.addEventListener("hashchange", updatePage);
+        return () => window.removeEventListener("hashchange", updatePage);
+    }, []);
 
     function navigate(page, id = null, extra = {}) {
         setNav({ page, id, ...extra });
@@ -234,6 +242,8 @@ export default function App() {
             }
         }
     }
+
+    if (showAbout) return <AboutUs signedIn={Boolean(session)} />;
 
     if (loading) return <p>Loading...</p>;
 
@@ -482,6 +492,7 @@ export default function App() {
                 {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
                 <footer className="border-t border-slate-100 px-8 py-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
                     <span>UTEP Educational EMR</span>
+                    <a href="#/about" className="text-slate-600 hover:underline">About us</a>
                     <span>For educational use only</span>
                 </footer>
             </div>

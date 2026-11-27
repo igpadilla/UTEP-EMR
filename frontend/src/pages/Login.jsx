@@ -263,7 +263,8 @@ export default function Login() {
 
                 {/* Minimal Footer */}
                 <footer className="py-5 px-6 text-center text-xs text-slate-400">
-                    UTEP Educational EMR
+                    <a href="#/about" className="text-slate-600 hover:text-[#0F3B70] hover:underline focus-visible:outline-2 focus-visible:outline-offset-4">About us</a>
+                    <p className="mt-2">UTEP Educational EMR</p>
                 </footer>
             </div>
         </div>
