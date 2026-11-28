@@ -4,6 +4,11 @@ const STORAGE_KEY = "emr:sidebarCollapsed";
 
 function NavIcon({ name }) {
     switch (name) {
+        case "createPatient":
+        case "createStudents":
+            return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="9" cy="7" r="3" /><path d="M3 20v-2a6 6 0 0112 0v2M19 8v8M15 12h8" /></svg>;
+        case "aboutUs":
+            return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7v1" /></svg>;
         case "dashboard":
             return (
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -69,6 +74,7 @@ export default function Navbar({
     user,
     canUseLivePatients = false,
     canReadRooms = false,
+    canCreatePatient = false,
     autoCollapse = false,
     collapsed: controlledCollapsed,
     onToggleCollapse,
@@ -133,10 +139,12 @@ export default function Navbar({
             : isAdmin || isInstructor
               ? [{ id: "courses", label: "Courses" }]
               : []),
-        ...(showPatients ? [{ id: "patients", label: "Patients" }] : []),
+        ...(showPatients ? [{ id: "patients", label: "Patient management" }] : []),
+        ...(canCreatePatient ? [{ id: "createPatient", label: "Create patient" }] : []),
         ...(canReadRooms ? [{ id: "rooms", label: "Rooms" }] : []),
-        ...(canManageStudents ? [{ id: "students", label: "Students" }] : []),
+        ...(canManageStudents ? [{ id: "students", label: "Student management" }, { id: "createStudents", label: "Create students" }] : []),
         ...(isAdmin ? [{ id: "auditLog", label: "Audit Log" }] : []),
+        { id: "aboutUs", label: "About us" },
         ...(isStudent && canUseLivePatients ? [{ id: "appointments", label: "Appointments" }] : []),
     ];
 
@@ -210,6 +218,7 @@ export default function Navbar({
                             key={item.id}
                             type="button"
                             onClick={() => onNavigate(item.id)}
+                            aria-current={isActive ? "page" : undefined}
                             title={isCollapsed ? item.label : undefined}
                             className={`w-full flex items-center gap-3 px-2.5 py-2 text-xs font-medium rounded-sm transition-colors ${
                                 isCollapsed ? "justify-center" : "justify-start"

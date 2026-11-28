@@ -7,8 +7,12 @@ export default function PatientVisits({ patient, caseId, canEdit, canManagePorta
     const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
+        setVisits([]);
+        setError("");
+        setLoading(true);
         if (caseId || !patient?.id) {
             setLoading(false);
             return;
@@ -19,7 +23,7 @@ export default function PatientVisits({ patient, caseId, canEdit, canManagePorta
             .catch((err) => { if (!cancelled) setError(err.message); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [patient?.id, caseId]);
+    }, [patient?.id, caseId, retry]);
 
     if (caseId) return <p className="chart-muted">Visits are kept on the patient record, not on case copies.</p>;
 
@@ -28,9 +32,10 @@ export default function PatientVisits({ patient, caseId, canEdit, canManagePorta
             <div className="chart-section-heading">
                 <h2 id="chart-visits-heading">Visits</h2>
             </div>
-            {error && <p className="form-message form-message-error" role="alert">{error}</p>}
+            {error && <div className="form-message form-message-error" role="alert"><p>{error}</p>
+                <button type="button" className="secondary-action-button" onClick={() => setRetry((value) => value + 1)}>Retry visits</button></div>}
             {loading ? <p className="chart-muted">Loading visits…</p>
-                : visits.length === 0 ? <p className="chart-muted">No visits recorded.</p>
+                : error ? null : visits.length === 0 ? <p className="chart-muted">No visits recorded.</p>
                 : <div className="chart-card-grid">
                     {visits.map((visit) => (
                         <article key={visit.id} className="chart-card">
@@ -40,7 +45,7 @@ export default function PatientVisits({ patient, caseId, canEdit, canManagePorta
                         </article>
                     ))}
                 </div>}
-            {canEdit && !loading && <PatientPortalManagement key={patient.id} patient={patient} visits={visits} canManageAccounts={canManagePortal} />}
+            {canEdit && !loading && !error && <PatientPortalManagement key={patient.id} patient={patient} visits={visits} canManageAccounts={canManagePortal} />}
         </section>
     );
 }

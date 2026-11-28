@@ -1,10 +1,23 @@
 import { useState } from "react";
 import { createStudent, enrollStudent } from "../services/students.js";
-import { parseStudentImport, importStudentRows } from "../lib/studentImport.js";
+import { parseRoster, importStudentRows } from "../lib/studentImport.js";
 
 export default function BulkStudentImport({ onImported, course = null }) {
 
     const [bulkData, setBulkData] = useState("");
+    const [reading, setReading] = useState(false);
+
+    async function loadFile(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setErrors([]); setBulkData("");
+        if (!/\.(csv|xml)$/i.test(file.name)) { setErrors(["Choose a CSV or XML file."]); return; }
+        if (file.size > 2 * 1024 * 1024) { setErrors(["Choose a roster smaller than 2 MB."]); return; }
+        setReading(true);
+        try { setBulkData(await file.text()); }
+        catch { setErrors(["Could not read this file. Choose it again or paste the roster below."]); }
+        finally { setReading(false); event.target.value = ""; }
+    }
 
         const [busy, setBusy] = useState(false);
     
@@ -34,7 +47,8 @@ export default function BulkStudentImport({ onImported, course = null }) {
 
     function handleSubmit(event) {
         event.preventDefault();
-        const parsed = parseStudentImport(bulkData);
+        if (busy || reading) return;
+        const parsed = parseRoster(bulkData);
         //     Keep this roster in the course the admin opened
         if (course) {
             for (const row of parsed.rows) {
@@ -61,7 +75,9 @@ export default function BulkStudentImport({ onImported, course = null }) {
             <div className="student-form-heading">
             
                 <h3 id="bulk-import-heading">Bulk Import Students</h3>
-                <p>Paste CSV in this order: <code>Full Name, Email, Course Number, CRN</code>.</p>
+                <p>Upload a CSV or XML roster, or paste it below.</p>
+                <p>CSV columns: <code>Full Name, Email, Course Number, CRN</code>.</p>
+                <details><summary>XML example</summary><pre className="roster-xml-example">{'<students>\n  <student>\n    <fullName>Ana Smith</fullName>\n    <email>ana@example.edu</email>\n    <courseNumber>PHARM 4301</courseNumber>\n    <crn>00123</crn>\n  </student>\n</students>'}</pre></details>
                 <p>Use First Last order for names. The header is optional. All rows are checked before accounts are created.</p>
                 <p>{course ? `Importing into ${course.course_number}, CRN ${course.crn}` : "Courses must already exist before students can be enrolled"}</p>
             </div>
@@ -73,14 +89,19 @@ export default function BulkStudentImport({ onImported, course = null }) {
 
             {!results && <form className="student-form" onSubmit={handleSubmit}>
                 <div className="student-form-field student-form-field-wide">
-                    <label htmlFor="bulk-data">CSV Data</label>
+                    <label htmlFor="roster-file">Choose roster file</label>
+                    <input id="roster-file" type="file" accept=".csv,.xml,text/csv,application/xml,text/xml" disabled={busy || reading} onChange={loadFile} />
+                    {reading && <p role="status">Reading roster…</p>}
+                </div>
+                <div className="student-form-field student-form-field-wide">
+                    <label htmlFor="bulk-data">CSV or XML data</label>
                     <textarea id="bulk-data" rows={8} value={bulkData}
-                        onChange={(event) => setBulkData(event.target.value)} disabled={busy}
+                        onChange={(event) => { setBulkData(event.target.value); setErrors([]); }} disabled={busy || reading}
                         placeholder={"Full Name, Email, Course Number, CRN\nJohn Doe, jdoe@miners.utep.edu, PHARM 4301, 11234"}
                         required />
                 </div>
                 <div className="student-form-actions">
-                    <button className="primary-action-button" type="submit" disabled={busy}>Run Bulk Import</button>
+                    <button className="primary-action-button" type="submit" disabled={busy || reading}>Run Bulk Import</button>
                 </div>
             </form>}
 

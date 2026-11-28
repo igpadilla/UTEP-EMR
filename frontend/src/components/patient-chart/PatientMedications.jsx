@@ -2,6 +2,7 @@ import { useState } from "react";
 import MedicationSelector from "../MedicationSelector.jsx";
 import { medicationName, medicationDetails } from "../medicationDisplay.js";
 import { saveMedications } from "../../services/patientChartService.js";
+import PrescriptionAlertForm from "../PrescriptionAlertForm.jsx";
 
 
 export default function PatientMedications({ patient, canEdit, editing, onEdit, onCancel, onSaved }) {
@@ -79,6 +80,7 @@ export default function PatientMedications({ patient, canEdit, editing, onEdit, 
                     <p className="chart-muted">No medications recorded.</p>
                 )}
             </div>
+            {canEdit && patient.id && <PrescriptionAlertForm key={patient.id} patient={patient} />}
         </section>
     );
 }

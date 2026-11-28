@@ -46,6 +46,12 @@
 .patient-portal .secondary-action-button { background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 3px; font-size: .75rem; }
 .patient-portal .secondary-action-button:hover { background: #f8fafc; color: #0f172a; }
 .portal-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.portal-alerts { margin-bottom: 1.5rem; overflow-wrap: anywhere; }
+.portal-health-history { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.portal-health-history li { overflow-wrap: anywhere; margin: .4rem 0; }
+.portal-prescription-form { margin-top: 1.5rem; }
+.portal-prescription-form form { display: grid; gap: .75rem; max-width: 480px; }
+.portal-prescription-form input, .portal-prescription-form select { width: 100%; padding: .65rem; border: 1px solid var(--border); border-radius: 4px; }
 .portal-readonly, .portal-empty { color: var(--text-muted); }
 .portal-readonly { margin-top: 1.5rem; font-size: .85rem; }
 .portal-management { border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem; text-align: left; }

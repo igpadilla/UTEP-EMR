@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+.roster-xml-example { max-width: 100%; overflow-x: auto; padding: 1rem; margin-top: .75rem; border: 1px solid var(--border); background: #f8fafc; font-size: .8rem; white-space: pre; }
+.patient-file-panel { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 4px; }
+.patient-file-panel summary { cursor: pointer; font-weight: 600; }
+.patient-file-panel p, .patient-file-panel label { margin: .75rem 0; font-size: .85rem; display: block; }
+.patient-file-panel input { display: block; margin-top: .5rem; max-width: 100%; }
+
 @theme {
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;

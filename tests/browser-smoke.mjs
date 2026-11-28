@@ -63,6 +63,10 @@ try {
     await page.route("http://127.0.0.1:54321/**", async (route) => {
         const request = route.request(), url = new URL(request.url());
         const reply = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
+        if (url.pathname.endsWith('/rpc/has_permission')) return reply(true);
+        if (url.pathname.endsWith('/simulation_participants')) return reply([]);
+        if (['course_announcements','simulations'].some((table)=>url.pathname.endsWith(`/${table}`))) return reply([]);
+        if (url.pathname.endsWith('/rpc/get_course_student_emails')) return reply(roster.map((row)=>({user_id:row.user_id,email:row.email})));
         if (url.pathname.endsWith("/token")) return reply({ access_token: jwt, refresh_token: "test-refresh", token_type: "bearer", expires_in: 3600, user });
         if (url.pathname.endsWith("/user")) {
             if (sessionMissing) return reply({ error_code: "session_not_found", message: "Session not found" }, 401);
@@ -106,7 +110,10 @@ try {
         }
         if (url.pathname.endsWith("/create-student")) {
             creationCalls++;
-            return reply({ student: { id: "created-student", ...request.postDataJSON() } }, 201);
+            const data = request.postDataJSON();
+            const id = `created-student-${students.length}`;
+            students.push({user_id:id,first_name:data.firstName,last_name:data.lastName,email:data.email,active:true});
+            return reply({ student: { id, ...data } }, 201);
         }
         if (url.pathname.endsWith("/enroll-in-course")) {
             const body = request.postDataJSON();
@@ -133,7 +140,9 @@ try {
     await page.getByLabel("Email", { exact: true }).fill("admin@example.edu");
     await page.getByLabel("Password", { exact: true }).fill("test-password");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await page.getByRole("button", { name: "Students", exact: true }).click();
+    await page.getByRole("button", { name: "Student management", exact: true }).click();
+    assert.equal(await page.getByLabel("First Name", { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("CSV or XML data").count(), 0);
     await page.getByText("Page 1 of 2").waitFor();
     await page.getByRole("button", { name: "Next", exact: true }).click();
     await page.getByText("Page 2 of 2").waitFor();
@@ -152,6 +161,8 @@ try {
     await page.getByText("Page 1 of 2").waitFor();
     console.log("PASS: directory pagination, search, filters, deactivation, and reactivation");
 
+    await page.getByRole("button", { name: "Create students", exact: true }).click();
+    assert.equal(await page.getByRole("heading", { name: "Student Accounts", exact: true }).count(), 0);
     await page.getByLabel("First Name", { exact: true }).fill("   ");
     await page.getByLabel("Last Name", { exact: true }).fill("Smith");
     await page.getByLabel("Email", { exact: true }).fill("ana@example.edu");
@@ -161,11 +172,40 @@ try {
     await page.getByRole("alert").filter({ hasText: "First and last names" }).waitFor();
     assert.equal(creationCalls, 0);
 
-    await page.getByLabel("CSV Data").fill("Ana Smith,invalid,P,1");
+    await page.getByLabel("First Name", { exact: true }).fill("New");
+    await page.getByLabel("Last Name", { exact: true }).fill("Student");
+    await page.getByLabel("Email", { exact: true }).fill("new.student@example.edu");
+    await page.getByRole("button", { name: "Create Student", exact: true }).click();
+    await page.getByRole("heading", { name: "Student management", exact: true }).waitFor();
+    await page.getByRole("status").filter({hasText:"New Student was created successfully."}).waitFor();
+    await page.getByLabel("Search by name or email").fill("new.student@example.edu");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("cell", { name: "new.student@example.edu", exact: true }).waitFor();
+    assert.equal(await page.getByLabel("First Name", { exact: true }).count(), 0);
+    creationCalls = 0;
+    await page.getByRole("button", { name: "Create students", exact: true }).click();
+
+    await page.getByLabel("CSV or XML data").fill("Ana Smith,invalid,P,1");
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByText("Row 1: Enter a valid email address.").waitFor();
     assert.equal(creationCalls, 0);
-    await page.getByLabel("CSV Data").fill("Ana Smith,ana@example.edu,P,1");
+    const xml = '<students><student><fullName>Ana Smith</fullName><email>ana@example.edu</email><courseNumber>P</courseNumber><crn>1</crn></student></students>';
+    const xmlChecks = await page.evaluate(async (input) => {
+        const {parseStudentXml} = await import('/src/lib/studentImport.js');
+        return [
+            parseStudentXml(input.replace('Ana Smith','Ana &amp; Maria Smith')),
+            parseStudentXml('<students><student>'),
+            parseStudentXml('<!DOCTYPE students [<!ENTITY private SYSTEM "file:///private">]><students/>'),
+            parseStudentXml(input.replace('</student>', '<email>extra@example.edu</email></student>')),
+            parseStudentXml(input.replace('</students>',input.match(/<student>.*<\/student>/)[0]+'</students>')),
+        ];
+    },xml);
+    assert.equal(xmlChecks[0].rows[0].firstName,'Ana');
+    assert.equal(xmlChecks[0].rows[0].lastName,'& Maria Smith');
+    assert.ok(xmlChecks.slice(1).every((result)=>result.errors.length));
+    await page.getByLabel('Choose roster file',{exact:true}).setInputFiles({name:'class.xml',mimeType:'application/xml',buffer:Buffer.from(xml)});
+    await page.getByLabel('CSV or XML data',{exact:true}).filter({hasText:''}).waitFor();
+    await page.waitForFunction((input)=>document.getElementById('bulk-data').value===input,xml);
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
     assert.equal(await page.locator(".student-import-credentials code").count(), 1);
@@ -189,14 +229,15 @@ try {
     assert.equal(enrollmentRequests.at(-1).courseId, course.id);
     await page.getByRole("button",{name:"Remove",exact:true}).last().click();
     await page.getByText("03, Student",{exact:true}).waitFor({state:"hidden"});
-    await page.getByRole("button", { name: "Import Roster as CSV", exact: true }).click();
+    await page.getByRole("button", { name: "Import Roster (CSV/XML)", exact: true }).click();
     enrolled = false;
     const beforeCourseImport = creationCalls;
-    await page.getByLabel("CSV Data").fill("Wrong Course,wrong@example.edu,OTHER,2");
+    await page.getByLabel("CSV or XML data").fill("Wrong Course,wrong@example.edu,OTHER,2");
     await page.getByRole("button",{name:"Run Bulk Import",exact:true}).click();
     await page.getByRole("alert").filter({hasText:"Use course P, CRN 1"}).waitFor();
     assert.equal(creationCalls,beforeCourseImport);
-    await page.getByLabel("CSV Data").fill("Ana Jones,ana.jones@example.edu,P,1");
+    await page.getByLabel('Choose roster file',{exact:true}).setInputFiles({name:'class.csv',mimeType:'text/csv',buffer:Buffer.from('Ana Jones,ana.jones@example.edu,P,1')});
+    await page.waitForFunction(()=>document.getElementById('bulk-data').value==='Ana Jones,ana.jones@example.edu,P,1');
     await page.getByRole("button", { name: "Run Bulk Import", exact: true }).click();
     await page.getByRole("cell").filter({ hasText: "Account created; enrollment failed" }).waitFor();
     const coursePassword = await page.locator(".student-import-credentials code").textContent();
@@ -213,8 +254,9 @@ try {
     assert.equal(await page.getByRole("button", { name:/^Case Management/ }).count(), 0);
     accountType = "instructor";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.getByRole("button",{name:"Students",exact:true}).waitFor({state:"hidden"});
-    assert.equal(await page.getByRole("button",{name:"Students",exact:true}).count(),0);
+    await page.getByRole("button",{name:"Student management",exact:true}).waitFor({state:"hidden"});
+    assert.equal(await page.getByRole("button",{name:"Student management",exact:true}).count(),0);
+    assert.equal(await page.getByRole("button",{name:"Create students",exact:true}).count(),0);
     assert.equal(await page.getByRole("button",{name:"Remove",exact:true}).count(),0);
     assert.equal(await page.getByRole("button",{name:"Enroll student",exact:true}).count(),0);
     await page.getByText("01, Student",{exact:true}).waitFor();
@@ -225,12 +267,12 @@ try {
     // An old open admin page also stops showing the account forms after a role change
     accountType = "admin";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.getByRole("button",{name:"Students",exact:true}).click();
+    await page.getByRole("button",{name:"Create students",exact:true}).click();
     await page.getByRole("button",{name:"Create Student",exact:true}).waitFor();
     accountType = "instructor";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByRole("button",{name:"Create Student",exact:true}).waitFor({state:"hidden"});
-    assert.equal(await page.getByLabel("CSV Data").count(),0);
+    assert.equal(await page.getByLabel("CSV or XML data").count(),0);
     await page.getByRole("button", { name: "Courses", exact: true }).click();
     await page.getByText("P", { exact: true }).click();
     await page.getByRole("button", { name: /^Cases\b/ }).click();
@@ -255,7 +297,7 @@ try {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByText("Your account is inactive.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Sign In", exact: true }).waitFor();
-    assert.equal(await page.getByRole("button", { name: "Students", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Student management", exact: true }).count(), 0);
     assert.deepEqual(pageErrors, []);
     console.log("PASS: an already-open app signs out a deactivated account on focus; no browser errors");
 

@@ -21,8 +21,6 @@ const TABS = ["Summary", "Vitals", "Labs & Imaging", "Notes", "Medications", "Al
 export default function PatientChart({
     id, caseId, backTo, backId = null, onNavigate, canEditPatient = false, canManagePortal = false, embedded = false, onArchived, onPatientSaved, onPatientCreated, fromCourse = null, simMode = false,
 }) {
-    // With no patient yet, the chart opens on an empty demographics form that creates one.
-    // The other sections stay locked until the patient exists.
     const creating = !id && !caseId && canEditPatient && Boolean(onPatientCreated);
     const [patient, setPatient] = useState(null);
     const [caseStatus, setCaseStatus] = useState(null);
@@ -147,6 +145,14 @@ export default function PatientChart({
         patient, canEdit, onCancel: () => setEditingSection(null), onSaved: savedPatient, creating,
     };
 
+    if (creating) return (
+        <main className="chart-page">
+            <div className="chart-content">
+                <PatientSummary {...sectionProps} editing />
+            </div>
+        </main>
+    );
+
     return (
         <main className={embedded ? "chart-page chart-embedded" : "chart-page"}>
             <section className="chart-header">
@@ -199,7 +205,6 @@ export default function PatientChart({
                         </button>
                     </div>
                 )}
-                {creating && <p className="chart-edit-hint">Create the patient to open the rest of the chart.</p>}
                 {caseId && ["Summary", "Allergies & History", "Diagnoses"].includes(activeTab)
                     && <p className="chart-edit-hint">These are the patient details saved with this case. They are read-only here.</p>}
 

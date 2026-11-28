@@ -90,6 +90,28 @@ test("patient portal isolates records and exposes only released patient-facing c
             await assert.rejects(as(db, ALICE, 'select get_my_patient_portal($1)', [PATIENT_B]), /does not exist/);
         });
 
+        await t.test("portal reads current chart details and visit history without internal notes", async () => {
+            await db.query(`update patients set phone_number='555-0100', address='123 Demo Street',
+                allergies=ARRAY['Latex'], medical_history=ARRAY['Asthma'],
+                diagnoses='[{"code":"DEMO","description":"Demo diagnosis","internal":"PRIVATE DIAGNOSIS"}]',
+                immunizations='[{"vaccine":"Demo vaccine","date":"2026-11-20","dose":"First","internal":"PRIVATE IMMUNIZATION"}]' where id=$1`, [PATIENT_A]);
+            const first = await portal(ALICE);
+            assert.equal(first.patient.phone_number, '555-0100');
+            assert.deepEqual(first.allergies, ['Latex']);
+            assert.deepEqual(first.medical_history, ['Asthma']);
+            assert.equal(first.diagnoses[0].description, 'Demo diagnosis');
+            assert.equal(first.immunizations[0].vaccine, 'Demo vaccine');
+            assert.equal(first.visits[0].id, VISIT);
+            assert.equal(first.visits[0].summary, null);
+            assert.ok(!JSON.stringify(first).includes('PRIVATE'));
+            assert.ok(!JSON.stringify(first).includes('INTERNAL NOTES'));
+            await db.query(`update patients set phone_number='555-0200', allergies=ARRAY['Penicillin'] where id=$1`, [PATIENT_A]);
+            const updated = await portal(ALICE);
+            assert.equal(updated.patient.phone_number, '555-0200');
+            assert.deepEqual(updated.allergies, ['Penicillin']);
+            assert.deepEqual((await portal(BOB)).visits, []);
+        });
+
         await t.test("portal access stays read-only even with a leftover front desk role", async () => {
             await assert.rejects(as(db, ALICE, `insert into patients(first_name,last_name,age) values ('X','Y',5)`), /row-level security/);
             await assert.rejects(as(db, ALICE, `insert into visits(patient_id,notes) values ('${PATIENT_A}','bad')`), /row-level security/);
@@ -147,6 +169,50 @@ test("patient portal isolates records and exposes only released patient-facing c
             const sharing = await as(db, ADMIN, `select changed_fields from phi_audit_log where record_id='${LAB_A}' and action='UPDATE'`);
             assert.ok(sharing.some((entry) => entry.changed_fields.includes('portal_released_at')));
             assert.equal((await as(db, ALICE, 'select * from phi_audit_log')).length, 0);
+        });
+
+        await t.test("prescription alerts require staff, saved medications and active portal access", async () => {
+            const send = (who, patient = PATIENT_A, medication = 'Recorded medicine', pharmacy = 'Demo Pharmacy') =>
+                as(db, who, 'select notify_patient_prescription($1,$2,$3)', [patient, medication, pharmacy]);
+            const alerts = async (who) => (await as(db, who, 'select get_my_prescription_alerts() as result'))[0].result;
+            for (const who of [ALICE, BOB, STUDENT]) await assert.rejects(send(who), /Only active staff/);
+            await assert.rejects(send(TEACHER, PATIENT_A, 'Not saved'), /saved medication/);
+            await assert.rejects(send(TEACHER, PATIENT_A, 'Recorded medicine', '  '), /pharmacy name/);
+            await assert.rejects(send(TEACHER, PATIENT_A, 'Recorded medicine', 'x'.repeat(201)), /pharmacy name/);
+            await db.query('update patients set archived_at = now() where id = $1', [PATIENT_A]);
+            await assert.rejects(send(TEACHER), /active patient/);
+            await db.query('update patients set archived_at = null where id = $1', [PATIENT_A]);
+            await as(db, ADMIN, `select set_patient_portal_access('${PATIENT_A}',false)`);
+            await assert.rejects(send(TEACHER), /active portal access/);
+            await as(db, ADMIN, `select set_patient_portal_access('${PATIENT_A}',true)`);
+            await send(TEACHER);
+            const own = await alerts(ALICE);
+            assert.equal(own.length, 1);
+            assert.equal(own[0].medication_name, 'Recorded medicine');
+            assert.equal(own[0].pharmacy_name, 'Demo Pharmacy');
+            assert.equal(own[0].read_at, null);
+            assert.deepEqual(Object.keys(own[0]).sort(), ['id','medication_name','pharmacy_name','created_at','read_at'].sort());
+            assert.deepEqual(await alerts(BOB), []);
+            await assert.rejects(as(db, BOB, 'select read_my_prescription_alert($1)', [own[0].id]), /not available/);
+            await assert.rejects(as(db, ALICE, 'select * from patient_prescription_alerts'), /permission denied/);
+            await as(db, ALICE, 'select read_my_prescription_alert($1)', [own[0].id]);
+            const readAt = (await alerts(ALICE))[0].read_at;
+            assert.ok(readAt);
+            await as(db, ALICE, 'select read_my_prescription_alert($1)', [own[0].id]);
+            assert.equal((await alerts(ALICE))[0].read_at, readAt);
+            const audit = await as(db, ADMIN, 'select * from phi_audit_log where table_name = $1 and record_id = $2', ['patient_prescription_alerts', own[0].id]);
+            assert.equal(audit.length, 1);
+            assert.equal(audit[0].patient_id, PATIENT_A);
+            await db.query('update profiles set active=false where user_id=$1', [TEACHER]);
+            await assert.rejects(send(TEACHER), /Only active staff/);
+            await db.query('update profiles set active=true where user_id=$1', [TEACHER]);
+            await as(db, ADMIN, `select set_patient_portal_access('${PATIENT_A}',false)`);
+            await assert.rejects(alerts(ALICE), /not available/);
+            await assert.rejects(as(db, ALICE, 'select read_my_prescription_alert($1)', [own[0].id]), /not available/);
+            await as(db, ADMIN, `select set_patient_portal_access('${PATIENT_A}',true)`);
+            await db.exec('set role anon');
+            await assert.rejects(db.query('select get_my_prescription_alerts()'), /permission denied/);
+            await db.exec('reset role');
         });
 
         await t.test("admin deactivation revokes access immediately and reactivation keeps records", async () => {
