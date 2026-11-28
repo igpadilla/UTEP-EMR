@@ -5,18 +5,22 @@
 .about-return { flex-shrink: 0; border: 1px solid #bfdbfe; border-radius: 5px; padding: .5rem .9rem; text-decoration: none; color: #0f3b70; font-size: .85rem; }
 .about-return:hover { background: #eff6ff; color: #164c8c; }
 .about-content { width: min(1080px, 100%); margin: 0 auto; padding: 4.5rem 1.5rem; flex: 1; }
-.about-intro { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 5rem; align-items: start; }
+.about-embedded { min-height: 0; }
+.about-embedded .about-content { padding-top: 2rem; padding-bottom: 2rem; }
+.about-intro { max-width: 800px; }
 .about-page h1 { font-size: clamp(2rem, 4vw, 2.75rem); font-weight: 600; letter-spacing: -.04em; line-height: 1.2; margin: 0 0 1.6rem; }
 .about-page h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 1.25rem; }
 .about-page p { color: #475569; font-size: .95rem; line-height: 1.8; margin: 0 0 1rem; }
-.about-project { border-left: 3px solid #e87722; padding: .3rem 0 .3rem 1.5rem; margin-top: .4rem; }
-.about-project dl { margin: 0; }
-.about-project dl div + div { margin-top: 1.1rem; }
-.about-project dt { font-size: .75rem; color: #64748b; margin-bottom: .2rem; }
-.about-project dd { font-size: .9rem; margin: 0; }
 .about-team { border-top: 1px solid #e2e8f0; margin-top: 3rem; padding-top: 2rem; }
-.about-team ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 2.5rem; }
-.about-team li { font-size: .95rem; padding: 1rem 0; border-bottom: 1px solid #e2e8f0; }
+.about-team-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 1.8fr); gap: 3rem; align-items: start; }
+.about-team-list { list-style: none; margin: 0; padding: 0; }
+.about-team-list li { display: flex; align-items: center; gap: 1rem; font-size: .95rem; padding: .75rem 0; border-bottom: 1px solid #e2e8f0; }
+.about-team-list li:first-child { padding-top: 0; }
+.about-portrait { width: 64px; height: 76px; flex-shrink: 0; object-fit: cover; border-radius: 4px; }
+.about-photo-space { display: grid; place-items: center; background: #f8fafc; border: 1px dashed #cbd5e1; color: #64748b; font-size: .75rem; }
+.about-group-photo { margin: 0; }
+.about-group-photo img, .about-group-photo > div { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; }
+.about-group-photo > div { display: grid; }
 .about-footer { border-top: 1px solid #e2e8f0; padding: 1rem 1.5rem; display: flex; justify-content: space-between; gap: 1rem; font-size: .7rem; color: #64748b; }
 .about-page a:focus-visible { outline: 2px solid #0f3b70; outline-offset: 5px; }
 .about-page h1:focus { outline: none; }
@@ -24,8 +28,7 @@
     .about-header { padding: 1rem; gap: 1rem; }
     .about-brand { font-size: .75rem; }
     .about-content { padding: 2.5rem 1.25rem; }
-    .about-intro { grid-template-columns: 1fr; gap: 2rem; }
+    .about-team-layout { grid-template-columns: 1fr; gap: 2rem; }
     .about-team { margin-top: 2rem; }
-    .about-team ul { grid-template-columns: 1fr; }
     .about-footer { flex-wrap: wrap; padding: 1rem 1.25rem; }
 }

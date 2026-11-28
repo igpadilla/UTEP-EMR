@@ -10,6 +10,7 @@ import PatientLookup from "./pages/PatientLookup.jsx";
 import StudentPatientDetail from "./pages/StudentPatientDetail.jsx";
 import Appointments from "./pages/Appointments.jsx";
 import StudentManagement from "./pages/StudentManagement.jsx";
+import CreateStudents from "./pages/CreateStudents.jsx";
 import InstructorCases from "./pages/InstructorCases.jsx";
 import TemplateBuilder from "./pages/TemplateBuilder.jsx";
 import CaseAssign from "./pages/CaseAssign.jsx";
@@ -72,6 +73,10 @@ export default function App() {
     }, []);
 
     function navigate(page, id = null, extra = {}) {
+        if (window.location.hash === "#/about") {
+            window.location.hash = "";
+            setShowAbout(false);
+        }
         setNav({ page, id, ...extra });
     }
 
@@ -246,7 +251,7 @@ export default function App() {
         }
     }
 
-    if (showAbout) return <AboutUs signedIn={Boolean(session)} />;
+    if (showAbout && !session) return <AboutUs />;
 
     if (loading) return <p>Loading...</p>;
 
@@ -273,6 +278,7 @@ export default function App() {
 
     //     Patient logins go straight to their own view with no staff navigation
     if (user.profile.account_type === "patient") {
+        if (showAbout) return <AboutUs signedIn />;
         return <PatientPortal key={user.id} user={user} accountWarning={accountWarning}
             idleWarning={showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />} />;
     }
@@ -290,8 +296,10 @@ export default function App() {
     const canManageCourses = isAdmin || isInstructor;
 
     const navbarPage =
-        nav.page === "createPatient" ? "createPatient"
+        showAbout || nav.page === "aboutUs" ? "aboutUs"
+        : nav.page === "createPatient" ? "createPatient"
         : nav.page === "studentManagement" ? "students"
+        : nav.page === "createStudents" ? "createStudents"
         : nav.page === "patientManager" ? "patients"
         : nav.page === "patientLookup" || nav.page === "studentPatientDetail" || nav.page === "patientChart" ? "patients"
         : nav.page === "appointments" ? "appointments"
@@ -310,6 +318,8 @@ export default function App() {
         if (page === "students" && canManageStudents) {
         
             navigate("studentManagement");
+        } else if (page === "createStudents" && canManageStudents) {
+            navigate("createStudents");
         } 
          else if (page === "courses" && canManageCourses) {
             navigate("courses");
@@ -327,6 +337,8 @@ export default function App() {
         } 
         else if (page === "appointments") {
             navigate("appointments");
+        } else if (page === "aboutUs") {
+            navigate("aboutUs");
         } else if (page === "auditLog" && isAdmin) {
             navigate("auditLog");
         } else if (page === "rooms" && canReadRooms) {
@@ -339,10 +351,13 @@ export default function App() {
     // Live patient pages are for staff and non clinical roles, then all other students are sent to their courses
     const livePatientPage = ["patientLookup", "studentPatientDetail", "appointments"].includes(nav.page)
         || (nav.page === "patientChart" && !nav.caseId);
-    const page = isStudent && !liveAccess.read && livePatientPage ? "studentCourses" : nav.page;
+    const page = showAbout ? "aboutUs" : isStudent && !liveAccess.read && livePatientPage ? "studentCourses" : nav.page;
 
     let pageContent;
     switch (page) {
+        case "aboutUs":
+            pageContent = <AboutUs embedded />;
+            break;
         case "createPatient":
             pageContent = user.profile.active && (isAdmin || isInstructor)
                 ? <PatientChart key="new-patient" onNavigate={navigate} backTo="patientManager" canEditPatient
@@ -372,7 +387,12 @@ export default function App() {
             
         case "studentManagement":
             pageContent = canManageStudents
-                ? <StudentManagement onNavigate={navigate} canManageAccounts={isAdmin} />
+                ? <StudentManagement onNavigate={navigate} canManageAccounts={isAdmin} notice={nav.notice} />
+                : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
+            break;
+        case "createStudents":
+            pageContent = canManageStudents
+                ? <CreateStudents onNavigate={navigate} canManageAccounts={isAdmin} />
                 : <Dashboard user={user} onNavigate={navigate} canUseLivePatients={liveAccess.read} />;
             break;
         case "appointments":
@@ -504,9 +524,7 @@ export default function App() {
                 </div>
                 {showIdleWarning && <IdleWarning onStay={() => stayIdleRef.current?.()} />}
                 <footer className="border-t border-slate-100 px-8 py-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                    <span>UTEP Educational EMR</span>
-                    <a href="#/about" className="text-slate-600 hover:underline">About us</a>
-                    <span>For educational use only</span>
+                    <span>UTEP EMR</span>
                 </footer>
             </div>
         </div>

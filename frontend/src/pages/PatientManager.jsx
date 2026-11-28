@@ -40,14 +40,14 @@ export default function PatientManager({ onNavigate, embedded = false }) {
             {!embedded && (
                 <div className="instructor-page-header">
                     <div>
-                        <h2>Patient Manager</h2>
+                        <h2>Patient management</h2>
                         <p>Manage the patient registry used for building case templates.</p>
                     </div>
                     {!showForm && (
                         <button
                             className="primary-action-button"
                             type="button"
-                            onClick={() => setShowForm(true)}
+                            onClick={() => onNavigate("createPatient")}
                         >
                             + Add Patient
                         </button>

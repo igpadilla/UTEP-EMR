@@ -39,7 +39,7 @@ try {
  await page.goto('http://127.0.0.1:5194');
  await page.getByLabel('Email',{exact:true}).fill(user.email); await page.getByLabel('Password',{exact:true}).fill('Temporary123');
  await page.getByRole('button',{name:'Sign In',exact:true}).click();
- await page.getByRole('button',{name:'Patients',exact:true}).click();
+ await page.getByRole('button',{name:'Patient management',exact:true}).click();
  await page.getByText('Patient files (CSV/XML)',{exact:true}).click();
  const xml=await page.evaluate(async()=>{
   const {patientFileText,parsePatientFile}=await import('/src/lib/patientFiles.js');
@@ -69,15 +69,34 @@ try {
  }
  await page.screenshot({path:`${output}registry-files.png`,fullPage:true});
  await page.getByRole('button',{name:'Create patient',exact:true}).click();
+ await page.getByRole('heading',{name:'New patient',exact:true}).waitFor();
+ assert.equal(await page.getByRole('tablist',{name:'Chart sections'}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Refresh chart',exact:true}).count(),0);
+ await page.screenshot({path:`${output}create-patient.png`,fullPage:true});
  await page.getByLabel('First name *',{exact:true}).fill('Sidebar');
  await page.getByLabel('Last name *',{exact:true}).fill('Patient');
  await page.getByLabel('Age *',{exact:true}).fill('41');
- await page.getByRole('tabpanel').getByRole('button',{name:'Create patient',exact:true}).click();
+ await page.getByRole('region',{name:'New patient',exact:true}).getByRole('button',{name:'Create patient',exact:true}).click();
  await page.getByRole('heading',{name:'Sidebar Patient',exact:true}).waitFor();
+ await page.getByRole('tablist',{name:'Chart sections'}).waitFor();
  assert.equal(patients.at(-1).first_name,'Sidebar');
  await page.screenshot({path:`${output}sidebar-patient.png`,fullPage:true});
+ await page.getByRole('button',{name:'About us',exact:true}).click();
+ await page.getByRole('heading',{name:'About us',exact:true}).waitFor();
+ const navigation=page.getByRole('complementary',{name:'Primary navigation'});
+ assert.equal(await navigation.getByRole('button',{name:'About us',exact:true}).getAttribute('aria-current'),'page');
+ assert.equal(await page.getByRole('link',{name:'Back to app',exact:true}).count(),0);
+ await page.screenshot({path:`${output}about-in-app.png`,fullPage:true,animations:'disabled'});
+ await navigation.getByRole('button',{name:'Patient management',exact:true}).click();
+ await page.getByRole('heading',{name:'Patient management',exact:true}).waitFor();
+ await page.evaluate(()=>{window.location.hash='/about';});
+ await page.reload();
+ await page.getByRole('heading',{name:'About us',exact:true}).waitFor();
+ await navigation.waitFor();
+ await navigation.getByRole('button',{name:'Patient management',exact:true}).click();
+ await page.getByRole('heading',{name:'Patient management',exact:true}).waitFor();
  accountType='student'; await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await page.getByRole('button',{name:'Create patient',exact:true}).waitFor({state:'hidden'});
  assert.deepEqual(errors,[]);
- console.log('PASS: patient CSV/XML round trips, validation, duplicate protection, downloads, sidebar creation and role restrictions');
+ console.log('PASS: patient CSV/XML round trips, validation, duplicate protection, downloads, sidebar creation, About Us navigation and role restrictions');
 } finally {await browser?.close();await server.close();}

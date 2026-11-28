@@ -122,7 +122,8 @@ try {
     await page.getByText('Asthma',{exact:true}).waitFor();
     await page.getByText('DEMO · Demo diagnosis',{exact:true}).waitFor();
     await page.getByText('Demo vaccine',{exact:false}).waitFor();
-    assert.equal(await page.getByRole('button', { name:'Students', exact:true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name:'Student management', exact:true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name:'Create students', exact:true }).count(), 0);
     assert.equal(await page.getByRole('button', { name:/Edit|Schedule|Delete|Refill/ }).count(), 0);
     await page.screenshot({ path:`${output}/01-overview.png`, fullPage:true });
     await page.getByRole('heading',{name:'Prescription alerts (1 unread)',exact:true}).waitFor();
@@ -214,7 +215,7 @@ try {
         await page.getByLabel('Email', { exact:true }).fill('admin@example.edu');
         await page.getByLabel('Password', { exact:true }).fill('Temporary123');
         await page.getByRole('button', { name:'Sign In', exact:true }).click();
-        await page.getByRole('button', { name:'Patients', exact:true }).click();
+        await page.getByRole('button', { name:'Patient management', exact:true }).click();
         await page.getByRole('cell', { name:'Avery Demo', exact:true }).click();
         await page.getByRole('tab', { name:'Visits', exact:true }).click();
     }

@@ -158,7 +158,7 @@ export default function PatientPortal({ user, accountWarning, idleWarning }) {
                 <p className="portal-readonly">View only - records are added by the care team</p>
             </main>
         </div>
-        <footer className="emr-footer"><span>Educational EMR Prototype</span><a href="#/about">About us</a><span>For educational use only</span></footer>
+        <footer className="emr-footer"><span>UTEP EMR</span><a href="#/about">About us</a></footer>
         {idleWarning}
     </div>;
 }
